@@ -1,0 +1,30 @@
+"""Fixed enumerations from CONTEXT.md and the AMIS build spec."""
+
+from enum import Enum
+
+
+class RequestStatus(str, Enum):
+    PENDING = "pending"
+    SCHEDULED = "scheduled"
+    COMPLETED = "completed"
+    DROPPED = "dropped"
+    EXPIRED = "expired"
+
+
+class ActionStatus(str, Enum):
+    PLANNED = "planned"
+    STARTED = "started"
+    COMPLETED = "completed"
+
+
+class ReasonCode(str, Enum):
+    WINDOW_INVALIDATED = "WINDOW_INVALIDATED"
+    INSUFFICIENT_BATTERY = "INSUFFICIENT_BATTERY"
+    INSUFFICIENT_STORAGE = "INSUFFICIENT_STORAGE"
+    DEADLINE_VIOLATION = "DEADLINE_VIOLATION"
+    TIME_OVERLAP = "TIME_OVERLAP"
+    SATELLITE_UNAVAILABLE = "SATELLITE_UNAVAILABLE"
+    DISPLACED_BY_COMPETING_REQUEST = "DISPLACED_BY_COMPETING_REQUEST"
+    ALTERNATIVE_WINDOW_AVAILABLE = "ALTERNATIVE_WINDOW_AVAILABLE"
+    NO_ALTERNATIVE_WINDOW = "NO_ALTERNATIVE_WINDOW"
+    REQUEST_UNCHANGED = "REQUEST_UNCHANGED"

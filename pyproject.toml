@@ -1,0 +1,9 @@
+[project]
+name = "amis"
+version = "0.1.0"
+description = "AMIS: adaptive mission planning simulator for Earth observation satellites"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
