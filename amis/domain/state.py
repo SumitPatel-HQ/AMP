@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from amis.domain.scenario import Scenario
 
@@ -30,3 +31,16 @@ class MissionState:
             storage_usage_mb=scenario.satellite.storage_usage_mb,
             available=scenario.satellite.available,
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scenario_id": self.scenario_id,
+            "simulated_time": self.simulated_time.isoformat(),
+            "satellite_id": self.satellite_id,
+            "battery_wh": self.battery_wh,
+            "storage_usage_mb": self.storage_usage_mb,
+            "available": self.available,
+            "active_event_ids": list(self.active_event_ids),
+            "completed_request_ids": list(self.completed_request_ids),
+            "mission_complete": self.mission_complete,
+        }

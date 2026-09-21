@@ -1,16 +1,30 @@
 """compute_metrics: quantify a plan's quality as plain data.
 
 Metrics are computed over the request pool rather than the scenario, so
-an expired request stays counted against completion. Churn and coverage
-need a second plan version to compare against, so they return null
-until replanning exists.
+an expired request stays counted against completion.
+
+Churn and coverage need a comparison to compute over, so they stay null
+until a plan has a parent version. Both also return null when their own
+denominator is zero rather than a score, because 1.0 is the exact number
+the demonstration quotes as evidence of explainability and a vacuous 1.0
+would be defensible arithmetic and a misleading headline.
 """
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
-from amis.domain import MetricsResult, MissionPlan, MissionState, ObservationRequest, RequestStatus, Scenario
+from amis.diff import CHANGED_CHANGE_TYPES, rebuilt_actions
+from amis.domain import (
+    DecisionTrace,
+    MetricsResult,
+    MissionPlan,
+    MissionState,
+    ObservationRequest,
+    PlanDiff,
+    RequestStatus,
+    Scenario,
+)
 
 
 def compute_metrics(
@@ -18,6 +32,9 @@ def compute_metrics(
     mission_state: MissionState,
     request_pool: Iterable[ObservationRequest],
     plan: MissionPlan,
+    previous_plan: Optional[MissionPlan] = None,
+    diff: Optional[PlanDiff] = None,
+    traces: Iterable[DecisionTrace] = (),
 ) -> MetricsResult:
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
@@ -48,4 +65,58 @@ def compute_metrics(
         storage_utilisation=storage_utilisation,
         request_pool_size=pool_size,
         request_pool_ids=frozenset(request.id for request in pool),
+        plan_churn=compute_plan_churn(previous_plan, plan, diff),
+        explanation_coverage=compute_explanation_coverage(diff, traces),
     )
+
+
+def compute_plan_churn(
+    previous_plan: Optional[MissionPlan],
+    plan: MissionPlan,
+    diff: Optional[PlanDiff],
+) -> Optional[float]:
+    """Changed unfrozen actions over the unfrozen actions of the earlier version.
+
+    An inserted request holds no action in the earlier version, so it
+    cannot reach the numerator and needs no special case here.
+    """
+
+    if previous_plan is None or diff is None:
+        return None
+
+    unfrozen_before = rebuilt_actions(previous_plan, plan)
+    if not unfrozen_before:
+        return None
+
+    changed_request_ids = {
+        entry.request_id
+        for entry in diff.entries
+        if entry.change_type in CHANGED_CHANGE_TYPES
+    }
+    changed_count = sum(
+        1 for action in unfrozen_before if action.request_id in changed_request_ids
+    )
+    return changed_count / len(unfrozen_before)
+
+
+def compute_explanation_coverage(
+    diff: Optional[PlanDiff], traces: Iterable[DecisionTrace] = ()
+) -> Optional[float]:
+    """Changed actions carrying a decision trace over changed actions."""
+
+    if diff is None:
+        return None
+
+    changed_request_ids = [
+        entry.request_id
+        for entry in diff.entries
+        if entry.change_type in CHANGED_CHANGE_TYPES
+    ]
+    if not changed_request_ids:
+        return None
+
+    traced_request_ids = {trace.request_id for trace in traces}
+    covered = sum(
+        1 for request_id in changed_request_ids if request_id in traced_request_ids
+    )
+    return covered / len(changed_request_ids)
