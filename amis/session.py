@@ -20,6 +20,7 @@ from amis.domain import (
     BatteryDropPayload,
     CloudBlockPayload,
     DecisionTrace,
+    EmergencyRequestPayload,
     EventPayload,
     EventType,
     Impact,
@@ -67,6 +68,7 @@ class MissionSession:
         self._plans: list[MissionPlan] = []
         self._state: MissionState | None = None
         self._request_pool: tuple[ObservationRequest, ...] = ()
+        self._request_pool_ids_by_plan_id: dict[str, frozenset[str]] = {}
         self._events: list[MissionEvent] = []
         self._traces: list[DecisionTrace] = []
         self._impacts: list[Impact] = []
@@ -112,6 +114,7 @@ class MissionSession:
         )
         self._plans.append(plan)
         self._update_request_statuses_from_plan()
+        self._record_request_pool_for(plan)
         return plan
 
     def replan(self, expected_parent_plan_id: str | None = None) -> MissionPlan:
@@ -163,6 +166,7 @@ class MissionSession:
         self._plans.append(plan)
         self._traces.extend(traces)
         self._update_request_statuses_from_plan()
+        self._record_request_pool_for(plan)
         return plan
 
     def compare_versions(self, from_version: int, to_version: int) -> PlanDiff:
@@ -173,9 +177,18 @@ class MissionSession:
         disagreeing with the versions it names.
         """
 
-        return self._compare(
-            self.get_plan_by_version(from_version),
-            self.get_plan_by_version(to_version),
+        previous_plan = self.get_plan_by_version(from_version)
+        plan = self.get_plan_by_version(to_version)
+        comparison = self._compare(previous_plan, plan)
+        metrics_before = self.get_metrics(previous_plan.id)
+        metrics_after = self.get_metrics(plan.id)
+        return replace(
+            comparison,
+            metrics_before=metrics_before,
+            metrics_after=metrics_after,
+            request_pool_mismatch=(
+                metrics_before.request_pool_ids != metrics_after.request_pool_ids
+            ),
         )
 
     def get_state(self) -> MissionState:
@@ -228,7 +241,7 @@ class MissionSession:
         return compute_metrics(
             scenario,
             state,
-            self._request_pool,
+            self._request_pool_for_plan(plan),
             plan,
             previous_plan=parent_plan,
             diff=self._compare(parent_plan, plan) if parent_plan else None,
@@ -253,11 +266,15 @@ class MissionSession:
             ) from error
 
         if parsed_event_type is EventType.CLOUD_BLOCK:
-            event_payload: EventPayload = self._parse_cloud_block_payload(payload)
-            self._validate_cloud_block(event_payload)
+            cloud_payload = self._parse_cloud_block_payload(payload)
+            self._validate_cloud_block(cloud_payload)
+            event_payload: EventPayload = cloud_payload
         elif parsed_event_type is EventType.BATTERY_DROP:
             event_payload = self._parse_battery_drop_payload(payload)
             self._validate_battery_drop(event_payload)
+        elif parsed_event_type is EventType.EMERGENCY_TASK:
+            event_payload = self._parse_emergency_request_payload(payload)
+            self._validate_emergency_request(event_payload)
         else:
             raise InvalidEventError(
                 "mission event type is not implemented",
@@ -273,6 +290,7 @@ class MissionSession:
         )
 
         if parsed_event_type is EventType.CLOUD_BLOCK:
+            assert isinstance(event_payload, CloudBlockPayload)
             self._windows = [
                 replace(
                     window,
@@ -287,13 +305,22 @@ class MissionSession:
                 state,
                 active_event_ids=state.active_event_ids + (event.id,),
             )
-        else:
+        elif parsed_event_type is EventType.BATTERY_DROP:
+            assert isinstance(event_payload, BatteryDropPayload)
             # No clamping: the state takes the injected value exactly, even
             # if a frozen in flight action can no longer afford itself.
             # See ADR-0003.
             self._state = replace(
                 state,
                 battery_wh=event_payload.new_battery_wh,
+                active_event_ids=state.active_event_ids + (event.id,),
+            )
+        else:
+            assert isinstance(event_payload, EmergencyRequestPayload)
+            self._request_pool = self._request_pool + (event_payload.request,)
+            self._windows.extend(event_payload.windows)
+            self._state = replace(
+                state,
                 active_event_ids=state.active_event_ids + (event.id,),
             )
 
@@ -320,6 +347,18 @@ class MissionSession:
         return self.inject_event(
             EventType.BATTERY_DROP,
             BatteryDropPayload(satellite_id=satellite_id, new_battery_wh=new_battery_wh),
+        )
+
+    def inject_emergency_request(
+        self,
+        request: ObservationRequest,
+        windows: tuple[ObservationWindow, ...],
+    ) -> MissionEvent:
+        """Inject the request carried by the ``EMERGENCY_TASK`` wire event."""
+
+        return self.inject_event(
+            EventType.EMERGENCY_TASK,
+            EmergencyRequestPayload(request=request, windows=windows),
         )
 
     def get_events(self) -> tuple[MissionEvent, ...]:
@@ -466,6 +505,7 @@ class MissionSession:
         self._plans = []
         self._state = MissionState.initial(scenario)
         self._request_pool = scenario.requests
+        self._request_pool_ids_by_plan_id = {}
         self._events = []
         self._traces = []
         self._impacts = []
@@ -509,6 +549,21 @@ class MissionSession:
             previous_plan,
             plan,
             reasons_by_request=self._impact_reasons_by_request(previous_plan),
+        )
+
+    def _record_request_pool_for(self, plan: MissionPlan) -> None:
+        self._request_pool_ids_by_plan_id[plan.id] = frozenset(
+            request.id for request in self._request_pool
+        )
+
+    def _request_pool_for_plan(
+        self, plan: MissionPlan
+    ) -> tuple[ObservationRequest, ...]:
+        request_ids = self._request_pool_ids_by_plan_id.get(plan.id)
+        if request_ids is None:
+            return self._request_pool
+        return tuple(
+            request for request in self._request_pool if request.id in request_ids
         )
 
     def _next_plan_id(self) -> str:
@@ -562,10 +617,12 @@ class MissionSession:
 
     @staticmethod
     def _parse_cloud_block_payload(
-        payload: CloudBlockPayload | dict[str, Any],
+        payload: EventPayload | dict[str, Any],
     ) -> CloudBlockPayload:
         if isinstance(payload, CloudBlockPayload):
             return payload
+        if not isinstance(payload, dict):
+            raise InvalidEventError("cloud block payload has the wrong shape")
         try:
             return CloudBlockPayload.from_dict(payload)
         except (KeyError, TypeError) as error:
@@ -601,10 +658,12 @@ class MissionSession:
 
     @staticmethod
     def _parse_battery_drop_payload(
-        payload: BatteryDropPayload | dict[str, Any],
+        payload: EventPayload | dict[str, Any],
     ) -> BatteryDropPayload:
         if isinstance(payload, BatteryDropPayload):
             return payload
+        if not isinstance(payload, dict):
+            raise InvalidEventError("battery drop payload has the wrong shape")
         try:
             return BatteryDropPayload.from_dict(payload)
         except (KeyError, TypeError) as error:
@@ -633,3 +692,60 @@ class MissionSession:
                     "battery_capacity_wh": capacity_wh,
                 },
             )
+
+    @staticmethod
+    def _parse_emergency_request_payload(
+        payload: EventPayload | dict[str, Any],
+    ) -> EmergencyRequestPayload:
+        if isinstance(payload, EmergencyRequestPayload):
+            return payload
+        if not isinstance(payload, dict):
+            raise InvalidEventError("emergency request payload has the wrong shape")
+        try:
+            return EmergencyRequestPayload.from_dict(payload)
+        except (KeyError, TypeError, ValueError) as error:
+            raise InvalidEventError(
+                "emergency request payload requires a request and explicit windows"
+            ) from error
+
+    def _validate_emergency_request(self, payload: EmergencyRequestPayload) -> None:
+        scenario = self._require_scenario()
+        request = payload.request
+        windows = payload.windows
+
+        if request.id in {item.id for item in self._request_pool}:
+            raise InvalidEventError(
+                "emergency request id already exists",
+                details={"request_id": request.id},
+            )
+        if not windows:
+            raise InvalidEventError(
+                "emergency request requires at least one explicit observation window",
+                details={"request_id": request.id},
+            )
+
+        existing_window_ids = {window.id for window in self._windows}
+        payload_window_ids: set[str] = set()
+        for window in windows:
+            if window.id in existing_window_ids or window.id in payload_window_ids:
+                raise InvalidEventError(
+                    "emergency request window id already exists",
+                    details={"window_id": window.id},
+                )
+            if window.request_id != request.id:
+                raise InvalidEventError(
+                    "emergency request window does not belong to the request",
+                    details={
+                        "request_id": request.id,
+                        "window_id": window.id,
+                    },
+                )
+            if window.satellite_id != scenario.satellite.id:
+                raise InvalidEventError(
+                    "emergency request window satellite does not match the mission satellite",
+                    details={
+                        "satellite_id": window.satellite_id,
+                        "window_id": window.id,
+                    },
+                )
+            payload_window_ids.add(window.id)

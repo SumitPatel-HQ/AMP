@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from amis.domain.enums import PlanChangeType, ReasonCode
+from amis.domain.metrics import MetricsResult
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,9 @@ class PlanDiff:
     from_plan_id: str
     to_plan_id: str
     entries: tuple[PlanDiffEntry, ...]
+    metrics_before: Optional[MetricsResult] = None
+    metrics_after: Optional[MetricsResult] = None
+    request_pool_mismatch: bool = False
 
     def entry_for(self, request_id: str) -> Optional[PlanDiffEntry]:
         return next(
@@ -43,4 +47,9 @@ class PlanDiff:
             "from_plan_id": self.from_plan_id,
             "to_plan_id": self.to_plan_id,
             "entries": [entry.to_dict() for entry in self.entries],
+            "metrics_before": (
+                self.metrics_before.to_dict() if self.metrics_before else None
+            ),
+            "metrics_after": self.metrics_after.to_dict() if self.metrics_after else None,
+            "request_pool_mismatch": self.request_pool_mismatch,
         }

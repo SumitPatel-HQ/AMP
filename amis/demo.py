@@ -5,10 +5,12 @@ Run with: python -m amis.demo
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from amis.domain import (
+    EmergencyRequestPayload,
     MissionState,
     ObservationRequest,
     ObservationWindow,
@@ -203,6 +205,39 @@ def build_canonical_replan_scenario() -> Scenario:
         satellite=satellite,
         requests=requests,
     )
+
+
+def build_emergency_replan_fixture() -> tuple[Scenario, EmergencyRequestPayload]:
+    """A priority tie where the earlier emergency deadline wins the window."""
+
+    canonical = build_canonical_replan_scenario()
+    requests = tuple(
+        replace(request, priority=5) if request.id == "OBS-C" else request
+        for request in canonical.requests
+    )
+    scenario = replace(
+        canonical,
+        name="Emergency request replanning demo",
+        requests=requests,
+    )
+    request = ObservationRequest(
+        id="OBS-EMERGENCY",
+        target_lat=34.05,
+        target_lon=-118.24,
+        priority=5,
+        duration_s=600.0,
+        deadline=REPLAN_START + timedelta(minutes=50),
+        energy_cost_wh=40.0,
+        storage_cost_mb=100.0,
+    )
+    window = ObservationWindow(
+        id="WIN-OBS-EMERGENCY-1",
+        request_id=request.id,
+        satellite_id=scenario.satellite.id,
+        start=REPLAN_START + timedelta(minutes=40),
+        end=REPLAN_START + timedelta(minutes=55),
+    )
+    return scenario, EmergencyRequestPayload(request=request, windows=(window,))
 
 
 def print_state(label: str, session: MissionSession, state: MissionState) -> None:

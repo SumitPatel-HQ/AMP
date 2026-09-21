@@ -221,4 +221,6 @@ def _unscheduled_reason(
         # The request held a placement and every window it could move to
         # failed on the window itself, which is the no alternative case.
         return ReasonCode.NO_ALTERNATIVE_WINDOW
+    if previous_window_id is not None and reason_code is ReasonCode.TIME_OVERLAP:
+        return ReasonCode.DISPLACED_BY_COMPETING_REQUEST
     return reason_code

@@ -9,6 +9,7 @@ from amis.domain.enums import (
 from amis.domain.event import (
     BatteryDropPayload,
     CloudBlockPayload,
+    EmergencyRequestPayload,
     EventPayload,
     MissionEvent,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "RequestStatus",
     "CloudBlockPayload",
     "BatteryDropPayload",
+    "EmergencyRequestPayload",
     "EventPayload",
     "MissionEvent",
     "Impact",
