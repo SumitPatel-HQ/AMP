@@ -1,6 +1,7 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { ErrorBanner } from "./panels/ErrorBanner";
 import { EventPanel } from "./panels/EventPanel";
+import { MissionMapPanel } from "./panels/MissionMapPanel";
 import { ScenarioPanel } from "./panels/ScenarioPanel";
 import { StatePanel } from "./panels/StatePanel";
 import { SteppingPanel } from "./panels/SteppingPanel";
@@ -43,6 +44,15 @@ function DashboardPanels({ session }: { session: ReturnType<typeof useMissionSes
           selectedRequestId={session.selectedRequestId}
           loading={session.loading}
           onReplan={session.replan}
+          onSelectRequest={session.selectRequest}
+        />
+      </div>
+      <div className="lg:col-span-3">
+        <MissionMapPanel
+          scenario={session.scenario}
+          plan={session.plan}
+          missionState={session.missionState}
+          selectedRequestId={session.selectedRequestId}
           onSelectRequest={session.selectRequest}
         />
       </div>

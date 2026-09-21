@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_AMIS_API_URL ?? "http://127.0.0.1:8000
 export const client = createClient<paths>({ baseUrl: API_BASE_URL });
 
 export type ScenarioSchema = components["schemas"]["ScenarioSchema"];
+export type ObservationRequestSchema = components["schemas"]["ObservationRequestSchema"];
 export type ObservationWindowSchema = components["schemas"]["ObservationWindowSchema"];
 export type MissionPlanSchema = components["schemas"]["MissionPlanSchema"];
 export type ScheduledActionSchema = components["schemas"]["ScheduledActionSchema"];
