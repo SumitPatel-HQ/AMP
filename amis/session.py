@@ -60,6 +60,7 @@ class MissionSession:
         self,
         window_provider: WindowProvider | None = None,
         planner: Planner | None = None,
+        plan_id_prefix: str = PLAN_ID_PREFIX,
     ) -> None:
         self._scenario: Scenario | None = None
         self._windows: list[ObservationWindow] = []
@@ -71,6 +72,7 @@ class MissionSession:
         self._impacts: list[Impact] = []
         self._window_provider = window_provider or SyntheticWindowProvider()
         self._planner = planner or GreedyPlanner()
+        self._plan_id_prefix = plan_id_prefix
 
     def load_scenario(self, source: Union[Scenario, dict[str, Any], str, Path]) -> Scenario:
         if isinstance(source, Scenario):
@@ -95,6 +97,10 @@ class MissionSession:
 
     def plan(self) -> MissionPlan:
         scenario = self._require_scenario()
+        if not self._windows:
+            raise SimulationStateError(
+                "observation windows must be generated before planning"
+            )
         mission_state = self.get_state()
         plan = self._planner.plan(
             scenario,
@@ -198,6 +204,9 @@ class MissionSession:
                 details={"version": version},
             )
         return plan
+
+    def get_plan_by_id(self, plan_id: str) -> MissionPlan:
+        return self._plan_by_id(plan_id)
 
     def get_traces(self, plan_id: str | None = None) -> tuple[DecisionTrace, ...]:
         self._require_scenario()
@@ -322,6 +331,70 @@ class MissionSession:
             raise SimulationStateError("no impact exists")
         return self._impacts[-1]
 
+    def get_impacts(self) -> tuple[Impact, ...]:
+        self._require_scenario()
+        return tuple(self._impacts)
+
+    def restore(
+        self,
+        scenario: Scenario,
+        *,
+        windows: tuple[ObservationWindow, ...] = (),
+        plans: tuple[MissionPlan, ...] = (),
+        state: MissionState | None = None,
+        events: tuple[MissionEvent, ...] = (),
+        impacts: tuple[Impact, ...] = (),
+        traces: tuple[DecisionTrace, ...] = (),
+    ) -> None:
+        """Rebuild a request-scoped session from repository records."""
+
+        self._scenario = scenario
+        self._windows = list(windows)
+        self._plans = list(plans)
+        self._state = state or MissionState.initial(scenario)
+        self._events = list(events)
+        self._impacts = list(impacts)
+        self._traces = list(traces)
+
+        introduced_by_event_id = {
+            event.id: request
+            for event in events
+            if (
+                request := getattr(event.payload, "request", None)
+            ) is not None
+            and isinstance(request, ObservationRequest)
+        }
+        introduced_requests = tuple(introduced_by_event_id.values())
+        self._request_pool = scenario.requests + introduced_requests
+
+        base_request_ids = {request.id for request in scenario.requests}
+        plan_by_id = {plan.id: plan for plan in plans}
+        introduced_at_version = [
+            (evaluated_plan.version, introduced_request.id)
+            for impact in impacts
+            if (evaluated_plan := plan_by_id.get(impact.evaluated_plan_id))
+            is not None
+            and (
+                introduced_request := introduced_by_event_id.get(impact.event_id)
+            )
+            is not None
+        ]
+        self._request_pool_ids_by_plan_id = {
+            plan.id: frozenset(
+                base_request_ids
+                | {
+                    request_id
+                    for version, request_id in introduced_at_version
+                    if version < plan.version
+                }
+            )
+            for plan in plans
+        }
+
+        if self._plans:
+            self._update_request_statuses_from_plan()
+            self._update_request_statuses_after_step()
+
     def step(self, seconds: float) -> MissionState:
         scenario = self._require_scenario()
         plan = self.get_plan()
@@ -439,7 +512,7 @@ class MissionSession:
         )
 
     def _next_plan_id(self) -> str:
-        return next_id(PLAN_ID_PREFIX, [plan.id for plan in self._plans])
+        return next_id(self._plan_id_prefix, [plan.id for plan in self._plans])
 
     def _next_action_number(self) -> int:
         return next_number(
