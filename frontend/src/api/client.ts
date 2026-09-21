@@ -12,6 +12,10 @@ export type ScheduledActionSchema = components["schemas"]["ScheduledActionSchema
 export type MissionStateSchema = components["schemas"]["MissionStateSchema"];
 export type MissionEventSchema = components["schemas"]["MissionEventSchema"];
 export type ImpactSchema = components["schemas"]["ImpactSchema"];
+export type PlanDiffSchema = components["schemas"]["PlanDiffSchema"];
+export type PlanDiffEntrySchema = components["schemas"]["PlanDiffEntrySchema"];
+export type UnscheduledEntrySchema = components["schemas"]["UnscheduledEntrySchema"];
+export type PlanChangeType = components["schemas"]["PlanChangeType"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type ApiErrorCode = ErrorEnvelope["error"]["code"];
 

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -9,6 +9,7 @@ import type {
   MissionPlanSchema,
   MissionStateSchema,
   ObservationWindowSchema,
+  PlanDiffSchema,
   ScenarioSchema,
 } from "./api/client";
 
@@ -21,7 +22,9 @@ const api = vi.hoisted(() => ({
   fetchPlan: vi.fn(),
   fetchState: vi.fn(),
   generateWindows: vi.fn(),
+  comparePlans: vi.fn(),
   injectCloudBlock: vi.fn(),
+  replan: vi.fn(),
   stepSimulation: vi.fn(),
 }));
 
@@ -49,6 +52,28 @@ const scenario = {
       target_lat: 12.97,
       target_lon: 77.59,
       priority: 5,
+      duration_s: 600,
+      deadline: "2026-09-21T14:00:00Z",
+      energy_cost_wh: 40,
+      storage_cost_mb: 100,
+      status: "pending",
+    },
+    {
+      id: "OBS-B",
+      target_lat: 28.61,
+      target_lon: 77.21,
+      priority: 4,
+      duration_s: 600,
+      deadline: "2026-09-21T14:00:00Z",
+      energy_cost_wh: 40,
+      storage_cost_mb: 100,
+      status: "pending",
+    },
+    {
+      id: "OBS-C",
+      target_lat: 19.08,
+      target_lon: 72.88,
+      priority: 3,
       duration_s: 600,
       deadline: "2026-09-21T14:00:00Z",
       energy_cost_wh: 40,
@@ -88,12 +113,77 @@ const plan = {
       storage_cost_mb: 100,
       status: "planned",
     },
+    {
+      id: "ACT-OBS-C-1",
+      request_id: "OBS-C",
+      satellite_id: scenario.satellite.id,
+      window_id: "WIN-OBS-C-1",
+      start: "2026-09-21T12:00:00Z",
+      end: "2026-09-21T12:10:00Z",
+      energy_cost_wh: 40,
+      storage_cost_mb: 100,
+      status: "planned",
+    },
   ],
-  unscheduled: [],
-  mission_utility: 5,
-  violation_count: 0,
+  unscheduled: [{ request_id: "OBS-B", reason_code: "DEADLINE_VIOLATION" }],
+  mission_utility: 8,
+  violation_count: 1,
   planning_time_ms: 1,
 } satisfies MissionPlanSchema;
+
+const revisedPlan = {
+  ...plan,
+  id: "SCN-002:PLAN-2",
+  version: 2,
+  parent_plan_id: plan.id,
+  actions: [
+    { ...plan.actions[0], id: "ACT-OBS-A-2", start: "2026-09-21T11:00:00Z", end: "2026-09-21T11:10:00Z" },
+    {
+      id: "ACT-OBS-B-1",
+      request_id: "OBS-B",
+      satellite_id: scenario.satellite.id,
+      window_id: "WIN-OBS-B-1",
+      start: "2026-09-21T13:00:00Z",
+      end: "2026-09-21T13:10:00Z",
+      energy_cost_wh: 40,
+      storage_cost_mb: 100,
+      status: "planned",
+    },
+  ],
+  unscheduled: [{ request_id: "OBS-C", reason_code: "WINDOW_INVALIDATED" }],
+  mission_utility: 9,
+} satisfies MissionPlanSchema;
+
+const planDiff = {
+  from_plan_id: plan.id,
+  to_plan_id: revisedPlan.id,
+  entries: [
+    {
+      request_id: "OBS-A",
+      change_type: "MOVED",
+      reason_code: "ALTERNATIVE_WINDOW_AVAILABLE",
+      old_start: "2026-09-21T10:10:00Z",
+      new_start: "2026-09-21T11:00:00Z",
+    },
+    {
+      request_id: "OBS-B",
+      change_type: "INSERTED",
+      reason_code: "ALTERNATIVE_WINDOW_AVAILABLE",
+      old_start: null,
+      new_start: "2026-09-21T13:00:00Z",
+    },
+    {
+      request_id: "OBS-C",
+      change_type: "DROPPED",
+      reason_code: "WINDOW_INVALIDATED",
+      old_start: "2026-09-21T12:00:00Z",
+      new_start: null,
+    },
+  ],
+  metrics_before: null,
+  metrics_after: null,
+  request_pool_mismatch: false,
+} satisfies PlanDiffSchema;
 
 const window_: ObservationWindowSchema = {
   id: "WIN-OBS-A-1",
@@ -113,13 +203,15 @@ function installSuccessfulApi(): void {
   api.generateWindows.mockResolvedValue([window_]);
   api.createPlan.mockResolvedValue(plan);
   api.fetchPlan.mockResolvedValue(plan);
+  api.replan.mockResolvedValue(revisedPlan);
+  api.comparePlans.mockResolvedValue(planDiff);
 }
 
 async function loadDemoAndGeneratePlan(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
   await screen.findByText(scenario.name);
   await user.click(screen.getByRole("button", { name: "Generate plan" }));
-  await screen.findByText("v1 (1 scheduled)");
+  await screen.findByText("v1 (2 scheduled)");
 }
 
 afterEach(() => {
@@ -148,8 +240,10 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
-    expect(await screen.findByText("v1 (1 scheduled)")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Mission timeline of scheduled actions" })).toBeTruthy();
+    expect(await screen.findByText("v1 (2 scheduled)")).toBeTruthy();
+    expect(
+      screen.getByRole("group", { name: "Mission timeline of scheduled actions" }),
+    ).toBeTruthy();
     await waitFor(() => expect(api.fetchState).toHaveBeenCalledTimes(2));
     expect(api.fetchEvents).toHaveBeenCalledTimes(2);
     expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("#3b82f6");
@@ -285,10 +379,248 @@ describe("mission dashboard", () => {
 
     expect(api.injectCloudBlock).toHaveBeenCalledWith(scenario.id, "OBS-A", "WIN-OBS-A-1");
     expect(await screen.findByText(/OBS-A: WINDOW_INVALIDATED/)).toBeTruthy();
-    expect(screen.getByText("v1 (1 scheduled)")).toBeTruthy();
+    expect(screen.getByText("v1 (2 scheduled)")).toBeTruthy();
     expect(api.createPlan).toHaveBeenCalledTimes(1);
     expect(
       (screen.getByRole("option", { name: /WIN-OBS-A-1/ }) as HTMLOptionElement).textContent,
     ).toContain("invalid");
+  });
+  it("replans against the plan version currently displayed and stacks initial above revised", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+
+    expect(await screen.findByText("v2 (2 scheduled)")).toBeTruthy();
+    expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id);
+    expect(api.comparePlans).toHaveBeenCalledWith(plan.id, revisedPlan.id);
+
+    const timelines = Array.from(container.querySelectorAll("svg[aria-label]")).map(
+      (svg) => svg.getAttribute("aria-label"),
+    );
+    expect(timelines).toEqual([
+      "Initial plan timeline of scheduled actions",
+      "Revised plan timeline of scheduled actions",
+    ]);
+  });
+
+  it("sends the newest plan version on a second replan", async () => {
+    installSuccessfulApi();
+    const thirdPlan = { ...revisedPlan, id: "SCN-002:PLAN-3", version: 3, parent_plan_id: revisedPlan.id };
+    api.replan.mockResolvedValueOnce(revisedPlan).mockResolvedValueOnce(thirdPlan);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v3 (2 scheduled)");
+
+    expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id);
+    expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
+  });
+
+  it("marks changed requests on the revised timeline and leaves the initial timeline unmarked", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
+    expect(
+      revised.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
+    ).toBe("MOVED");
+    expect(
+      revised.querySelector('[data-request-id="OBS-B"]')?.getAttribute("data-change"),
+    ).toBe("INSERTED");
+    expect(within(revised).getByText("OBS-A · MOVED")).toBeTruthy();
+    expect(
+      initial.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
+    ).toBeNull();
+  });
+
+  it("draws frozen actions differently from unfrozen ones", async () => {
+    installSuccessfulApi();
+    const steppedState = {
+      ...missionState,
+      simulated_time: "2026-09-21T11:30:00Z",
+    } satisfies MissionStateSchema;
+    api.stepSimulation.mockResolvedValue(steppedState);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    api.fetchState.mockResolvedValue(steppedState);
+    await user.click(screen.getByRole("button", { name: "Step" }));
+    await waitFor(() => expect(api.stepSimulation).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    const frozen = revised.querySelector('[data-request-id="OBS-A"]');
+    const unfrozen = revised.querySelector('[data-request-id="OBS-B"]');
+    expect(frozen?.getAttribute("data-frozen")).toBe("true");
+    expect(unfrozen?.getAttribute("data-frozen")).toBe("false");
+    expect(frozen?.querySelector("rect")?.getAttribute("stroke")).not.toBe(
+      unfrozen?.querySelector("rect")?.getAttribute("stroke"),
+    );
+  });
+
+  it("lists every unscheduled request under its own timeline and never draws it on one", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const initialEntries = within(
+      screen.getByRole("list", { name: "Initial plan unscheduled requests" }),
+    ).getAllByRole("listitem");
+    expect(initialEntries).toHaveLength(1);
+    expect(initialEntries[0].textContent).toBe("OBS-B · priority 4 · DEADLINE_VIOLATION");
+
+    const revisedEntries = within(
+      screen.getByRole("list", { name: "Revised plan unscheduled requests" }),
+    ).getAllByRole("listitem");
+    expect(revisedEntries).toHaveLength(1);
+    expect(revisedEntries[0].textContent).toContain(
+      "OBS-C · priority 3 · WINDOW_INVALIDATED",
+    );
+
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    expect(revised.querySelector('svg [data-request-id="OBS-C"]')).toBeNull();
+    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
+    expect(initial.querySelector('svg [data-request-id="OBS-B"]')).toBeNull();
+  });
+
+  it("shows a plan version conflict as a readable message and keeps the displayed plan", async () => {
+    installSuccessfulApi();
+    api.replan.mockRejectedValue(
+      new ApiError({
+        error: {
+          code: "PLAN_VERSION_CONFLICT",
+          message: "replan named a plan version that is no longer current",
+          details: { current_plan_id: "SCN-002:PLAN-9" },
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+
+    expect(await screen.findByText("PLAN_VERSION_CONFLICT")).toBeTruthy();
+    expect(
+      screen.getByText(/replan named a plan version that is no longer current/),
+    ).toBeTruthy();
+    expect(screen.getByText("v1 (2 scheduled)")).toBeTruthy();
+    expect(api.comparePlans).not.toHaveBeenCalled();
+  });
+  it("keeps the revised timeline current when the clock moves after a replan", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const steppedState = {
+      ...missionState,
+      simulated_time: "2026-09-21T11:05:00Z",
+    } satisfies MissionStateSchema;
+    api.stepSimulation.mockResolvedValue(steppedState);
+    api.fetchState.mockResolvedValue(steppedState);
+    api.fetchPlan.mockResolvedValue({
+      ...revisedPlan,
+      actions: [
+        { ...revisedPlan.actions[0], status: "started" },
+        revisedPlan.actions[1],
+      ],
+    } satisfies MissionPlanSchema);
+
+    await user.click(screen.getByRole("button", { name: "Step" }));
+
+    const revised = () => container.querySelector('[aria-label="Revised plan"]');
+    await waitFor(() =>
+      expect(
+        revised()?.querySelector('[data-request-id="OBS-A"] rect')?.getAttribute("fill"),
+      ).toBe("#f59e0b"),
+    );
+    // The clock moved past 11:00, but the replan ran at 10:00 and was free to
+    // move this action, so it must not acquire frozen styling after the fact.
+    expect(
+      revised()?.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-frozen"),
+    ).toBe("false");
+  });
+  it("marks the request the replan dropped in the revised unscheduled list", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    const dropped = revised.querySelector('li[data-request-id="OBS-C"]');
+    expect(dropped?.getAttribute("data-change")).toBe("DROPPED");
+    expect(dropped?.textContent).toContain("DROPPED");
+
+    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
+    expect(
+      initial.querySelector('li[data-request-id="OBS-B"]')?.getAttribute("data-change"),
+    ).toBeNull();
+  });
+
+  it("does not mark a request the clock completed as one the replan changed", async () => {
+    installSuccessfulApi();
+    api.comparePlans.mockResolvedValue({
+      ...planDiff,
+      entries: [
+        {
+          request_id: "OBS-A",
+          change_type: "COMPLETED",
+          reason_code: "REQUEST_UNCHANGED",
+          old_start: "2026-09-21T10:10:00Z",
+          new_start: "2026-09-21T10:10:00Z",
+        },
+      ],
+    } satisfies PlanDiffSchema);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    expect(
+      revised.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
+    ).toBeNull();
+  });
+
+  it("lets a keyboard user select a request from the timeline", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const row = screen.getByRole("button", { name: /^OBS-A, / });
+    row.focus();
+    await user.keyboard("{Enter}");
+
+    expect(
+      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+    ).toBe("true");
   });
 });

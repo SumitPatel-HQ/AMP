@@ -1,87 +1,117 @@
 import type {
   MissionPlanSchema,
+  MissionStateSchema,
+  PlanChangeType,
+  PlanDiffSchema,
   ScenarioSchema,
-  ScheduledActionSchema,
 } from "../api/client";
+import type { ReplanResult } from "../state/types";
 import { PanelFrame } from "./PanelFrame";
+import { PlanTimeline } from "./PlanTimeline";
 
-const HEIGHT = 28;
-const ROW_GAP = 6;
-const LEFT_LABEL_WIDTH = 110;
+const NO_CHANGES: Record<string, PlanChangeType> = {};
 
-const STATUS_COLORS: Record<ScheduledActionSchema["status"], string> = {
-  planned: "#3b82f6",
-  started: "#f59e0b",
-  completed: "#10b981",
-};
+/**
+ * The change types a replan caused. UNCHANGED is not a change, and COMPLETED
+ * is the diff reporting that the clock finished an action, not that replanning
+ * touched it, so neither is marked.
+ */
+function replanChanges(diff: PlanDiffSchema): Record<string, PlanChangeType> {
+  const changes: Record<string, PlanChangeType> = {};
+  for (const entry of diff.entries) {
+    if (entry.change_type !== "UNCHANGED" && entry.change_type !== "COMPLETED") {
+      changes[entry.request_id] = entry.change_type;
+    }
+  }
+  return changes;
+}
+
+interface TimelineView {
+  label: string;
+  plan: MissionPlanSchema;
+  changeByRequestId: Record<string, PlanChangeType>;
+}
+
+/** One timeline before a replan, two stacked for comparison after one. */
+function timelineViews(
+  plan: MissionPlanSchema | null,
+  replanResult: ReplanResult | null,
+): TimelineView[] {
+  if (replanResult !== null) {
+    const changes = replanChanges(replanResult.diff);
+    return [
+      {
+        label: "Initial plan",
+        plan: replanResult.initialPlan,
+        changeByRequestId: NO_CHANGES,
+      },
+      {
+        label: "Revised plan",
+        plan: replanResult.revisedPlan,
+        changeByRequestId: changes,
+      },
+    ];
+  }
+  return plan === null
+    ? []
+    : [{ label: "Mission", plan, changeByRequestId: NO_CHANGES }];
+}
 
 export function TimelinePanel({
   scenario,
   plan,
+  replanResult,
+  missionState,
+  selectedRequestId,
+  loading,
+  onReplan,
+  onSelectRequest,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
+  replanResult: ReplanResult | null;
+  missionState: MissionStateSchema | null;
+  selectedRequestId: string | null;
+  loading: boolean;
+  onReplan: () => void;
+  onSelectRequest: (requestId: string | null) => void;
 }) {
-  if (scenario === null || plan === null) {
-    return (
-      <PanelFrame title="Timeline">
-        <p className="text-sm text-neutral-500">
-          Load a scenario and generate a plan to see scheduled actions.
-        </p>
-      </PanelFrame>
-    );
-  }
-
-  const rangeStart = new Date(scenario.start_time).getTime();
-  const rangeEnd = new Date(scenario.end_time).getTime();
-  const rangeMs = Math.max(rangeEnd - rangeStart, 1);
-  const width = 720;
-  const trackWidth = width - LEFT_LABEL_WIDTH;
-  const svgHeight = plan.actions.length * (HEIGHT + ROW_GAP) + ROW_GAP;
-
-  const toX = (isoTime: string): number => {
-    const offset = new Date(isoTime).getTime() - rangeStart;
-    return LEFT_LABEL_WIDTH + (offset / rangeMs) * trackWidth;
-  };
+  const views = scenario === null ? [] : timelineViews(plan, replanResult);
+  // Both stacked timelines are read at the clock the replan ran at, so what
+  // they mark as frozen stays what that replan was not allowed to touch.
+  const frozenAt = replanResult?.frozenAt ?? missionState?.simulated_time ?? null;
 
   return (
     <PanelFrame title="Timeline">
-      {plan.actions.length === 0 ? (
-        <p className="text-sm text-neutral-500">Plan has no scheduled actions.</p>
-      ) : (
-        <svg
-          role="img"
-          aria-label="Mission timeline of scheduled actions"
-          width="100%"
-          viewBox={`0 0 ${width} ${svgHeight}`}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onReplan}
+          disabled={loading || plan === null}
+          className="rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
         >
-          {plan.actions.map((action, index) => {
-            const y = ROW_GAP + index * (HEIGHT + ROW_GAP);
-            const x1 = toX(action.start);
-            const x2 = toX(action.end);
-            return (
-              <g key={action.id}>
-                <text
-                  x={0}
-                  y={y + HEIGHT / 2}
-                  dominantBaseline="middle"
-                  fontSize={11}
-                  fill="#9ca3af"
-                >
-                  {action.request_id}
-                </text>
-                <rect
-                  x={x1}
-                  y={y}
-                  width={Math.max(x2 - x1, 2)}
-                  height={HEIGHT}
-                  rx={2}
-                  fill={STATUS_COLORS[action.status]}
-                />
-              </g>
-            );
-          })}
-        </svg>
+          Replan
+        </button>
+      </div>
+      {scenario === null || views.length === 0 ? (
+        <p className="text-sm text-neutral-500">
+          Load a scenario and generate a plan to see scheduled actions.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {views.map((view) => (
+            <PlanTimeline
+              key={view.plan.id}
+              label={view.label}
+              scenario={scenario}
+              plan={view.plan}
+              simulatedTime={frozenAt}
+              changeByRequestId={view.changeByRequestId}
+              selectedRequestId={selectedRequestId}
+              onSelectRequest={onSelectRequest}
+            />
+          ))}
+        </div>
       )}
     </PanelFrame>
   );

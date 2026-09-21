@@ -6,6 +6,7 @@ import type {
   MissionStateSchema,
   MissionEventSchema,
   ImpactSchema,
+  PlanDiffSchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -103,6 +104,29 @@ export async function fetchPlan(planId: string): Promise<MissionPlanSchema> {
   return unwrap(
     await client.GET("/plans/{plan_id}", {
       params: { path: { plan_id: planId } },
+    }),
+  );
+}
+
+export async function replan(
+  scenarioId: string,
+  expectedParentPlanId: string,
+): Promise<MissionPlanSchema> {
+  return unwrap(
+    await client.POST("/scenarios/{scenario_id}/replan", {
+      params: { path: { scenario_id: scenarioId } },
+      body: { expected_parent_plan_id: expectedParentPlanId },
+    }),
+  );
+}
+
+export async function comparePlans(
+  oldPlanId: string,
+  newPlanId: string,
+): Promise<PlanDiffSchema> {
+  return unwrap(
+    await client.GET("/plans/{old_plan_id}/compare/{new_plan_id}", {
+      params: { path: { old_plan_id: oldPlanId, new_plan_id: newPlanId } },
     }),
   );
 }

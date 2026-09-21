@@ -35,7 +35,16 @@ function DashboardPanels({ session }: { session: ReturnType<typeof useMissionSes
         />
       </div>
       <div className="lg:col-span-3">
-        <TimelinePanel scenario={session.scenario} plan={session.plan} />
+        <TimelinePanel
+          scenario={session.scenario}
+          plan={session.plan}
+          replanResult={session.replanResult}
+          missionState={session.missionState}
+          selectedRequestId={session.selectedRequestId}
+          loading={session.loading}
+          onReplan={session.replan}
+          onSelectRequest={session.selectRequest}
+        />
       </div>
       <div className="lg:col-span-3">
         <EventPanel
