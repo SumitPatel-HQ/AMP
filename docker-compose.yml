@@ -19,11 +19,22 @@ services:
     build: .
     environment:
       AMIS_DATABASE_URL: postgresql+psycopg2://amis:amis@db:5432/amis
+      AMIS_CORS_ALLOWED_ORIGINS: http://localhost:8080,http://localhost:5173
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_AMIS_API_URL: http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
 
 volumes:
   amis-postgres-data:

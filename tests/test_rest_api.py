@@ -307,6 +307,74 @@ def test_validation_errors_use_the_envelope_and_openapi_lists_all_six_codes():
     asyncio.run(run())
 
 
+def test_cors_allows_the_configured_frontend_origin():
+    async def run() -> None:
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/demo/scenario", headers={"Origin": "http://localhost:5173"}
+            )
+            assert (
+                response.headers["access-control-allow-origin"]
+                == "http://localhost:5173"
+            )
+
+    asyncio.run(run())
+
+
+def test_demo_scenario_route_returns_the_canonical_scenario_without_persisting_it():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            demo = await client.get("/demo/scenario")
+            assert demo.status_code == 200
+            assert Scenario.from_dict(demo.json()) == build_canonical_replan_scenario()
+
+            missing = await client.get(f"/scenarios/{demo.json()['id']}")
+            assert missing.status_code == 404
+
+    asyncio.run(run())
+
+
+def test_events_route_lists_injected_events_for_the_state_panel():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario = _scenario("SCN-EVENTS")
+            await client.post("/scenarios", json=scenario.to_dict())
+
+            empty = await client.get(f"/scenarios/{scenario.id}/events")
+            assert empty.status_code == 200
+            assert empty.json() == []
+
+            windows = (
+                await client.post(f"/scenarios/{scenario.id}/windows/generate")
+            ).json()
+            await client.post(f"/scenarios/{scenario.id}/plan")
+            injected = await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={
+                    "event_type": "CLOUD_BLOCK",
+                    "payload": {
+                        "request_id": windows[0]["request_id"],
+                        "window_id": windows[0]["id"],
+                    },
+                },
+            )
+
+            listed = await client.get(f"/scenarios/{scenario.id}/events")
+            assert listed.status_code == 200
+            assert listed.json() == [injected.json()]
+
+            missing = await client.get("/scenarios/DOES-NOT-EXIST/events")
+            assert missing.status_code == 404
+
+    asyncio.run(run())
+
+
 def test_plan_routes_remain_unambiguous_across_scenarios():
     async def run() -> None:
         app = create_app()

@@ -7,6 +7,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, Path, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from amis.api_schemas import (
@@ -24,6 +25,7 @@ from amis.api_schemas import (
     ScenarioSchema,
     StepRequest,
 )
+from amis.demo import build_canonical_replan_scenario
 from amis.domain import Scenario
 from amis.errors import (
     ConstraintViolationError,
@@ -34,6 +36,7 @@ from amis.errors import (
     ResourceNotFoundError,
     SimulationStateError,
 )
+from amis.config import get_cors_allowed_origins
 from amis.repositories import MissionSessionStore, Repositories
 from amis.windows import WindowProvider
 
@@ -70,6 +73,12 @@ def create_app(
     window_provider: WindowProvider | None = None,
 ) -> FastAPI:
     app = FastAPI(title="AMIS REST API", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(get_cors_allowed_origins()),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
     store = MissionSessionStore(
         repositories or Repositories.in_memory(),
         window_provider=window_provider,
@@ -118,6 +127,13 @@ def create_app(
             details={"errors": error.errors()},
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
+
+    @app.get(
+        "/demo/scenario",
+        response_model=ScenarioSchema,
+    )
+    def get_demo_scenario() -> dict[str, Any]:
+        return build_canonical_replan_scenario().to_dict()
 
     @app.post(
         "/scenarios",
@@ -197,6 +213,14 @@ def create_app(
         )
         store.save(session)
         return event.to_dict()
+
+    @app.get(
+        "/scenarios/{scenario_id}/events",
+        response_model=list[MissionEventSchema],
+        responses=_documented_errors(404, 422),
+    )
+    def get_events(scenario_id: ScenarioId) -> list[dict[str, Any]]:
+        return [event.to_dict() for event in store.load(scenario_id).get_events()]
 
     @app.get(
         "/scenarios/{scenario_id}/impact",

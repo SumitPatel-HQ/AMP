@@ -10,7 +10,19 @@ from __future__ import annotations
 import os
 
 DATABASE_URL_ENV_VAR = "AMIS_DATABASE_URL"
+CORS_ALLOWED_ORIGINS_ENV_VAR = "AMIS_CORS_ALLOWED_ORIGINS"
+DEFAULT_CORS_ALLOWED_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
 
 
 def get_database_url() -> str | None:
     return os.environ.get(DATABASE_URL_ENV_VAR) or None
+
+
+def get_cors_allowed_origins() -> tuple[str, ...]:
+    raw = os.environ.get(CORS_ALLOWED_ORIGINS_ENV_VAR)
+    if raw is None:
+        return DEFAULT_CORS_ALLOWED_ORIGINS
+    return tuple(origin.strip() for origin in raw.split(",") if origin.strip())

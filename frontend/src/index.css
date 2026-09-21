@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: #0a0b0f;
+  color: #d4d6dc;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
