@@ -1,4 +1,5 @@
 from amis.domain.enums import ActionStatus, ReasonCode, RequestStatus
+from amis.domain.metrics import MetricsResult
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry
 from amis.domain.scenario import ObservationRequest, Satellite, Scenario
 from amis.domain.state import MissionState
@@ -9,6 +10,7 @@ __all__ = [
     "ActionStatus",
     "ReasonCode",
     "RequestStatus",
+    "MetricsResult",
     "MissionPlan",
     "ScheduledAction",
     "UnscheduledEntry",
