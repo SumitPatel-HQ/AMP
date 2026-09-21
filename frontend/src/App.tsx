@@ -1,7 +1,9 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { ErrorBanner } from "./panels/ErrorBanner";
+import { EventPanel } from "./panels/EventPanel";
 import { ScenarioPanel } from "./panels/ScenarioPanel";
 import { StatePanel } from "./panels/StatePanel";
+import { SteppingPanel } from "./panels/SteppingPanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
 
 // Panels mount independently over this grid. Add, remove, or reorder an
@@ -25,8 +27,25 @@ function DashboardPanels({ session }: { session: ReturnType<typeof useMissionSes
           satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
         />
       </div>
+      <div className="lg:col-span-1">
+        <SteppingPanel
+          missionState={session.missionState}
+          loading={session.loading}
+          onStep={session.step}
+        />
+      </div>
       <div className="lg:col-span-3">
         <TimelinePanel scenario={session.scenario} plan={session.plan} />
+      </div>
+      <div className="lg:col-span-3">
+        <EventPanel
+          scenario={session.scenario}
+          plan={session.plan}
+          windows={session.windows}
+          impact={session.impact}
+          loading={session.loading}
+          onInjectCloudBlock={session.injectCloudBlock}
+        />
       </div>
     </div>
   );

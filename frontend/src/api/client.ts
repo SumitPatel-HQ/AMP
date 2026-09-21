@@ -11,6 +11,7 @@ export type MissionPlanSchema = components["schemas"]["MissionPlanSchema"];
 export type ScheduledActionSchema = components["schemas"]["ScheduledActionSchema"];
 export type MissionStateSchema = components["schemas"]["MissionStateSchema"];
 export type MissionEventSchema = components["schemas"]["MissionEventSchema"];
+export type ImpactSchema = components["schemas"]["ImpactSchema"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type ApiErrorCode = ErrorEnvelope["error"]["code"];
 

@@ -5,6 +5,7 @@ import type {
   MissionPlanSchema,
   MissionStateSchema,
   MissionEventSchema,
+  ImpactSchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -58,6 +59,50 @@ export async function fetchEvents(scenarioId: string): Promise<MissionEventSchem
   return unwrap(
     await client.GET("/scenarios/{scenario_id}/events", {
       params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+export async function stepSimulation(
+  scenarioId: string,
+  seconds: number,
+): Promise<MissionStateSchema> {
+  return unwrap(
+    await client.POST("/scenarios/{scenario_id}/simulation/step", {
+      params: { path: { scenario_id: scenarioId } },
+      body: { seconds },
+    }),
+  );
+}
+
+export async function injectCloudBlock(
+  scenarioId: string,
+  requestId: string,
+  windowId: string,
+): Promise<MissionEventSchema> {
+  return unwrap(
+    await client.POST("/scenarios/{scenario_id}/events", {
+      params: { path: { scenario_id: scenarioId } },
+      body: {
+        event_type: "CLOUD_BLOCK",
+        payload: { request_id: requestId, window_id: windowId },
+      },
+    }),
+  );
+}
+
+export async function fetchImpact(scenarioId: string): Promise<ImpactSchema> {
+  return unwrap(
+    await client.GET("/scenarios/{scenario_id}/impact", {
+      params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+export async function fetchPlan(planId: string): Promise<MissionPlanSchema> {
+  return unwrap(
+    await client.GET("/plans/{plan_id}", {
+      params: { path: { plan_id: planId } },
     }),
   );
 }

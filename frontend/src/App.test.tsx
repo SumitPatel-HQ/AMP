@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { ApiError } from "./api/amis";
 import type {
+  ImpactSchema,
+  MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
+  ObservationWindowSchema,
   ScenarioSchema,
 } from "./api/client";
 
@@ -14,8 +17,12 @@ const api = vi.hoisted(() => ({
   createScenario: vi.fn(),
   fetchDemoScenario: vi.fn(),
   fetchEvents: vi.fn(),
+  fetchImpact: vi.fn(),
+  fetchPlan: vi.fn(),
   fetchState: vi.fn(),
   generateWindows: vi.fn(),
+  injectCloudBlock: vi.fn(),
+  stepSimulation: vi.fn(),
 }));
 
 vi.mock("./api/amis", async (importOriginal) => ({
@@ -88,13 +95,31 @@ const plan = {
   planning_time_ms: 1,
 } satisfies MissionPlanSchema;
 
+const window_: ObservationWindowSchema = {
+  id: "WIN-OBS-A-1",
+  request_id: "OBS-A",
+  satellite_id: scenario.satellite.id,
+  start: "2026-09-21T10:10:00Z",
+  end: "2026-09-21T10:20:00Z",
+  valid: true,
+  invalid_reason: null,
+};
+
 function installSuccessfulApi(): void {
   api.fetchDemoScenario.mockResolvedValue(scenario);
   api.createScenario.mockResolvedValue(scenario);
   api.fetchState.mockResolvedValue(missionState);
   api.fetchEvents.mockResolvedValue([]);
-  api.generateWindows.mockResolvedValue([]);
+  api.generateWindows.mockResolvedValue([window_]);
   api.createPlan.mockResolvedValue(plan);
+  api.fetchPlan.mockResolvedValue(plan);
+}
+
+async function loadDemoAndGeneratePlan(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+  await screen.findByText(scenario.name);
+  await user.click(screen.getByRole("button", { name: "Generate plan" }));
+  await screen.findByText("v1 (1 scheduled)");
 }
 
 afterEach(() => {
@@ -175,5 +200,95 @@ describe("mission dashboard", () => {
 
     expect(await screen.findByText("RESOURCE_NOT_FOUND")).toBeTruthy();
     expect(screen.getByText(/demo scenario is unavailable/)).toBeTruthy();
+  });
+
+  it("steps the simulation, updates the state panel, and refreshes the timeline's action statuses", async () => {
+    installSuccessfulApi();
+    api.stepSimulation.mockResolvedValue({
+      ...missionState,
+      simulated_time: "2026-09-21T10:15:00Z",
+      battery_wh: 490,
+    } satisfies MissionStateSchema);
+    api.fetchPlan.mockResolvedValue({
+      ...plan,
+      actions: [{ ...plan.actions[0], status: "started" }],
+    } satisfies MissionPlanSchema);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Step" }));
+
+    expect(api.stepSimulation).toHaveBeenCalledWith(scenario.id, 300);
+    expect(await screen.findByText("490.0 Wh")).toBeTruthy();
+    await waitFor(() =>
+      expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("#f59e0b"),
+    );
+  });
+
+  it("shows mission complete as a readable message and surfaces a rejected step past the end", async () => {
+    installSuccessfulApi();
+    api.stepSimulation.mockResolvedValueOnce({
+      ...missionState,
+      simulated_time: scenario.end_time,
+      mission_complete: true,
+    } satisfies MissionStateSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Step" }));
+    expect(await screen.findByText("Mission complete.")).toBeTruthy();
+
+    api.stepSimulation.mockRejectedValueOnce(
+      new ApiError({
+        error: {
+          code: "SIMULATION_STATE_ERROR",
+          message: "mission is complete; reset the simulation before stepping again",
+          details: {},
+        },
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Step" }));
+
+    expect(await screen.findByText("SIMULATION_STATE_ERROR")).toBeTruthy();
+    expect(
+      screen.getByText(/mission is complete; reset the simulation before stepping again/),
+    ).toBeTruthy();
+  });
+
+  it("injects a cloud block chosen from request and window dropdowns and shows the impact, without replanning", async () => {
+    installSuccessfulApi();
+    api.injectCloudBlock.mockResolvedValue({
+      id: "EVT-1",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema);
+    api.fetchImpact.mockResolvedValue({
+      id: "IMPACT-1",
+      event_id: "EVT-1",
+      evaluated_plan_id: plan.id,
+      frozen_action_ids: [],
+      valid_unfrozen_action_ids: [],
+      invalid_unfrozen_action_ids: ["ACT-OBS-A-1"],
+      reason_codes: { "ACT-OBS-A-1": ["WINDOW_INVALIDATED"] },
+    } satisfies ImpactSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
+    await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
+    await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+
+    expect(api.injectCloudBlock).toHaveBeenCalledWith(scenario.id, "OBS-A", "WIN-OBS-A-1");
+    expect(await screen.findByText(/OBS-A: WINDOW_INVALIDATED/)).toBeTruthy();
+    expect(screen.getByText("v1 (1 scheduled)")).toBeTruthy();
+    expect(api.createPlan).toHaveBeenCalledTimes(1);
+    expect(
+      (screen.getByRole("option", { name: /WIN-OBS-A-1/ }) as HTMLOptionElement).textContent,
+    ).toContain("invalid");
   });
 });
