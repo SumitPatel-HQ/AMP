@@ -31,3 +31,18 @@ class Impact:
                 for action_id, reasons in self.reason_codes.items()
             },
         }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "Impact":
+        return Impact(
+            id=data["id"],
+            event_id=data["event_id"],
+            evaluated_plan_id=data["evaluated_plan_id"],
+            frozen_action_ids=tuple(data["frozen_action_ids"]),
+            valid_unfrozen_action_ids=tuple(data["valid_unfrozen_action_ids"]),
+            invalid_unfrozen_action_ids=tuple(data["invalid_unfrozen_action_ids"]),
+            reason_codes={
+                action_id: tuple(ReasonCode(reason) for reason in reasons)
+                for action_id, reasons in data["reason_codes"].items()
+            },
+        )

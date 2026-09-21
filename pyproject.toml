@@ -5,6 +5,9 @@ description = "AMIS: adaptive mission planning simulator for Earth observation s
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116,<1",
+    "uvicorn>=0.30,<1",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
 ]
 
 [project.optional-dependencies]
@@ -13,6 +16,12 @@ test = [
     "mypy>=1.18,<2",
     "pytest>=9,<10",
 ]
+postgres = [
+    "psycopg2-binary>=2.9,<3",
+]
+
+[tool.setuptools.packages.find]
+include = ["amis*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

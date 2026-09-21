@@ -37,3 +37,22 @@ class DecisionTrace:
             "message": self.message,
             "metadata": dict(self.metadata),
         }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "DecisionTrace":
+        previous_action = data.get("previous_action")
+        new_action = data.get("new_action")
+        return DecisionTrace(
+            id=data["id"],
+            plan_id=data["plan_id"],
+            reason_code=ReasonCode(data["reason_code"]),
+            message=data["message"],
+            event_id=data.get("event_id"),
+            request_id=data.get("request_id"),
+            previous_action=(
+                ScheduledAction.from_dict(previous_action) if previous_action else None
+            ),
+            new_action=ScheduledAction.from_dict(new_action) if new_action else None,
+            constraint_name=data.get("constraint_name"),
+            metadata=dict(data.get("metadata", {})),
+        )

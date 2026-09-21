@@ -44,3 +44,17 @@ class MissionState:
             "completed_request_ids": list(self.completed_request_ids),
             "mission_complete": self.mission_complete,
         }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "MissionState":
+        return MissionState(
+            scenario_id=data["scenario_id"],
+            simulated_time=datetime.fromisoformat(data["simulated_time"]),
+            satellite_id=data["satellite_id"],
+            battery_wh=data["battery_wh"],
+            storage_usage_mb=data["storage_usage_mb"],
+            available=data["available"],
+            active_event_ids=tuple(data.get("active_event_ids", ())),
+            completed_request_ids=tuple(data.get("completed_request_ids", ())),
+            mission_complete=data.get("mission_complete", False),
+        )

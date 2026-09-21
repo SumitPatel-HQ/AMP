@@ -34,6 +34,20 @@ class ScheduledAction:
             "status": self.status.value,
         }
 
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "ScheduledAction":
+        return ScheduledAction(
+            id=data["id"],
+            request_id=data["request_id"],
+            satellite_id=data["satellite_id"],
+            window_id=data["window_id"],
+            start=datetime.fromisoformat(data["start"]),
+            end=datetime.fromisoformat(data["end"]),
+            energy_cost_wh=data["energy_cost_wh"],
+            storage_cost_mb=data["storage_cost_mb"],
+            status=ActionStatus(data["status"]),
+        )
+
 
 @dataclass(frozen=True)
 class UnscheduledEntry:
@@ -42,6 +56,13 @@ class UnscheduledEntry:
 
     def to_dict(self) -> dict[str, Any]:
         return {"request_id": self.request_id, "reason_code": self.reason_code.value}
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "UnscheduledEntry":
+        return UnscheduledEntry(
+            request_id=data["request_id"],
+            reason_code=ReasonCode(data["reason_code"]),
+        )
 
 
 @dataclass(frozen=True)
@@ -70,3 +91,20 @@ class MissionPlan:
             "violation_count": self.violation_count,
             "planning_time_ms": self.planning_time_ms,
         }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "MissionPlan":
+        return MissionPlan(
+            id=data["id"],
+            scenario_id=data["scenario_id"],
+            version=data["version"],
+            parent_plan_id=data.get("parent_plan_id"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            actions=tuple(ScheduledAction.from_dict(a) for a in data["actions"]),
+            unscheduled=tuple(
+                UnscheduledEntry.from_dict(u) for u in data["unscheduled"]
+            ),
+            mission_utility=data["mission_utility"],
+            violation_count=data["violation_count"],
+            planning_time_ms=data["planning_time_ms"],
+        )
