@@ -17,8 +17,10 @@ from typing import Any, Union
 from amis.diff import compare_plans
 from amis.domain import (
     ActionStatus,
+    BatteryDropPayload,
     CloudBlockPayload,
     DecisionTrace,
+    EventPayload,
     EventType,
     Impact,
     MetricsResult,
@@ -227,7 +229,7 @@ class MissionSession:
     def inject_event(
         self,
         event_type: EventType | str,
-        payload: CloudBlockPayload | dict[str, Any],
+        payload: EventPayload | dict[str, Any],
     ) -> MissionEvent:
         scenario = self._require_scenario()
         plan = self.get_plan()
@@ -241,37 +243,51 @@ class MissionSession:
                 details={"event_type": str(event_type)},
             ) from error
 
-        if parsed_event_type is not EventType.CLOUD_BLOCK:
+        if parsed_event_type is EventType.CLOUD_BLOCK:
+            event_payload: EventPayload = self._parse_cloud_block_payload(payload)
+            self._validate_cloud_block(event_payload)
+        elif parsed_event_type is EventType.BATTERY_DROP:
+            event_payload = self._parse_battery_drop_payload(payload)
+            self._validate_battery_drop(event_payload)
+        else:
             raise InvalidEventError(
                 "mission event type is not implemented",
                 details={"event_type": parsed_event_type.value},
             )
-
-        cloud_block = self._parse_cloud_block_payload(payload)
-        self._validate_cloud_block(cloud_block)
 
         event = MissionEvent(
             id=next_id(EVENT_ID_PREFIX, [record.id for record in self._events]),
             scenario_id=scenario.id,
             event_type=parsed_event_type,
             event_time=state.simulated_time,
-            payload=cloud_block,
+            payload=event_payload,
         )
 
-        self._windows = [
-            replace(
-                window,
-                valid=False,
-                invalid_reason=ReasonCode.WINDOW_INVALIDATED.value,
+        if parsed_event_type is EventType.CLOUD_BLOCK:
+            self._windows = [
+                replace(
+                    window,
+                    valid=False,
+                    invalid_reason=ReasonCode.WINDOW_INVALIDATED.value,
+                )
+                if window.id == event_payload.window_id
+                else window
+                for window in self._windows
+            ]
+            self._state = replace(
+                state,
+                active_event_ids=state.active_event_ids + (event.id,),
             )
-            if window.id == cloud_block.window_id
-            else window
-            for window in self._windows
-        ]
-        self._state = replace(
-            state,
-            active_event_ids=state.active_event_ids + (event.id,),
-        )
+        else:
+            # No clamping: the state takes the injected value exactly, even
+            # if a frozen in flight action can no longer afford itself.
+            # See ADR-0003.
+            self._state = replace(
+                state,
+                battery_wh=event_payload.new_battery_wh,
+                active_event_ids=state.active_event_ids + (event.id,),
+            )
+
         impact = analyze_impact(
             impact_id=next_id(IMPACT_ID_PREFIX, [record.id for record in self._impacts]),
             event_id=event.id,
@@ -289,6 +305,12 @@ class MissionSession:
         return self.inject_event(
             EventType.CLOUD_BLOCK,
             CloudBlockPayload(request_id=request_id, window_id=window_id),
+        )
+
+    def inject_battery_drop(self, satellite_id: str, new_battery_wh: float) -> MissionEvent:
+        return self.inject_event(
+            EventType.BATTERY_DROP,
+            BatteryDropPayload(satellite_id=satellite_id, new_battery_wh=new_battery_wh),
         )
 
     def get_events(self) -> tuple[MissionEvent, ...]:
@@ -501,5 +523,40 @@ class MissionSession:
                 details={
                     "request_id": payload.request_id,
                     "window_id": payload.window_id,
+                },
+            )
+
+    @staticmethod
+    def _parse_battery_drop_payload(
+        payload: BatteryDropPayload | dict[str, Any],
+    ) -> BatteryDropPayload:
+        if isinstance(payload, BatteryDropPayload):
+            return payload
+        try:
+            return BatteryDropPayload.from_dict(payload)
+        except (KeyError, TypeError) as error:
+            raise InvalidEventError(
+                "battery drop payload requires satellite_id and new_battery_wh"
+            ) from error
+
+    def _validate_battery_drop(self, payload: BatteryDropPayload) -> None:
+        scenario = self._require_scenario()
+        state = self.get_state()
+        if payload.satellite_id != state.satellite_id:
+            raise InvalidEventError(
+                "battery drop satellite does not match the mission satellite",
+                details={"satellite_id": payload.satellite_id},
+            )
+        capacity_wh = scenario.satellite.battery_capacity_wh
+        if (
+            not math.isfinite(payload.new_battery_wh)
+            or payload.new_battery_wh < 0
+            or payload.new_battery_wh > capacity_wh
+        ):
+            raise InvalidEventError(
+                "battery drop value must be between zero and battery capacity",
+                details={
+                    "new_battery_wh": payload.new_battery_wh,
+                    "battery_capacity_wh": capacity_wh,
                 },
             )

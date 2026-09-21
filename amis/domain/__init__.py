@@ -6,7 +6,12 @@ from amis.domain.enums import (
     ReasonCode,
     RequestStatus,
 )
-from amis.domain.event import CloudBlockPayload, MissionEvent
+from amis.domain.event import (
+    BatteryDropPayload,
+    CloudBlockPayload,
+    EventPayload,
+    MissionEvent,
+)
 from amis.domain.impact import Impact
 from amis.domain.metrics import MetricsResult
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry
@@ -23,6 +28,8 @@ __all__ = [
     "ReasonCode",
     "RequestStatus",
     "CloudBlockPayload",
+    "BatteryDropPayload",
+    "EventPayload",
     "MissionEvent",
     "Impact",
     "MetricsResult",

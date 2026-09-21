@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
 from amis.domain.enums import EventType
 
@@ -26,12 +26,31 @@ class CloudBlockPayload:
 
 
 @dataclass(frozen=True)
+class BatteryDropPayload:
+    satellite_id: str
+    new_battery_wh: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"satellite_id": self.satellite_id, "new_battery_wh": self.new_battery_wh}
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "BatteryDropPayload":
+        return BatteryDropPayload(
+            satellite_id=data["satellite_id"],
+            new_battery_wh=data["new_battery_wh"],
+        )
+
+
+EventPayload = Union[CloudBlockPayload, BatteryDropPayload]
+
+
+@dataclass(frozen=True)
 class MissionEvent:
     id: str
     scenario_id: str
     event_type: EventType
     event_time: datetime
-    payload: CloudBlockPayload
+    payload: EventPayload
 
     def to_dict(self) -> dict[str, Any]:
         return {
