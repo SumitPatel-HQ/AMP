@@ -36,7 +36,7 @@ from amis.errors import (
     ResourceNotFoundError,
     SimulationStateError,
 )
-from amis.config import get_cors_allowed_origins
+from amis.config import get_cors_allowed_origin_regex, get_cors_allowed_origins
 from amis.repositories import MissionSessionStore, Repositories
 from amis.windows import WindowProvider
 
@@ -76,6 +76,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(get_cors_allowed_origins()),
+        allow_origin_regex=get_cors_allowed_origin_regex(),
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )

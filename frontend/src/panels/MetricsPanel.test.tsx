@@ -55,11 +55,11 @@ describe("metrics panel", () => {
     render(<MetricsPanel diff={diff} />);
 
     const churnRow = screen.getByText("Plan churn").closest("tr");
-    expect(churnRow?.textContent).toContain("n/a");
+    expect(churnRow?.textContent).toContain("N/A");
     expect(churnRow?.textContent).not.toContain("0%");
 
     const coverageRow = screen.getByText("Explanation coverage").closest("tr");
-    expect(coverageRow?.textContent).toContain("n/a");
+    expect(coverageRow?.textContent).toContain("N/A");
   });
 
   it("renders the after plan's churn and coverage as scores once they exist", () => {

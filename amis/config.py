@@ -15,6 +15,9 @@ DEFAULT_CORS_ALLOWED_ORIGINS = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
+DEFAULT_CORS_ALLOWED_ORIGIN_REGEX = (
+    r"^http://(?:localhost|127\.0\.0\.1):\d+$"
+)
 
 
 def get_database_url() -> str | None:
@@ -26,3 +29,9 @@ def get_cors_allowed_origins() -> tuple[str, ...]:
     if raw is None:
         return DEFAULT_CORS_ALLOWED_ORIGINS
     return tuple(origin.strip() for origin in raw.split(",") if origin.strip())
+
+
+def get_cors_allowed_origin_regex() -> str | None:
+    if CORS_ALLOWED_ORIGINS_ENV_VAR in os.environ:
+        return None
+    return DEFAULT_CORS_ALLOWED_ORIGIN_REGEX

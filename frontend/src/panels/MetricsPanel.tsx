@@ -2,7 +2,7 @@ import type { MetricsSchema, PlanDiffSchema } from "../api/client";
 import { PanelFrame } from "./PanelFrame";
 
 function formatPercent(value: number | null): string {
-  return value === null ? "n/a" : `${(value * 100).toFixed(0)}%`;
+  return value === null ? "N/A" : `${(value * 100).toFixed(0)}%`;
 }
 
 interface MetricRow {

@@ -323,6 +323,48 @@ def test_cors_allows_the_configured_frontend_origin():
     asyncio.run(run())
 
 
+def test_cors_allows_a_vite_fallback_port_in_local_development(monkeypatch):
+    monkeypatch.delenv("AMIS_CORS_ALLOWED_ORIGINS", raising=False)
+
+    async def run() -> None:
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/demo/scenario", headers={"Origin": "http://localhost:5175"}
+            )
+            assert response.headers["access-control-allow-origin"] == (
+                "http://localhost:5175"
+            )
+
+    asyncio.run(run())
+
+
+def test_cors_explicit_allowlist_disables_the_local_development_pattern(monkeypatch):
+    monkeypatch.setenv(
+        "AMIS_CORS_ALLOWED_ORIGINS",
+        "https://dashboard.example.com",
+    )
+
+    async def run() -> None:
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            configured = await client.get(
+                "/demo/scenario",
+                headers={"Origin": "https://dashboard.example.com"},
+            )
+            local = await client.get(
+                "/demo/scenario", headers={"Origin": "http://localhost:5175"}
+            )
+            assert configured.headers["access-control-allow-origin"] == (
+                "https://dashboard.example.com"
+            )
+            assert "access-control-allow-origin" not in local.headers
+
+    asyncio.run(run())
+
+
 def test_demo_scenario_route_returns_the_canonical_scenario_without_persisting_it():
     async def run() -> None:
         app = create_app(window_provider=CanonicalWindowProvider())
