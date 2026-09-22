@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { ApiError } from "./api/amis";
 import type {
+  DecisionTraceSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -21,6 +22,7 @@ const api = vi.hoisted(() => ({
   fetchImpact: vi.fn(),
   fetchPlan: vi.fn(),
   fetchState: vi.fn(),
+  fetchTraces: vi.fn(),
   generateWindows: vi.fn(),
   comparePlans: vi.fn(),
   injectCloudBlock: vi.fn(),
@@ -180,10 +182,49 @@ const planDiff = {
       new_start: null,
     },
   ],
-  metrics_before: null,
-  metrics_after: null,
+  metrics_before: {
+    plan_id: plan.id,
+    mission_utility: 8,
+    completion_rate: 0,
+    violation_count: 1,
+    planning_time_ms: 1,
+    battery_utilisation: 0,
+    storage_utilisation: 0,
+    request_pool_size: 3,
+    request_pool_ids: ["OBS-A", "OBS-B", "OBS-C"],
+    plan_churn: null,
+    explanation_coverage: null,
+  },
+  metrics_after: {
+    plan_id: revisedPlan.id,
+    mission_utility: 9,
+    completion_rate: 0,
+    violation_count: 1,
+    planning_time_ms: 1,
+    battery_utilisation: 0,
+    storage_utilisation: 0,
+    request_pool_size: 3,
+    request_pool_ids: ["OBS-A", "OBS-B", "OBS-C"],
+    plan_churn: 2 / 3,
+    explanation_coverage: 1,
+  },
   request_pool_mismatch: false,
 } satisfies PlanDiffSchema;
+
+const traces = [
+  {
+    id: "TRACE-0001",
+    plan_id: revisedPlan.id,
+    event_id: null,
+    request_id: "OBS-A",
+    reason_code: "ALTERNATIVE_WINDOW_AVAILABLE",
+    previous_action: null,
+    new_action: null,
+    constraint_name: null,
+    message: "OBS-A moved from 2026-09-21 10:10 to 2026-09-21 11:00 because an alternative window was available.",
+    metadata: {},
+  },
+] satisfies DecisionTraceSchema[];
 
 const window_: ObservationWindowSchema = {
   id: "WIN-OBS-A-1",
@@ -205,6 +246,7 @@ function installSuccessfulApi(): void {
   api.fetchPlan.mockResolvedValue(plan);
   api.replan.mockResolvedValue(revisedPlan);
   api.comparePlans.mockResolvedValue(planDiff);
+  api.fetchTraces.mockResolvedValue(traces);
 }
 
 async function loadDemoAndGeneratePlan(user: ReturnType<typeof userEvent.setup>) {
@@ -622,5 +664,111 @@ describe("mission dashboard", () => {
     expect(
       container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
     ).toBe("true");
+  });
+
+  it("compares the two plan versions' metrics side by side after a replan", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    expect(screen.getByText("Replan to compare plan metrics.")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const churnRow = screen.getByText("Plan churn").closest("tr");
+    expect(churnRow?.textContent).toContain("n/a");
+    expect(churnRow?.textContent).toContain("67%");
+  });
+
+  it("lists each decision trace with its reason code and generated sentence after a replan", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    expect(
+      screen.getByText("Replan to see why each request moved, was inserted, or was dropped."),
+    ).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    const entry = within(screen.getByRole("list", { name: "Decision trace" })).getByRole(
+      "button",
+      { name: /OBS-A/ },
+    );
+    expect(entry.textContent).toContain("ALTERNATIVE_WINDOW_AVAILABLE");
+    expect(entry.textContent).toContain(traces[0].message);
+  });
+
+  it("highlights the matching request on both timelines when a trace entry is clicked", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    await user.click(
+      within(screen.getByRole("list", { name: "Decision trace" })).getByRole("button", {
+        name: /OBS-A/,
+      }),
+    );
+
+    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
+    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    expect(
+      revised.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+    ).toBe("true");
+    expect(
+      initial.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+    ).toBe("true");
+  });
+
+  it("clears the selected request when replanning, since it may not exist in the new trace", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: /^OBS-A, / }));
+    expect(
+      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+    ).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    expect(container.querySelector('[data-selected="true"]')).toBeNull();
+  });
+
+  it("refreshes the metrics panel's battery and storage figures after a step, since they read live mission state", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("0%");
+
+    api.comparePlans.mockResolvedValueOnce({
+      ...planDiff,
+      metrics_after: { ...planDiff.metrics_after!, battery_utilisation: 0.5 },
+    } satisfies PlanDiffSchema);
+    api.stepSimulation.mockResolvedValue({
+      ...missionState,
+      simulated_time: "2026-09-21T11:05:00Z",
+      battery_wh: 250,
+    } satisfies MissionStateSchema);
+    api.fetchPlan.mockResolvedValue(revisedPlan);
+
+    await user.click(screen.getByRole("button", { name: "Step" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("50%"),
+    );
   });
 });

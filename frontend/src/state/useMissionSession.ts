@@ -9,6 +9,7 @@ import {
   fetchImpact,
   fetchPlan,
   fetchState,
+  fetchTraces,
   generateWindows,
   injectCloudBlock,
   replan as replanMission,
@@ -129,14 +130,27 @@ export function useMissionSession(): MissionSessionState {
     try {
       // The displayed plan is the version the reviewer decided against, so it
       // is the version the server must still hold for this replan to be safe.
-      const revisedPlan = await replanMission(scenario.id, plan.id);
-      const diff = await comparePlans(plan.id, revisedPlan.id);
+      const initialPlan = plan;
+      const revisedPlan = await replanMission(scenario.id, initialPlan.id);
+      // The server has already committed to the new version, so the local
+      // plan pointer must move with it even if the comparison below fails -
+      // otherwise the next replan attempt would still send the stale id and
+      // loop on a version conflict.
       setPlan(revisedPlan);
+      // A request selected before this replan may not appear in its trace,
+      // so it is cleared rather than left pointing at data this replan never
+      // touched.
+      setSelectedRequestId(null);
+      const [diff, traces] = await Promise.all([
+        comparePlans(initialPlan.id, revisedPlan.id),
+        fetchTraces(revisedPlan.id),
+      ]);
       const nextState = await refetchStateAndEvents(scenario.id);
       setReplanResult({
-        initialPlan: plan,
+        initialPlan,
         revisedPlan,
         diff,
+        traces,
         frozenAt: nextState.simulated_time,
       });
     } catch (caught) {
@@ -159,13 +173,17 @@ export function useMissionSession(): MissionSessionState {
         if (plan !== null) {
           const refreshedPlan = await fetchPlan(plan.id);
           setPlan(refreshedPlan);
-          // The revised timeline draws its own copy of the plan, so it has to
-          // follow the clock too or it drifts from the one above it.
-          setReplanResult((current) =>
-            current === null || current.revisedPlan.id !== refreshedPlan.id
-              ? current
-              : { ...current, revisedPlan: refreshedPlan },
-          );
+          if (replanResult !== null && replanResult.revisedPlan.id === refreshedPlan.id) {
+            // Battery and storage utilisation read the live mission state, not
+            // the plan, so the metrics panel goes stale after a step unless
+            // its comparison is refetched along with the revised timeline.
+            const diff = await comparePlans(replanResult.initialPlan.id, refreshedPlan.id);
+            setReplanResult((current) =>
+              current === null || current.revisedPlan.id !== refreshedPlan.id
+                ? current
+                : { ...current, revisedPlan: refreshedPlan, diff },
+            );
+          }
         }
       } catch (caught) {
         setError(describeError(caught));
@@ -173,7 +191,7 @@ export function useMissionSession(): MissionSessionState {
         setLoading(false);
       }
     },
-    [scenario, plan],
+    [scenario, plan, replanResult],
   );
 
   const injectCloudBlockEvent = useCallback(

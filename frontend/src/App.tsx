@@ -1,11 +1,13 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { ErrorBanner } from "./panels/ErrorBanner";
 import { EventPanel } from "./panels/EventPanel";
+import { MetricsPanel } from "./panels/MetricsPanel";
 import { MissionMapPanel } from "./panels/MissionMapPanel";
 import { ScenarioPanel } from "./panels/ScenarioPanel";
 import { StatePanel } from "./panels/StatePanel";
 import { SteppingPanel } from "./panels/SteppingPanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
+import { TracePanel } from "./panels/TracePanel";
 
 // Panels mount independently over this grid. Add, remove, or reorder an
 // entry here without any other panel needing to change.
@@ -44,6 +46,16 @@ function DashboardPanels({ session }: { session: ReturnType<typeof useMissionSes
           selectedRequestId={session.selectedRequestId}
           loading={session.loading}
           onReplan={session.replan}
+          onSelectRequest={session.selectRequest}
+        />
+      </div>
+      <div className="lg:col-span-1">
+        <MetricsPanel diff={session.replanResult?.diff ?? null} />
+      </div>
+      <div className="lg:col-span-2">
+        <TracePanel
+          traces={session.replanResult?.traces ?? []}
+          selectedRequestId={session.selectedRequestId}
           onSelectRequest={session.selectRequest}
         />
       </div>

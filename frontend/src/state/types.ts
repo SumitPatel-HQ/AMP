@@ -1,5 +1,6 @@
 import type {
   ApiErrorCode,
+  DecisionTraceSchema,
   MissionPlanSchema,
   PlanDiffSchema,
 } from "../api/client";
@@ -14,6 +15,8 @@ export interface ReplanResult {
   initialPlan: MissionPlanSchema;
   revisedPlan: MissionPlanSchema;
   diff: PlanDiffSchema;
+  /** Every changed request's trace, in the chronological order it was decided. */
+  traces: DecisionTraceSchema[];
   /**
    * The simulated time the replan ran at. Frozen actions are the ones this
    * clock had already started, so pinning it keeps the two timelines showing

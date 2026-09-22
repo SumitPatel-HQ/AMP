@@ -17,6 +17,8 @@ export type PlanDiffSchema = components["schemas"]["PlanDiffSchema"];
 export type PlanDiffEntrySchema = components["schemas"]["PlanDiffEntrySchema"];
 export type UnscheduledEntrySchema = components["schemas"]["UnscheduledEntrySchema"];
 export type PlanChangeType = components["schemas"]["PlanChangeType"];
+export type MetricsSchema = components["schemas"]["MetricsSchema"];
+export type DecisionTraceSchema = components["schemas"]["DecisionTraceSchema"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type ApiErrorCode = ErrorEnvelope["error"]["code"];
 

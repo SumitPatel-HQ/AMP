@@ -7,6 +7,7 @@ import type {
   MissionEventSchema,
   ImpactSchema,
   PlanDiffSchema,
+  DecisionTraceSchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -127,6 +128,14 @@ export async function comparePlans(
   return unwrap(
     await client.GET("/plans/{old_plan_id}/compare/{new_plan_id}", {
       params: { path: { old_plan_id: oldPlanId, new_plan_id: newPlanId } },
+    }),
+  );
+}
+
+export async function fetchTraces(planId: string): Promise<DecisionTraceSchema[]> {
+  return unwrap(
+    await client.GET("/plans/{plan_id}/traces", {
+      params: { path: { plan_id: planId } },
     }),
   );
 }
