@@ -19,10 +19,12 @@
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/maplibre": "^9.4.0",
     "maplibre-gl": "^6.11.2",
+    "moment": "^2.31.0",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "topojson-client": "^3.1.0",
+    "vis-timeline": "^8.5.4",
     "world-atlas": "^2.0.2"
   },
   "devDependencies": {

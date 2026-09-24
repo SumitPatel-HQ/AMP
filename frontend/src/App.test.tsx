@@ -267,7 +267,7 @@ describe("mission dashboard", () => {
   it("loads the demo and draws a generated plan only after user actions", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    render(<App />);
 
     expect(api.fetchDemoScenario).toHaveBeenCalledTimes(0);
     expect(api.fetchState).toHaveBeenCalledTimes(0);
@@ -285,11 +285,13 @@ describe("mission dashboard", () => {
 
     expect(await screen.findByLabelText("Current plan V1")).toBeTruthy();
     expect(
-      screen.getByRole("group", { name: "Mission timeline of scheduled actions" }),
+      screen.getByRole("group", {
+        name: "Mission plan timeline of observation windows, scheduled actions, mission events, and mission time",
+      }),
     ).toBeTruthy();
     await waitFor(() => expect(api.fetchState).toHaveBeenCalledTimes(2));
     expect(api.fetchEvents).toHaveBeenCalledTimes(2);
-    expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("#3b82f6");
+    expect(document.querySelector("svg[aria-label*='timeline']")).toBeNull();
   });
 
   it("creates a clean scenario id for each demo session", async () => {
@@ -351,16 +353,14 @@ describe("mission dashboard", () => {
       actions: [{ ...plan.actions[0], status: "started" }],
     } satisfies MissionPlanSchema);
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    render(<App />);
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Step" }));
 
     expect(api.stepSimulation).toHaveBeenCalledWith(scenario.id, 300);
     expect(await screen.findByText("490.0 Wh")).toBeTruthy();
-    await waitFor(() =>
-      expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("#f59e0b"),
-    );
+    expect(api.fetchPlan).toHaveBeenCalledWith(plan.id);
   });
 
   it("shows mission complete as a readable message and surfaces a rejected step past the end", async () => {
@@ -433,7 +433,7 @@ describe("mission dashboard", () => {
       (screen.getByRole("option", { name: /WIN-OBS-A-1/ }) as HTMLOptionElement).textContent,
     ).toContain("invalid");
   });
-  it("replans against the plan version currently displayed and stacks initial above revised", async () => {
+  it("replans against the displayed version and keeps one current mission timeline", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -445,12 +445,11 @@ describe("mission dashboard", () => {
     expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id);
     expect(api.comparePlans).toHaveBeenCalledWith(plan.id, revisedPlan.id);
 
-    const timelines = Array.from(container.querySelectorAll("svg[aria-label]")).map(
-      (svg) => svg.getAttribute("aria-label"),
+    const timelines = Array.from(container.querySelectorAll(".amis-vis-timeline[aria-label]")).map(
+      (timeline) => timeline.getAttribute("aria-label"),
     );
     expect(timelines).toEqual([
-      "Initial plan timeline of scheduled actions",
-      "Revised plan timeline of scheduled actions",
+      "Mission plan timeline of observation windows, scheduled actions, mission events, and mission time",
     ]);
   });
 
@@ -471,7 +470,7 @@ describe("mission dashboard", () => {
     expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
   });
 
-  it("marks changed requests on the revised timeline and leaves the initial timeline unmarked", async () => {
+  it("lists the current plan's unscheduled request and never draws it on the timeline", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -480,74 +479,16 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
-    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
-    expect(
-      revised.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
-    ).toBe("MOVED");
-    expect(
-      revised.querySelector('[data-request-id="OBS-B"]')?.getAttribute("data-change"),
-    ).toBe("INSERTED");
-    expect(within(revised).getByText("OBS-A · MOVED")).toBeTruthy();
-    expect(
-      initial.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
-    ).toBeNull();
-  });
-
-  it("draws frozen actions differently from unfrozen ones", async () => {
-    installSuccessfulApi();
-    const steppedState = {
-      ...missionState,
-      simulated_time: "2026-09-21T11:30:00Z",
-    } satisfies MissionStateSchema;
-    api.stepSimulation.mockResolvedValue(steppedState);
-    const user = userEvent.setup();
-    const { container } = render(<App />);
-    await loadDemoAndGeneratePlan(user);
-    api.fetchState.mockResolvedValue(steppedState);
-    await user.click(screen.getByRole("button", { name: "Step" }));
-    await waitFor(() => expect(api.stepSimulation).toHaveBeenCalledTimes(1));
-
-    await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByLabelText("Current plan V2");
-
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
-    const frozen = revised.querySelector('[data-request-id="OBS-A"]');
-    const unfrozen = revised.querySelector('[data-request-id="OBS-B"]');
-    expect(frozen?.getAttribute("data-frozen")).toBe("true");
-    expect(unfrozen?.getAttribute("data-frozen")).toBe("false");
-    expect(frozen?.querySelector("rect")?.getAttribute("stroke")).not.toBe(
-      unfrozen?.querySelector("rect")?.getAttribute("stroke"),
-    );
-  });
-
-  it("lists every unscheduled request under its own timeline and never draws it on one", async () => {
-    installSuccessfulApi();
-    const user = userEvent.setup();
-    const { container } = render(<App />);
-    await loadDemoAndGeneratePlan(user);
-
-    await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByLabelText("Current plan V2");
-
-    const initialEntries = within(
-      screen.getByRole("list", { name: "Initial plan unscheduled requests" }),
+    const currentEntries = within(
+      screen.getByRole("list", { name: "Mission plan unscheduled requests" }),
     ).getAllByRole("listitem");
-    expect(initialEntries).toHaveLength(1);
-    expect(initialEntries[0].textContent).toBe("OBS-B · priority 4 · DEADLINE_VIOLATION");
-
-    const revisedEntries = within(
-      screen.getByRole("list", { name: "Revised plan unscheduled requests" }),
-    ).getAllByRole("listitem");
-    expect(revisedEntries).toHaveLength(1);
-    expect(revisedEntries[0].textContent).toContain(
+    expect(currentEntries).toHaveLength(1);
+    expect(currentEntries[0].textContent).toContain(
       "OBS-C · priority 3 · WINDOW_INVALIDATED",
     );
 
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
-    expect(revised.querySelector('svg [data-request-id="OBS-C"]')).toBeNull();
-    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
-    expect(initial.querySelector('svg [data-request-id="OBS-B"]')).toBeNull();
+    const timeline = container.querySelector('[aria-label="Mission plan"]') as HTMLElement;
+    expect(timeline.querySelector('.vis-item.amis-action [data-request-id="OBS-C"]')).toBeNull();
   });
 
   it("shows a plan version conflict as a readable message and keeps the displayed plan", async () => {
@@ -577,7 +518,7 @@ describe("mission dashboard", () => {
   it("keeps the revised timeline current when the clock moves after a replan", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    render(<App />);
     await loadDemoAndGeneratePlan(user);
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
@@ -598,17 +539,9 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Step" }));
 
-    const revised = () => container.querySelector('[aria-label="Revised plan"]');
-    await waitFor(() =>
-      expect(
-        revised()?.querySelector('[data-request-id="OBS-A"] rect')?.getAttribute("fill"),
-      ).toBe("#f59e0b"),
-    );
-    // The clock moved past 11:00, but the replan ran at 10:00 and was free to
-    // move this action, so it must not acquire frozen styling after the fact.
-    expect(
-      revised()?.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-frozen"),
-    ).toBe("false");
+    expect(await screen.findByText("2026-09-21 11:05:00 UTC")).toBeTruthy();
+    expect(api.fetchPlan).toHaveBeenCalledWith(revisedPlan.id);
+    await waitFor(() => expect(api.comparePlans).toHaveBeenCalledTimes(2));
   });
   it("marks the request the replan dropped in the revised unscheduled list", async () => {
     installSuccessfulApi();
@@ -619,57 +552,10 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
-    const dropped = revised.querySelector('li[data-request-id="OBS-C"]');
+    const timeline = container.querySelector('[aria-label="Mission plan"]') as HTMLElement;
+    const dropped = timeline.querySelector('li[data-request-id="OBS-C"]');
     expect(dropped?.getAttribute("data-change")).toBe("DROPPED");
     expect(dropped?.textContent).toContain("DROPPED");
-
-    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
-    expect(
-      initial.querySelector('li[data-request-id="OBS-B"]')?.getAttribute("data-change"),
-    ).toBeNull();
-  });
-
-  it("does not mark a request the clock completed as one the replan changed", async () => {
-    installSuccessfulApi();
-    api.comparePlans.mockResolvedValue({
-      ...planDiff,
-      entries: [
-        {
-          request_id: "OBS-A",
-          change_type: "COMPLETED",
-          reason_code: "REQUEST_UNCHANGED",
-          old_start: "2026-09-21T10:10:00Z",
-          new_start: "2026-09-21T10:10:00Z",
-        },
-      ],
-    } satisfies PlanDiffSchema);
-    const user = userEvent.setup();
-    const { container } = render(<App />);
-    await loadDemoAndGeneratePlan(user);
-
-    await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByLabelText("Current plan V2");
-
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
-    expect(
-      revised.querySelector('[data-request-id="OBS-A"]')?.getAttribute("data-change"),
-    ).toBeNull();
-  });
-
-  it("lets a keyboard user select a request from the timeline", async () => {
-    installSuccessfulApi();
-    const user = userEvent.setup();
-    const { container } = render(<App />);
-    await loadDemoAndGeneratePlan(user);
-
-    const row = screen.getByRole("button", { name: /^OBS-A, / });
-    row.focus();
-    await user.keyboard("{Enter}");
-
-    expect(
-      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
-    ).toBe("true");
   });
 
   it("compares the two plan versions' metrics side by side after a replan", async () => {
@@ -709,7 +595,7 @@ describe("mission dashboard", () => {
     expect(entry.textContent).toContain(traces[0].message);
   });
 
-  it("highlights the matching request on both timelines when a trace entry is clicked", async () => {
+  it("highlights the matching request on the mission timeline when a trace entry is clicked", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -723,31 +609,28 @@ describe("mission dashboard", () => {
       }),
     );
 
-    const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
-    const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
+    const timeline = container.querySelector('[aria-label="Mission plan"]') as HTMLElement;
     expect(
-      revised.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
-    ).toBe("true");
-    expect(
-      initial.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+      timeline
+        .querySelector('.amis-timeline-group-button[data-request-id="OBS-A"]')
+        ?.getAttribute("data-selected"),
     ).toBe("true");
   });
 
   it("clears the selected request when replanning, since it may not exist in the new trace", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    render(<App />);
     await loadDemoAndGeneratePlan(user);
 
-    await user.click(screen.getByRole("button", { name: /^OBS-A, / }));
-    expect(
-      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
-    ).toBe("true");
+    const requestList = screen.getByRole("list", { name: "Observation requests" });
+    await user.click(within(requestList).getByRole("button", { name: /^OBS-A/ }));
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    expect(container.querySelector('[data-selected="true"]')).toBeNull();
+    expect(fakeMap.lastScene().selectedRequestId).toBeNull();
   });
 
   it("refreshes the metrics panel's battery and storage figures after a step, since they read live mission state", async () => {
@@ -822,7 +705,9 @@ describe("mission dashboard", () => {
 
     expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
     expect(
-      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+      container
+        .querySelector('.amis-timeline-group-button[data-request-id="OBS-A"]')
+        ?.getAttribute("data-selected"),
     ).toBe("true");
   });
 
@@ -840,6 +725,34 @@ describe("mission dashboard", () => {
     expect(row.textContent).toContain("in plan");
     await user.click(row);
 
+    expect(row.getAttribute("data-selected")).toBe("true");
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
+  });
+
+  it("lets the timeline select a window with the keyboard through shared selection", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const timeline = screen.getByRole("group", {
+      name: "Mission plan timeline of observation windows, scheduled actions, mission events, and mission time",
+    });
+    const timelineWindow = document.createElement("div");
+    timelineWindow.className = "vis-item";
+    timelineWindow.dataset.kind = "window";
+    timelineWindow.dataset.windowId = "WIN-OBS-A-1";
+    timelineWindow.tabIndex = 0;
+    timelineWindow.setAttribute("role", "button");
+    timeline.append(timelineWindow);
+    timelineWindow.focus();
+    await user.keyboard("{Enter}");
+
+    await user.click(screen.getByRole("tab", { name: /Windows/ }));
+    const row = within(screen.getByRole("list", { name: "Observation windows" })).getByRole(
+      "button",
+      { name: /WIN-OBS-A-1/ },
+    );
     expect(row.getAttribute("data-selected")).toBe("true");
     expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
   });

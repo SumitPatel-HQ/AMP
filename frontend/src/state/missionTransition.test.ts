@@ -106,7 +106,6 @@ const replanned: ReplanResult = {
   revisedPlan: planV2,
   diff,
   traces: [],
-  frozenAt: "2026-09-21T10:20:00Z",
 };
 
 describe("missionTransition", () => {

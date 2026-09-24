@@ -309,7 +309,7 @@ Keep the selected stack unless implementation evidence requires otherwise:
 - TanStack Query
 - Recharts for conventional metrics/charts
 - React-Leaflet currently used for map unless a later map-specific decision justifies change
-- Custom SVG for the AMIS mission timeline
+- `vis-timeline` for the AMIS mission timeline (replacing the temporary custom SVG implementation in Prompt 3)
 - generated TypeScript API types via `openapi-typescript`
 - FastAPI backend
 - PostgreSQL + SQLAlchemy
@@ -574,7 +574,7 @@ These areas are combined because mission state, requests and windows define the 
 **Do not:**
 - redesign the backend;
 - rewrite map internals;
-- rewrite the custom timeline visualization;
+- rewrite the timeline visualization (timeline replacement happens in Prompt 3);
 - invent data;
 - add new domain concepts;
 - spend the stage on animation or cosmetic polish;
@@ -615,62 +615,66 @@ Keep this prompt separate because the map is a specialized operational visualiza
 
 ### Prompt 3 — Mission Timeline + Mission Time
 
-**Primary reference:** NASA Open MCT Time Conductor, Timeline, Plan Layout and Event Timestrip concepts.
+**Primary reference:** NASA Open MCT Time Conductor, Timeline, Plan Layout and Event Timestrip concepts for time/interaction semantics.
 
-This remains its own prompt because the timeline is the most domain-specific and interaction-heavy visualization in AMIS.
+**Implementation library:** `vis-timeline` for rendering.
 
-**Before editing:** inspect the current AMIS custom SVG timeline, current plan/window/event data, and Open MCT's relevant time/timeline concepts. Keep AMIS terminology and backend semantics authoritative.
+This remains its own prompt because the timeline is the most domain-specific and interaction-heavy visualization in AMIS. The current hand-written/custom SVG timeline is temporary and is replaced in this prompt.
+
+**Before editing:** inspect the temporary AMIS custom SVG timeline only as a behavioral baseline, plus current plan/window/event data and Open MCT's relevant time/timeline concepts.
+
+Keep AMIS terminology and backend semantics authoritative. Backend remains authoritative for all timestamps, states, events and plan changes.
 
 **Implement:**
-- make the custom SVG timeline a first-class mission-control surface rather than a simple action strip;
+- replace the hand-written/custom SVG timeline with `vis-timeline`;
+- keep React responsible for AMIS domain/view-model mapping to `vis-timeline` groups/items/options;
 - use one clear mission-time axis derived from scenario start/end/current time;
-- render observation windows as subtle background bands associated with requests;
-- render scheduled actions distinctly from windows;
+- map AMIS domain to timeline approximately as:
+  - `ObservationRequest` → timeline group / row;
+  - `ObservationWindow` → subtle background range;
+  - `ScheduledAction` → foreground time-range bar;
+  - `MissionEvent` → marker at its mission time;
+  - `MissionState.simulation_time` → current-time marker;
+  - selected `ObservationRequest` → highlight/focus its timeline group;
+  - selected `ObservationWindow` or `ScheduledAction` → highlight its timeline item;
+- render observation windows as subtle background ranges;
+- render `ScheduledAction` items distinctly from windows;
 - render the current mission-time marker;
-- render event markers at their mission times;
-- visually distinguish completed/frozen, future, invalidated/impacted and selected items using data that actually exists;
-- prepare the timeline to display Plan V1/Plan V2 change states without prematurely implementing the full comparison UI;
-- synchronize request/window selection with the shared selection model so map/list/timeline selection can refer to the same mission object;
-- keep labels, density and zoom/readability appropriate for 5–10 request MVP scenarios.
+- render `MissionEvent` markers at their actual mission times;
+- visually distinguish completed/frozen, future, invalidated/impacted and selected states using data that actually exists;
+- synchronize selection with the shared Requests/Map selection model;
+- fully theme `vis-timeline` to match the AMIS dark mission-control UI;
+- keep density, labels, zoom and readability appropriate for 5–10 requests;
+- prepare the timeline for later Plan Vn → Vn+1 visualization without implementing the full comparison UI yet.
 
 **Do not:**
-- replace the purpose-built SVG timeline with a generic chart library;
+- use Recharts or another generic chart library for the mission timeline;
+- calculate planning or impact logic in the browser;
 - fabricate invalidation/change states;
+- implement full Plan V1/V2 comparison UI yet;
 - create a second independent mission clock;
-- implement plan comparison logic in the browser if the backend already supplies it.
+- implement plan comparison logic client-side when the backend already supplies it;
+- preserve the old SVG timeline merely for compatibility;
+- leave default `vis-timeline` styling/chrome that conflicts with AMIS.
 
-**Acceptance criteria:** a reviewer can visually answer: what could have been observed, what was planned, what has already happened, where mission time is now, and when a disruption occurred. Selection between request list/map/timeline uses the same selected entity state.
+**Acceptance criteria:** a reviewer can visually answer:
+- what could have been observed;
+- what was actually planned;
+- what has already happened;
+- where mission time is now;
+- when a disruption occurred.
 
-### Prompt 4 — Event -> Impact -> Replan Operational Workflow
+Additionally:
+- timeline positions and widths correspond to real backend timestamps;
+- request/map/timeline selection uses the same shared selected entity state;
+- the timeline remains compact and readable at target desktop resolutions;
+- frontend build/typecheck passes.
 
-**References:** AMIS backend/domain is authoritative; Open MCT contributes operational interaction principles; World Monitor contributes compact control presentation.
+### Prompt 4 — Event → Impact → Replan Operational Workflow
 
-Keep the complete adaptive loop together. Splitting event injection, impact and replanning would leave unusable intermediate states and duplicate UI work.
+Full spec moved to `./AMIS_PROMPT_4_EVENT_IMPACT_REPLAN.md` — that file is authoritative for this stage.
 
-**Implement the user-visible sequence:**
-
-`Choose event -> configure valid payload -> inject -> see event in mission context -> inspect persisted impact -> Replan -> see Plan V2 become available`
-
-Requirements:
-- make event injection a compact contextual control/dialog/drawer, not a large permanent card;
-- support existing CLOUD_BLOCK, BATTERY_DROP and EMERGENCY_TASK flows using the real API contracts;
-- for cloud blocking, use Request -> Window selection rather than raw window-ID typing where the existing API permits it;
-- after injection, refetch relevant state explicitly; no polling;
-- show the event on the timeline and spatially where meaningful;
-- surface persisted impact: evaluated plan, invalid action(s), violation/reason information;
-- clearly separate **impact** (what became invalid) from **plan diff** (what changed after replanning);
-- enable Replan only when valid for the current lifecycle;
-- send `expected_parent_plan_id`; handle `PLAN_VERSION_CONFLICT` visibly rather than hiding it;
-- after successful replan, expose the new immutable plan version without discarding Plan V1 context;
-- preserve lifecycle errors from the backend and present them intelligibly.
-
-**Do not:**
-- reimplement impact analysis in React;
-- mutate scenario data to represent emergency requests;
-- use polling;
-- hide backend reason codes behind invented explanations.
-
-**Acceptance criteria:** a reviewer can execute the adaptive-planning loop from the UI and understand the disruption before seeing the replan result. Cloud, battery and emergency flows remain grounded in backend behavior.
+Summary: implement the adaptive loop as one sequence `Current Plan → Configure Event → Inject Event → See Event in Mission Context → Inspect Persisted Impact → Replan → New Immutable Plan Version`, using compact event dialog, Request → Window selection for CLOUD_BLOCK, real BATTERY_DROP/EMERGENCY_TASK contracts with immutable Scenario, persisted Impact kept separate from Plan Diff, Replan with `expected_parent_plan_id` and visible `PLAN_VERSION_CONFLICT` handling, no polling, preserving Prompts 1–3 including the Prompt 3 `vis-timeline`. Full comparison/DecisionTrace remains Prompt 5. Stop after Prompt 4.
 
 ### Prompt 5 — Plan Comparison + Decision Trace / Explainability
 

@@ -34,6 +34,9 @@ async function renderMap(overrides: Partial<Parameters<typeof MissionMapPanel>[0
   };
   const result = render(<MissionMapPanel {...props} />);
   await waitFor(() => expect(fakeMap.handlers).not.toBeNull());
+  if (props.scenario !== null) {
+    await waitFor(() => expect(fakeMap.scenes.length).toBeGreaterThan(0));
+  }
   return { ...result, props, onSelectRequest };
 }
 
@@ -152,9 +155,17 @@ describe("mission map linking", () => {
     const user = userEvent.setup();
     const { container } = await renderLoadedDashboard(user);
 
-    const timelineRow = container.querySelector(
-      'svg [data-request-id="OBS-B"]',
-    ) as SVGGElement;
+    // jsdom has no layout, so vis-timeline draws its group labels after the
+    // first data update rather than on initial mount.
+    await waitFor(() => expect(fakeMap.handlers).not.toBeNull());
+    act(() => fakeMap.handlers?.onPickTarget("OBS-A"));
+    const timelineRow = await waitFor(() => {
+      const row = container.querySelector(
+        '.amis-timeline-group-button[data-request-id="OBS-B"]',
+      );
+      expect(row).not.toBeNull();
+      return row as HTMLButtonElement;
+    });
     await user.click(timelineRow);
 
     expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-B");
@@ -169,7 +180,7 @@ describe("mission map linking", () => {
 
     expect(
       container
-        .querySelector('svg [data-request-id="OBS-A"]')
+        .querySelector('.amis-timeline-group-button[data-request-id="OBS-A"]')
         ?.getAttribute("data-selected"),
     ).toBe("true");
   });

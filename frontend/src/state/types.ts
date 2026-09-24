@@ -17,13 +17,6 @@ export interface ReplanResult {
   diff: PlanDiffSchema;
   /** Every changed request's trace, in the chronological order it was decided. */
   traces: DecisionTraceSchema[];
-  /**
-   * The simulated time the replan ran at. Frozen actions are the ones this
-   * clock had already started, so pinning it keeps the two timelines showing
-   * what that replan could not touch rather than what the live clock has since
-   * overtaken.
-   */
-  frozenAt: string;
 }
 
 /**

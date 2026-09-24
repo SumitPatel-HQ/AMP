@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "vis-timeline/styles/vis-timeline-graph2d.min.css";
 
 /*
  * Mission workspace surfaces. Restrained near-black layers separated by thin
@@ -11,6 +12,18 @@
   --amis-bg: #0a0a0b;
   --amis-surface: #121316;
   --amis-border: #25272c;
+  --timeline-window: rgba(56, 189, 248, 0.1);
+  --timeline-window-border: rgba(56, 189, 248, 0.28);
+  --timeline-planned: #1d4ed8;
+  --timeline-planned-border: #60a5fa;
+  --timeline-started: #b45309;
+  --timeline-started-border: #fbbf24;
+  --timeline-completed: #047857;
+  --timeline-completed-border: #34d399;
+  --timeline-frozen: #e5e7eb;
+  --timeline-impacted: #fb7185;
+  --timeline-event: #fb7185;
+  --timeline-now: #f472b6;
 }
 
 html,
@@ -26,4 +39,295 @@ body,
 * {
   scrollbar-width: thin;
   scrollbar-color: #33363d transparent;
+}
+
+/* vis-timeline is a renderer only. AMIS owns its mission semantics and theme. */
+.amis-vis-timeline {
+  --timeline-grid: #25272c;
+  --timeline-grid-major: #3a3d45;
+  --timeline-muted: #7c818c;
+  --timeline-selected: #e879f9;
+  overflow: hidden;
+  border: 1px solid var(--amis-border);
+  background: #0d0e11;
+}
+
+.amis-vis-timeline .vis-timeline {
+  border: 0;
+  background: transparent;
+  color: #d4d6dc;
+  font-family: inherit;
+  font-size: 10px;
+}
+
+.amis-vis-timeline .vis-panel,
+.amis-vis-timeline .vis-labelset .vis-label,
+.amis-vis-timeline .vis-foreground .vis-group {
+  border-color: var(--timeline-grid);
+  min-height: 28px;
+}
+
+.amis-vis-timeline .vis-panel.vis-left,
+.amis-vis-timeline .vis-panel.vis-center,
+.amis-vis-timeline .vis-panel.vis-top,
+.amis-vis-timeline .vis-panel.vis-bottom {
+  border-color: var(--timeline-grid-major);
+}
+
+.amis-vis-timeline .vis-labelset .vis-label,
+.amis-vis-timeline .vis-foreground .vis-group:nth-child(even) {
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.amis-vis-timeline .vis-labelset .vis-label {
+  color: #aeb2bc;
+}
+
+.amis-vis-timeline .vis-labelset .vis-label .vis-inner {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 7px;
+}
+
+.amis-timeline-group-button {
+  width: 100%;
+  cursor: pointer;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amis-timeline-group-label {
+  overflow: hidden;
+  color: #858b97;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amis-timeline-group-button:focus-visible {
+  outline: 1px solid var(--timeline-selected);
+  outline-offset: 2px;
+}
+
+.amis-timeline-legend-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.5rem;
+  border-radius: 1px;
+}
+
+.amis-legend-window {
+  border: 1px solid var(--timeline-window-border);
+  background: var(--timeline-window);
+}
+
+.amis-legend-planned {
+  background: var(--timeline-planned);
+}
+
+.amis-legend-started {
+  background: var(--timeline-started);
+}
+
+.amis-legend-completed {
+  background: var(--timeline-completed);
+}
+
+.amis-legend-frozen {
+  border: 1px dashed var(--timeline-frozen);
+}
+
+.amis-legend-impacted {
+  border: 1px solid var(--timeline-impacted);
+  background: rgba(225, 29, 72, 0.2);
+}
+
+.amis-legend-event {
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: var(--timeline-event);
+}
+
+.amis-legend-mission-time {
+  width: 2px;
+  background: var(--timeline-now);
+}
+
+.amis-vis-timeline .vis-label.amis-request-group-selected,
+.amis-vis-timeline .vis-group.amis-request-group-selected {
+  background: rgba(232, 121, 249, 0.08);
+  box-shadow: inset 2px 0 0 var(--timeline-selected);
+}
+
+.amis-vis-timeline .vis-label.amis-request-group-selected {
+  color: #faf5ff;
+}
+
+.amis-vis-timeline .vis-time-axis {
+  background: #111216;
+}
+
+.amis-vis-timeline .vis-time-axis .vis-text {
+  color: #858b97;
+  font-size: 9px;
+}
+
+.amis-vis-timeline .vis-time-axis .vis-text.vis-major {
+  color: #c0c4cd;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.amis-vis-timeline .vis-time-axis .vis-grid.vis-minor {
+  border-color: var(--timeline-grid);
+}
+
+.amis-vis-timeline .vis-time-axis .vis-grid.vis-major {
+  border-color: var(--timeline-grid-major);
+}
+
+.amis-vis-timeline .vis-item {
+  border-radius: 2px;
+  font-size: 9px;
+  line-height: 17px;
+}
+
+.amis-vis-timeline .vis-item .vis-item-content {
+  overflow: hidden;
+  padding: 0 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amis-vis-timeline .vis-item.amis-window {
+  border-width: 0 1px;
+  border-color: var(--timeline-window-border);
+  background: var(--timeline-window);
+}
+
+.amis-vis-timeline .vis-item.amis-window-invalid {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(225, 29, 72, 0.1) 0,
+    rgba(225, 29, 72, 0.1) 5px,
+    rgba(225, 29, 72, 0.2) 5px,
+    rgba(225, 29, 72, 0.2) 8px
+  );
+}
+
+.amis-vis-timeline .vis-item.amis-action {
+  z-index: 2;
+  height: 19px;
+  border: 1px solid var(--timeline-planned-border);
+  background: var(--timeline-planned);
+  color: #eff6ff;
+  text-transform: uppercase;
+}
+
+.amis-vis-timeline .vis-item.amis-action-started {
+  border-color: var(--timeline-started-border);
+  background: var(--timeline-started);
+  color: #fffbeb;
+}
+
+.amis-vis-timeline .vis-item.amis-action-completed {
+  border-color: var(--timeline-completed-border);
+  background: var(--timeline-completed);
+  color: #ecfdf5;
+}
+
+.amis-vis-timeline .vis-item.amis-action-frozen {
+  border-style: dashed;
+  filter: saturate(0.75);
+}
+
+.amis-vis-timeline .vis-item.amis-action-impacted {
+  border-color: var(--timeline-impacted);
+  background: repeating-linear-gradient(
+    135deg,
+    #881337 0,
+    #881337 6px,
+    #be123c 6px,
+    #be123c 10px
+  );
+}
+
+.amis-vis-timeline .vis-item[class*="amis-change-"]::before {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid #0a0a0b;
+  border-radius: 999px;
+  background: var(--timeline-now);
+  content: "";
+}
+
+.amis-vis-timeline .vis-item.amis-event {
+  z-index: 4;
+  border: 0;
+  background: transparent;
+  color: #fda4af;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.amis-vis-timeline .vis-item.amis-event .vis-dot {
+  top: 7px;
+  border-width: 5px;
+  border-color: var(--timeline-event);
+}
+
+.amis-vis-timeline .vis-item.amis-event .vis-item-content {
+  padding-left: 7px;
+  text-shadow: 0 1px 2px #0a0a0b;
+}
+
+.amis-vis-timeline .vis-item.vis-selected,
+.amis-vis-timeline .vis-item.amis-timeline-selected {
+  border-color: var(--timeline-selected);
+  box-shadow: 0 0 0 1px var(--timeline-selected), 0 0 8px rgba(232, 121, 249, 0.55);
+}
+
+.amis-vis-timeline .vis-custom-time.mission-now {
+  z-index: 5;
+  width: 2px;
+  pointer-events: none;
+  background: var(--timeline-now);
+  box-shadow: 0 0 7px rgba(244, 114, 182, 0.75);
+}
+
+.amis-vis-timeline .vis-item[role="button"]:focus-visible,
+.amis-vis-timeline .vis-item [role="button"]:focus-visible {
+  outline: 2px solid var(--timeline-selected);
+  outline-offset: 2px;
+}
+
+.amis-vis-timeline .vis-custom-time.mission-now::after {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  padding: 1px 3px;
+  border: 1px solid rgba(244, 114, 182, 0.55);
+  background: #3b0a2a;
+  color: #fbcfe8;
+  content: "MISSION NOW";
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.amis-vis-timeline .vis-shadow {
+  box-shadow: none;
 }

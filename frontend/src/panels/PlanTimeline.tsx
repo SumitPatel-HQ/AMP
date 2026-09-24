@@ -1,31 +1,42 @@
+import { useEffect, useMemo, useRef } from "react";
+import moment from "moment";
+import { Timeline, type TimelineEventPropertiesResult, type TimelineOptions } from "vis-timeline";
 import type {
+  ImpactSchema,
+  MissionEventSchema,
   MissionPlanSchema,
+  MissionStateSchema,
+  ObservationWindowSchema,
   PlanChangeType,
   ScenarioSchema,
-  ScheduledActionSchema,
   UnscheduledEntrySchema,
 } from "../api/client";
-import { CHANGED_MARKER, FROZEN_STROKE, STATUS_COLORS } from "./timelinePalette";
+import {
+  buildMissionTimelineModel,
+  findWindowAtTime,
+  MISSION_EVENTS_GROUP_ID,
+  type MissionTimelineGroup,
+  type MissionTimelineItem,
+} from "../timeline/missionTimelineModel";
 
-const HEIGHT = 28;
-const ROW_GAP = 6;
-const LEFT_LABEL_WIDTH = 110;
-const WIDTH = 720;
-
-const SELECTION_STROKE = "#e879f9";
+const MISSION_NOW_ID = "mission-now";
 
 /** One timeline of one plan, with that plan's unscheduled requests beneath it. */
 export interface PlanTimelineProps {
-  /** Names this timeline in headings, labels, and both accessible names. */
   label: string;
   scenario: ScenarioSchema;
+  windows: ObservationWindowSchema[];
   plan: MissionPlanSchema;
-  /** Drives the frozen rule: an action is frozen once it has started. */
-  simulatedTime: string | null;
-  /** Change types keyed by request id. Empty on a timeline nothing changed on. */
+  missionState: MissionStateSchema | null;
+  events: MissionEventSchema[];
+  impact: ImpactSchema | null;
   changeByRequestId: Record<string, PlanChangeType>;
   selectedRequestId: string | null;
+  selectedWindowId: string | null;
+  selectedEventId: string | null;
   onSelectRequest: (requestId: string | null) => void;
+  onSelectWindow: (windowId: string | null) => void;
+  onSelectEvent: (eventId: string | null) => void;
 }
 
 function priorityOf(scenario: ScenarioSchema, requestId: string): string {
@@ -46,16 +57,12 @@ function UnscheduledList({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <h4 className="text-xs uppercase tracking-widest text-neutral-500">Unscheduled</h4>
+      <h4 className="text-[10px] uppercase tracking-widest text-neutral-500">Unscheduled</h4>
       {entries.length === 0 ? (
-        <p className="text-sm text-neutral-500">
-          This plan fitted every request in the pool.
-        </p>
+        <p className="text-xs text-neutral-500">This plan fitted every request in the pool.</p>
       ) : (
-        <ul aria-label={`${label} unscheduled requests`} className="space-y-1 text-sm">
+        <ul aria-label={`${label} unscheduled requests`} className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
           {entries.map((entry) => {
-            // A request the replan dropped is marked here, because this is the
-            // only place it appears once it has no action to draw.
             const change = changeByRequestId[entry.request_id];
             return (
               <li
@@ -81,122 +88,276 @@ function UnscheduledList({
   );
 }
 
+function timelineOptions(
+  groupCount: number,
+  start: string,
+  end: string,
+  onSelectRequest: (requestId: string | null) => void,
+): TimelineOptions {
+  const duration = Math.max(new Date(end).getTime() - new Date(start).getTime(), 1);
+  return {
+    start,
+    end,
+    min: start,
+    max: end,
+    height: Math.min(Math.max(groupCount * 32 + 50, 115), 350),
+    orientation: "top",
+    editable: false,
+    selectable: true,
+    multiselect: true,
+    stack: true,
+    moveable: true,
+    zoomable: true,
+    zoomMin: Math.max(Math.floor(duration / 100), 60_000),
+    zoomMax: duration,
+    showCurrentTime: false,
+    showMajorLabels: true,
+    showMinorLabels: true,
+    verticalScroll: true,
+    horizontalScroll: true,
+    groupHeightMode: "fitItems",
+    margin: { axis: 4, item: { horizontal: 3, vertical: 5 } },
+    dataAttributes: [
+      "kind",
+      "request-id",
+      "window-id",
+      "action-id",
+      "event-id",
+      "status",
+      "frozen",
+      "impacted",
+      "change",
+      "selected",
+    ],
+    moment: (value) => moment.utc(value),
+    format: {
+      minorLabels: { minute: "HH:mm", hour: "HH:mm", day: "DD" },
+      majorLabels: {
+        minute: "YYYY-MM-DD [UTC]",
+        hour: "YYYY-MM-DD [UTC]",
+        day: "YYYY-MM-DD [UTC]",
+      },
+    },
+    groupTemplate: (rawGroup) => {
+      if (rawGroup === null) {
+        return document.createElement("span");
+      }
+      const group = rawGroup as MissionTimelineGroup;
+      // The mission lane is not an observation request, so it renders a
+      // static label rather than a request-selection button.
+      if (group.requestId === MISSION_EVENTS_GROUP_ID) {
+        const label = document.createElement("span");
+        label.className = "amis-timeline-group-label";
+        label.textContent = "Mission events";
+        label.title = String(group.title ?? "Mission-level events");
+        return label;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "amis-timeline-group-button";
+      button.textContent = `${group.requestId} · P${group.priority}`;
+      button.title = String(group.title ?? group.requestId);
+      button.dataset.requestId = group.requestId;
+      button.dataset.selected = group.selected ? "true" : "false";
+      button.setAttribute("aria-pressed", String(group.selected));
+      button.setAttribute("aria-label", `${group.requestId}, priority ${group.priority}`);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onSelectRequest(group.selected ? null : group.requestId);
+      });
+      return button;
+    },
+  };
+}
+
+function selectedItemIds(items: MissionTimelineItem[]): Array<string | number> {
+  return items.filter((item) => item.selected && item.kind !== "window").map((item) => item.id);
+}
+
+function decorateTimelineItems(container: HTMLElement) {
+  for (const element of Array.from(
+    container.querySelectorAll<HTMLElement>(".vis-item[data-kind], .vis-item [data-kind]"),
+  )) {
+    const kind = element.dataset.kind;
+    const id =
+      element.dataset.actionId ?? element.dataset.windowId ?? element.dataset.eventId ?? "item";
+    element.tabIndex = 0;
+    element.setAttribute("role", "button");
+    element.setAttribute("aria-label", `Select ${kind} ${id}`);
+  }
+}
+
 export function PlanTimeline({
   label,
   scenario,
+  windows,
   plan,
-  simulatedTime,
+  missionState,
+  events,
+  impact,
   changeByRequestId,
   selectedRequestId,
+  selectedWindowId,
+  selectedEventId,
   onSelectRequest,
+  onSelectWindow,
+  onSelectEvent,
 }: PlanTimelineProps) {
-  const rangeStart = new Date(scenario.start_time).getTime();
-  const rangeEnd = new Date(scenario.end_time).getTime();
-  const rangeMs = Math.max(rangeEnd - rangeStart, 1);
-  const trackWidth = WIDTH - LEFT_LABEL_WIDTH;
-  const svgHeight = plan.actions.length * (HEIGHT + ROW_GAP) + ROW_GAP;
-  const simulatedMs = simulatedTime === null ? null : new Date(simulatedTime).getTime();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<Timeline | null>(null);
+  const hasMissionNowRef = useRef(false);
+  const itemByIdRef = useRef(new Map<string | number, MissionTimelineItem>());
 
-  const toX = (isoTime: string): number => {
-    const offset = new Date(isoTime).getTime() - rangeStart;
-    return LEFT_LABEL_WIDTH + (offset / rangeMs) * trackWidth;
-  };
+  const model = useMemo(
+    () =>
+      buildMissionTimelineModel({
+        scenario,
+        windows,
+        plan,
+        missionState,
+        events,
+        impact,
+        selectedRequestId,
+        selectedWindowId,
+        selectedEventId,
+        changeByRequestId,
+      }),
+    [
+      scenario,
+      windows,
+      plan,
+      missionState,
+      events,
+      impact,
+      selectedRequestId,
+      selectedWindowId,
+      selectedEventId,
+      changeByRequestId,
+    ],
+  );
+  useEffect(() => {
+    itemByIdRef.current = new Map(model.items.map((item) => [item.id, item]));
+  }, [model.items]);
 
-  // The planner's rule, read from the same two values it reads: an action is
-  // frozen once its start time is at or before the current simulated time.
-  const isFrozen = (action: ScheduledActionSchema): boolean =>
-    simulatedMs !== null && new Date(action.start).getTime() <= simulatedMs;
+  useEffect(() => {
+    if (containerRef.current === null) {
+      return;
+    }
+    const timeline = new Timeline(
+      containerRef.current,
+      model.items,
+      model.groups,
+      timelineOptions(
+        model.groups.length,
+        model.bounds.start,
+        model.bounds.end,
+        onSelectRequest,
+      ),
+    );
+    timelineRef.current = timeline;
+    const container = containerRef.current;
+
+    const selectElement = (element: HTMLElement) => {
+      const kind = element.dataset.kind;
+      if (kind === "event") {
+        onSelectEvent(element.dataset.eventId ?? null);
+      } else if (kind === "action" || kind === "window") {
+        onSelectWindow(element.dataset.windowId ?? null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const element =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>("[data-kind]")
+          : null;
+      if (element === null || !container.contains(element)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      selectElement(element);
+    };
+
+    const handleChanged = () => decorateTimelineItems(container);
+    container.addEventListener("keydown", handleKeyDown);
+    timeline.on("changed", handleChanged);
+
+    const handleClick = (properties: TimelineEventPropertiesResult) => {
+      if (properties.item === null || properties.item === undefined) {
+        if (properties.group !== null && properties.group !== undefined && properties.time instanceof Date) {
+          const window = findWindowAtTime(
+            [...itemByIdRef.current.values()],
+            properties.group,
+            properties.time,
+          );
+          if (window !== undefined) {
+            onSelectWindow(window.selected ? null : window.windowId);
+          }
+        }
+        return;
+      }
+      const item = itemByIdRef.current.get(properties.item);
+      if (item?.kind === "event") {
+        onSelectEvent(item.selected ? null : item.eventId);
+      } else if (item?.kind === "action" || item?.kind === "window") {
+        onSelectWindow(item.selected ? null : item.windowId);
+      }
+    };
+    timeline.on("click", handleClick);
+
+    return () => {
+      container.removeEventListener("keydown", handleKeyDown);
+      timeline.off("changed", handleChanged);
+      timeline.off("click", handleClick);
+      timeline.destroy();
+      timelineRef.current = null;
+      hasMissionNowRef.current = false;
+    };
+  }, [model.bounds.end, model.bounds.start, model.groups.length, onSelectEvent, onSelectRequest, onSelectWindow]);
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (timeline === null) {
+      return;
+    }
+    timeline.setData({ groups: model.groups, items: model.items });
+    timeline.redraw();
+    timeline.setSelection(selectedItemIds(model.items));
+    if (model.bounds.current === null) {
+      if (hasMissionNowRef.current) {
+        timeline.removeCustomTime(MISSION_NOW_ID);
+        hasMissionNowRef.current = false;
+      }
+      return;
+    }
+    if (hasMissionNowRef.current) {
+      timeline.setCustomTime(model.bounds.current, MISSION_NOW_ID);
+    } else {
+      timeline.addCustomTime(model.bounds.current, MISSION_NOW_ID);
+      hasMissionNowRef.current = true;
+    }
+    timeline.setCustomTimeTitle(
+      `Mission time: ${new Date(model.bounds.current).toISOString()}`,
+      MISSION_NOW_ID,
+    );
+  }, [model]);
 
   return (
-    <div role="group" aria-label={label} className="flex flex-col gap-2">
-      <h3 className="text-xs uppercase tracking-widest text-neutral-400">
+    <div role="group" aria-label={label} className="flex min-w-0 flex-col gap-1.5">
+      <h3 className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-400">
         {label} <span className="text-neutral-500">V{plan.version}</span>
+        <span className="normal-case tracking-normal text-neutral-600">UTC · drag to inspect · wheel to zoom</span>
       </h3>
-      {plan.actions.length === 0 ? (
-        <p className="text-sm text-neutral-500">Plan has no scheduled actions.</p>
-      ) : (
-        <svg
-          role="group"
-          aria-label={`${label} timeline of scheduled actions`}
-          width="100%"
-          viewBox={`0 0 ${WIDTH} ${svgHeight}`}
-        >
-          {plan.actions.map((action, index) => {
-            const y = ROW_GAP + index * (HEIGHT + ROW_GAP);
-            const x1 = toX(action.start);
-            const x2 = toX(action.end);
-            const frozen = isFrozen(action);
-            const change = changeByRequestId[action.request_id];
-            const selected = action.request_id === selectedRequestId;
-            return (
-              <g
-                key={action.id}
-                role="button"
-                tabIndex={0}
-                aria-pressed={selected}
-                aria-label={[
-                  action.request_id,
-                  frozen ? "frozen and untouchable by replanning" : "still replannable",
-                  change === undefined ? null : `${change} by the last replan`,
-                ]
-                  .filter((part) => part !== null)
-                  .join(", ")}
-                data-request-id={action.request_id}
-                data-frozen={frozen ? "true" : "false"}
-                data-change={change}
-                data-selected={selected ? "true" : undefined}
-                onClick={() => onSelectRequest(selected ? null : action.request_id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelectRequest(selected ? null : action.request_id);
-                  }
-                }}
-                className="cursor-pointer"
-              >
-                <text
-                  x={0}
-                  y={y + HEIGHT / 2}
-                  dominantBaseline="middle"
-                  fontSize={11}
-                  fill={selected ? "#f9fafb" : "#9ca3af"}
-                >
-                  {change === undefined
-                    ? action.request_id
-                    : `${action.request_id} · ${change}`}
-                </text>
-                <rect
-                  x={x1}
-                  y={y}
-                  width={Math.max(x2 - x1, 2)}
-                  height={HEIGHT}
-                  rx={2}
-                  fill={STATUS_COLORS[action.status]}
-                  fillOpacity={frozen ? 0.45 : 1}
-                  stroke={frozen ? FROZEN_STROKE : undefined}
-                  strokeWidth={frozen ? 2 : undefined}
-                  strokeDasharray={frozen ? "3 2" : undefined}
-                />
-                {change === undefined ? null : (
-                  <circle cx={x1} cy={y} r={3.5} fill={CHANGED_MARKER} />
-                )}
-                {selected ? (
-                  <rect
-                    x={0}
-                    y={y - 2}
-                    width={WIDTH}
-                    height={HEIGHT + 4}
-                    rx={3}
-                    fill="none"
-                    stroke={SELECTION_STROKE}
-                    strokeWidth={1}
-                  />
-                ) : null}
-              </g>
-            );
-          })}
-        </svg>
-      )}
+      <div
+        ref={containerRef}
+        role="group"
+        aria-label={`${label} timeline of observation windows, scheduled actions, mission events, and mission time`}
+        className="amis-vis-timeline min-w-0"
+      />
       <UnscheduledList
         label={label}
         scenario={scenario}

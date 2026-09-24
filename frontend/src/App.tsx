@@ -74,8 +74,15 @@ function MissionWorkspace({
         plan={session.plan}
         replanResult={replanResult}
         missionState={session.missionState}
+        windows={session.windows}
+        events={session.events}
+        impact={session.impact}
         selectedRequestId={selection.requestId}
+        selectedWindowId={selection.windowId}
+        selectedEventId={selection.eventId}
         onSelectRequest={session.selectRequest}
+        onSelectWindow={session.selectWindow}
+        onSelectEvent={session.selectEvent}
       />
       <div className="col-span-3 grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-1">
         <ImpactPanel

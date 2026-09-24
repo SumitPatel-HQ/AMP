@@ -23,6 +23,7 @@ import type {
   ObservationWindowSchema,
   ScenarioSchema,
 } from "../api/client";
+import { eventAnchorRequestId, eventAnchorWindowId } from "../timeline/missionTimelineModel";
 import { EMPTY_SELECTION } from "./types";
 import type { MissionSelection, MissionSessionError, ReplanResult } from "./types";
 
@@ -77,7 +78,6 @@ export function useMissionSession(): MissionSessionState {
     ]);
     setMissionState(nextState);
     setEvents(nextEvents);
-    return nextState;
   }, []);
 
   const loadDemoScenario = useCallback(async () => {
@@ -158,13 +158,12 @@ export function useMissionSession(): MissionSessionState {
         comparePlans(initialPlan.id, revisedPlan.id),
         fetchTraces(revisedPlan.id),
       ]);
-      const nextState = await refetchStateAndEvents(scenario.id);
+      await refetchStateAndEvents(scenario.id);
       setReplanResult({
         initialPlan,
         revisedPlan,
         diff,
         traces,
-        frozenAt: nextState.simulated_time,
       });
     } catch (caught) {
       setError(describeError(caught));
@@ -259,9 +258,26 @@ export function useMissionSession(): MissionSessionState {
     [windows],
   );
 
+  // Selecting an event also follows what it disrupted, so the map, timeline
+  // and nav highlight the affected request/target (and window for a cloud
+  // block). Mission-level events name no request and leave those untouched.
   const selectEvent = useCallback(
-    (eventId: string | null) => setSelection((current) => ({ ...current, eventId })),
-    [],
+    (eventId: string | null) =>
+      setSelection((current) => {
+        if (eventId === null) {
+          return { ...current, eventId };
+        }
+        const event = events.find((candidate) => candidate.id === eventId);
+        if (event === undefined) {
+          return { ...current, eventId };
+        }
+        const requestId = eventAnchorRequestId(event);
+        if (requestId === null) {
+          return { ...current, eventId };
+        }
+        return { ...current, eventId, requestId, windowId: eventAnchorWindowId(event) };
+      }),
+    [events],
   );
 
   const selectPlan = useCallback(
