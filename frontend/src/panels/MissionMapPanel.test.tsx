@@ -141,7 +141,7 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
   await screen.findByText(scenario.name);
   await user.click(screen.getByRole("button", { name: "Generate plan" }));
-  await screen.findByText("v1 (2 scheduled)");
+  await screen.findByLabelText("Current plan V1");
   return rendered;
 }
 

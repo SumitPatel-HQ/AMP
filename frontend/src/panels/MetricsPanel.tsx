@@ -1,5 +1,5 @@
-import type { MetricsSchema, PlanDiffSchema } from "../api/client";
-import { shortPlanId } from "./format";
+import type { MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
+import { planLabel } from "../state/planContext";
 import { PanelFrame } from "./PanelFrame";
 
 function formatPercent(value: number | null): string {
@@ -67,13 +67,20 @@ function buildRows(before: MetricsSchema, after: MetricsSchema): MetricRow[] {
 }
 
 /** The initial and revised plan versions, compared metric by metric. */
-export function MetricsPanel({ diff }: { diff: PlanDiffSchema | null }) {
+export function MetricsPanel({
+  diff,
+  plans = [],
+}: {
+  diff: PlanDiffSchema | null;
+  /** The plan versions the session holds, so the header names them as V1, V2. */
+  plans?: readonly MissionPlanSchema[];
+}) {
   const before = diff?.metrics_before ?? null;
   const after = diff?.metrics_after ?? null;
 
   if (before === null || after === null) {
     return (
-      <PanelFrame title="Metrics">
+      <PanelFrame title="Mission evaluation">
         <p className="text-xs text-neutral-500">Replan to compare plan metrics.</p>
       </PanelFrame>
     );
@@ -81,8 +88,8 @@ export function MetricsPanel({ diff }: { diff: PlanDiffSchema | null }) {
 
   return (
     <PanelFrame
-      title="Metrics"
-      meta={`${shortPlanId(before.plan_id)} → ${shortPlanId(after.plan_id)}`}
+      title="Mission evaluation"
+      meta={`${planLabel(before.plan_id, plans)} → ${planLabel(after.plan_id, plans)}`}
     >
       {diff?.request_pool_mismatch ? (
         <p role="alert" className="mb-1 text-xs text-red-400">
@@ -94,16 +101,16 @@ export function MetricsPanel({ diff }: { diff: PlanDiffSchema | null }) {
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
             <th className="py-0.5 font-normal">Metric</th>
-            <th className="py-0.5 font-normal">Before</th>
-            <th className="py-0.5 font-normal">After</th>
+            <th className="py-0.5 font-normal">{`Before (${planLabel(before.plan_id, plans)})`}</th>
+            <th className="py-0.5 font-normal">{`After (${planLabel(after.plan_id, plans)})`}</th>
           </tr>
         </thead>
         <tbody>
           {buildRows(before, after).map((row) => (
             <tr key={row.label}>
-              <td className="py-0.5 pr-3 text-neutral-500">{row.label}</td>
-              <td className="py-0.5 pr-3 font-mono text-neutral-200">{row.before}</td>
-              <td className="py-0.5 font-mono text-neutral-200">{row.after}</td>
+              <td className="py-px pr-3 text-neutral-400">{row.label}</td>
+              <td className="py-px pr-3 tabular-nums text-neutral-200">{row.before}</td>
+              <td className="py-px tabular-nums text-neutral-200">{row.after}</td>
             </tr>
           ))}
         </tbody>

@@ -5,7 +5,14 @@ import type {
   ObservationWindowSchema,
   ScenarioSchema,
 } from "../api/client";
-import { CONTROL_BUTTON, CONTROL_INPUT } from "./controls";
+import {
+  CONTROL_BUTTON,
+  CONTROL_INPUT,
+  EVENT_BUTTON,
+  EVENT_BUTTON_OPEN,
+  REPLAN_BUTTON,
+  REPLAN_BUTTON_PRIMARY,
+} from "./controls";
 import { CloudBlockControl } from "./CloudBlockControl";
 
 /** hh:mm:ss of a non-negative span, the format the mission clock counts in. */
@@ -96,6 +103,8 @@ function StatusChip({
 export function MissionBar({
   scenario,
   plan,
+  previousVersion,
+  awaitingReplan,
   missionState,
   windows,
   loading,
@@ -107,6 +116,10 @@ export function MissionBar({
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
+  /** The version the last replan started from, while the current plan is its result. */
+  previousVersion: number | null;
+  /** An event has invalidated the current plan and no replan has answered it yet. */
+  awaitingReplan: boolean;
   missionState: MissionStateSchema | null;
   windows: ObservationWindowSchema[];
   loading: boolean;
@@ -120,7 +133,7 @@ export function MissionBar({
   const [eventOpen, setEventOpen] = useState(false);
 
   return (
-    <header className="relative z-20 flex h-10 shrink-0 items-center gap-3 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-3">
+    <header className="relative z-20 flex h-9 shrink-0 items-center gap-3 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-3">
       <div className="flex min-w-0 items-center gap-3">
         <span className="rounded-sm border border-neutral-600 px-1.5 text-xs font-bold tracking-[0.2em] text-neutral-100">
           AMIS
@@ -128,14 +141,14 @@ export function MissionBar({
         {scenario === null ? (
           <span className="text-xs text-neutral-500">No scenario loaded.</span>
         ) : (
-          <div className="flex min-w-0 items-baseline gap-2">
+          <div className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
             <span className="truncate text-xs font-semibold text-neutral-200" title={scenario.name}>
               {scenario.name}
             </span>
-            <span className="max-w-48 truncate text-[10px] text-neutral-500" title={scenario.id}>
+            <span className="hidden max-w-48 truncate text-[10px] text-neutral-500 2xl:inline" title={scenario.id}>
               {scenario.id}
             </span>
-            <span className="text-[10px] text-neutral-500">{scenario.satellite.id}</span>
+            <span className="shrink-0 text-[10px] text-neutral-500">{scenario.satellite.id}</span>
           </div>
         )}
       </div>
@@ -143,9 +156,19 @@ export function MissionBar({
       <Divider />
       <MissionClock scenario={scenario} missionState={missionState} />
       <StatusChip missionState={missionState} hasPlan={plan !== null} loading={loading} />
-      {scenario === null ? null : (
-        <span className="shrink-0 whitespace-nowrap text-[11px] text-neutral-400">
-          {plan === null ? "no plan" : `v${plan.version} (${plan.actions.length} scheduled)`}
+      {scenario === null ? null : plan === null ? (
+        <span className="shrink-0 whitespace-nowrap text-[11px] text-neutral-500">no plan</span>
+      ) : (
+        <span
+          aria-label={`Current plan V${plan.version}`}
+          title={plan.id}
+          className="shrink-0 whitespace-nowrap rounded-sm border border-sky-800 bg-sky-950/40 px-1.5 text-[11px] font-semibold text-sky-200"
+        >
+          Plan{" "}
+          {previousVersion === null ? null : (
+            <span className="font-normal text-neutral-400">{`V${previousVersion} → `}</span>
+          )}
+          {`V${plan.version}`}
         </span>
       )}
 
@@ -197,7 +220,7 @@ export function MissionBar({
             aria-controls="event-control"
             onClick={() => setEventOpen((open) => !open)}
             disabled={scenario === null}
-            className={`${CONTROL_BUTTON} ${eventOpen ? "border-amber-600 text-amber-200" : ""}`}
+            className={eventOpen ? EVENT_BUTTON_OPEN : EVENT_BUTTON}
           >
             Event
           </button>
@@ -219,7 +242,7 @@ export function MissionBar({
           type="button"
           onClick={onReplan}
           disabled={loading || plan === null}
-          className={CONTROL_BUTTON}
+          className={awaitingReplan ? REPLAN_BUTTON_PRIMARY : REPLAN_BUTTON}
         >
           Replan
         </button>

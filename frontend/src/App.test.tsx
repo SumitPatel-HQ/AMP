@@ -254,7 +254,7 @@ async function loadDemoAndGeneratePlan(user: ReturnType<typeof userEvent.setup>)
   await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
   await screen.findByText(scenario.name);
   await user.click(screen.getByRole("button", { name: "Generate plan" }));
-  await screen.findByText("v1 (2 scheduled)");
+  await screen.findByLabelText("Current plan V1");
 }
 
 afterEach(() => {
@@ -283,7 +283,7 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
-    expect(await screen.findByText("v1 (2 scheduled)")).toBeTruthy();
+    expect(await screen.findByLabelText("Current plan V1")).toBeTruthy();
     expect(
       screen.getByRole("group", { name: "Mission timeline of scheduled actions" }),
     ).toBeTruthy();
@@ -422,8 +422,12 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
 
     expect(api.injectCloudBlock).toHaveBeenCalledWith(scenario.id, "OBS-A", "WIN-OBS-A-1");
-    expect(await screen.findByText(/OBS-A: WINDOW_INVALIDATED/)).toBeTruthy();
-    expect(screen.getByText("v1 (2 scheduled)")).toBeTruthy();
+    const impactRow = within(await screen.findByRole("list", { name: "Event impact" })).getByText(
+      "OBS-A",
+    ).closest("li");
+    expect(impactRow?.getAttribute("data-impact")).toBe("invalid");
+    expect(impactRow?.textContent).toContain("WINDOW_INVALIDATED");
+    expect(screen.getByLabelText("Current plan V1")).toBeTruthy();
     expect(api.createPlan).toHaveBeenCalledTimes(1);
     expect(
       (screen.getByRole("option", { name: /WIN-OBS-A-1/ }) as HTMLOptionElement).textContent,
@@ -437,7 +441,7 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
 
-    expect(await screen.findByText("v2 (2 scheduled)")).toBeTruthy();
+    expect(await screen.findByLabelText("Current plan V2")).toBeTruthy();
     expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id);
     expect(api.comparePlans).toHaveBeenCalledWith(plan.id, revisedPlan.id);
 
@@ -459,9 +463,9 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v3 (2 scheduled)");
+    await screen.findByLabelText("Current plan V3");
 
     expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id);
     expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
@@ -474,7 +478,7 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
     const initial = container.querySelector('[aria-label="Initial plan"]') as HTMLElement;
@@ -505,7 +509,7 @@ describe("mission dashboard", () => {
     await waitFor(() => expect(api.stepSimulation).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
     const frozen = revised.querySelector('[data-request-id="OBS-A"]');
@@ -524,7 +528,7 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const initialEntries = within(
       screen.getByRole("list", { name: "Initial plan unscheduled requests" }),
@@ -567,7 +571,7 @@ describe("mission dashboard", () => {
     expect(
       screen.getByText(/replan named a plan version that is no longer current/),
     ).toBeTruthy();
-    expect(screen.getByText("v1 (2 scheduled)")).toBeTruthy();
+    expect(screen.getByLabelText("Current plan V1")).toBeTruthy();
     expect(api.comparePlans).not.toHaveBeenCalled();
   });
   it("keeps the revised timeline current when the clock moves after a replan", async () => {
@@ -576,7 +580,7 @@ describe("mission dashboard", () => {
     const { container } = render(<App />);
     await loadDemoAndGeneratePlan(user);
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const steppedState = {
       ...missionState,
@@ -613,7 +617,7 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
     const dropped = revised.querySelector('li[data-request-id="OBS-C"]');
@@ -645,7 +649,7 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const revised = container.querySelector('[aria-label="Revised plan"]') as HTMLElement;
     expect(
@@ -677,10 +681,10 @@ describe("mission dashboard", () => {
     expect(screen.getByText("Replan to compare plan metrics.")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const churnRow = screen.getByText("Plan churn").closest("tr");
-    expect(churnRow?.textContent).toContain("n/a");
+    expect(churnRow?.textContent).toContain("N/A");
     expect(churnRow?.textContent).toContain("67%");
   });
 
@@ -695,7 +699,7 @@ describe("mission dashboard", () => {
     ).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     const entry = within(screen.getByRole("list", { name: "Decision trace" })).getByRole(
       "button",
@@ -711,7 +715,7 @@ describe("mission dashboard", () => {
     const { container } = render(<App />);
     await loadDemoAndGeneratePlan(user);
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     await user.click(
       within(screen.getByRole("list", { name: "Decision trace" })).getByRole("button", {
@@ -741,7 +745,7 @@ describe("mission dashboard", () => {
     ).toBe("true");
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     expect(container.querySelector('[data-selected="true"]')).toBeNull();
   });
@@ -752,7 +756,7 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("0%");
 
@@ -800,9 +804,9 @@ describe("mission dashboard", () => {
       "button",
     );
     expect(rows.map((row) => row.getAttribute("data-plan-status"))).toEqual([
-      "scheduled",
+      "planned",
       "unscheduled",
-      "scheduled",
+      "planned",
     ]);
     expect(rows[1].textContent).toContain("DEADLINE_VIOLATION");
   });
@@ -846,7 +850,7 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
     await user.click(screen.getByRole("button", { name: "Replan" }));
-    await screen.findByText("v2 (2 scheduled)");
+    await screen.findByLabelText("Current plan V2");
 
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const rows = within(screen.getByRole("list", { name: "Mission plans" })).getAllByRole(
@@ -896,12 +900,198 @@ describe("mission dashboard", () => {
 
     api.fetchState.mockResolvedValue({ ...missionState, completed_request_ids: ["OBS-A"] });
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
-    await screen.findByText("v1 (2 scheduled)");
+    await screen.findByLabelText("Current plan V1");
 
     const rows = within(screen.getByRole("list", { name: "Observation requests" })).getAllByRole(
       "button",
     );
     expect(rows[0].textContent).toContain("completed");
     expect(rows[1].textContent).not.toContain("completed");
+  });
+  it("says completed once for a request both the clock and its plan report completed", async () => {
+    installSuccessfulApi();
+    api.createPlan.mockResolvedValue({
+      ...plan,
+      actions: [{ ...plan.actions[0], status: "completed" }, plan.actions[1]],
+    } satisfies MissionPlanSchema);
+    api.fetchState.mockResolvedValue({ ...missionState, completed_request_ids: ["OBS-A"] });
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const row = within(screen.getByRole("list", { name: "Observation requests" })).getAllByRole(
+      "button",
+    )[0];
+    expect(row.textContent?.match(/completed/g)).toHaveLength(1);
+  });
+
+  it("summarises the mission transition from plan through event and impact to the revised plan", async () => {
+    installSuccessfulApi();
+    const event = {
+      id: "EVT-1",
+      scenario_id: scenario.id,
+      event_time: "2026-09-21T10:05:00Z",
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema;
+    api.injectCloudBlock.mockResolvedValue(event);
+    api.fetchImpact.mockResolvedValue({
+      id: "IMPACT-1",
+      event_id: "EVT-1",
+      evaluated_plan_id: plan.id,
+      frozen_action_ids: [],
+      valid_unfrozen_action_ids: ["ACT-OBS-C-1"],
+      invalid_unfrozen_action_ids: ["ACT-OBS-A-1"],
+      reason_codes: { "ACT-OBS-A-1": ["WINDOW_INVALIDATED"] },
+    } satisfies ImpactSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const summary = () => screen.getByRole("region", { name: "Mission transition" });
+    expect(summary().textContent).toContain("Plan V1");
+    expect(summary().textContent).toContain("2 / 3 scheduled");
+    expect(summary().textContent).not.toContain("CLOUD_BLOCK");
+
+    api.fetchEvents.mockResolvedValue([event]);
+    await user.click(screen.getByRole("button", { name: "Event" }));
+    await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
+    await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
+    await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+
+    await waitFor(() => expect(summary().textContent).toContain("Awaiting replan"));
+    expect(summary().textContent).toContain("CLOUD_BLOCK · EVT-1");
+    expect(summary().textContent).toContain("OBS-A / WIN-OBS-A-1");
+    expect(summary().textContent).toContain("1 scheduled action invalid");
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+
+    expect(summary().textContent).not.toContain("Awaiting replan");
+    const plans = within(summary()).getAllByRole("listitem", { name: /^Plan V/ });
+    expect(plans.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Plan V1 (previous)",
+      "Plan V2 (current)",
+    ]);
+  });
+
+  it("labels impact, trace and evaluation with the plan versions they describe", async () => {
+    installSuccessfulApi();
+    api.injectCloudBlock.mockResolvedValue({
+      id: "EVT-1",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema);
+    api.fetchImpact.mockResolvedValue({
+      id: "IMPACT-1",
+      event_id: "EVT-1",
+      evaluated_plan_id: plan.id,
+      frozen_action_ids: [],
+      valid_unfrozen_action_ids: ["ACT-OBS-C-1"],
+      invalid_unfrozen_action_ids: ["ACT-OBS-A-1"],
+      reason_codes: { "ACT-OBS-A-1": ["WINDOW_INVALIDATED"] },
+    } satisfies ImpactSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Event" }));
+    await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
+    await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
+    await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    await screen.findByRole("list", { name: "Event impact" });
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+
+    const section = (name: string) => screen.getByRole("region", { name });
+    expect(section("Impact").textContent).toContain("EVT-1 on V1");
+    expect(section("Decision trace").textContent).toContain("V1 → V2");
+    expect(section("Mission evaluation").textContent).toContain("V1 → V2");
+    // Impact actions belong to the plan the event evaluated, not the revised one.
+    const impactRow = within(section("Impact")).getByText("OBS-A").closest("li");
+    expect(impactRow?.textContent).toContain("WINDOW_INVALIDATED");
+  });
+  it("flags an impact from an earlier transition once a second replan has moved past it", async () => {
+    installSuccessfulApi();
+    const thirdPlan = { ...revisedPlan, id: "SCN-002:PLAN-3", version: 3, parent_plan_id: revisedPlan.id };
+    api.replan.mockResolvedValueOnce(revisedPlan).mockResolvedValueOnce(thirdPlan);
+    const event = {
+      id: "EVT-1",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema;
+    api.injectCloudBlock.mockResolvedValue(event);
+    api.fetchImpact.mockResolvedValue({
+      id: "IMPACT-1",
+      event_id: "EVT-1",
+      evaluated_plan_id: plan.id,
+      frozen_action_ids: [],
+      valid_unfrozen_action_ids: [],
+      invalid_unfrozen_action_ids: ["ACT-OBS-A-1"],
+      reason_codes: { "ACT-OBS-A-1": ["WINDOW_INVALIDATED"] },
+    } satisfies ImpactSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    api.fetchEvents.mockResolvedValue([event]);
+    await user.click(screen.getByRole("button", { name: "Event" }));
+    await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
+    await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
+    await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    await screen.findByRole("list", { name: "Event impact" });
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+    expect(screen.getByRole("region", { name: "Impact" }).textContent).not.toContain(
+      "earlier transition",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V3");
+
+    expect(screen.getByRole("region", { name: "Impact" }).textContent).toContain(
+      "earlier transition",
+    );
+    const summary = screen.getByRole("region", { name: "Mission transition" });
+    expect(summary.textContent).toContain("No new event");
+    expect(summary.textContent).not.toContain("No event injected");
+  });
+
+  it("drops the previous version from the plan chip once an event hits the revised plan", async () => {
+    installSuccessfulApi();
+    api.injectCloudBlock.mockResolvedValue({
+      id: "EVT-2",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema);
+    api.fetchImpact.mockResolvedValue({
+      id: "IMPACT-2",
+      event_id: "EVT-2",
+      evaluated_plan_id: revisedPlan.id,
+      frozen_action_ids: [],
+      valid_unfrozen_action_ids: [],
+      invalid_unfrozen_action_ids: ["ACT-OBS-A-2"],
+      reason_codes: { "ACT-OBS-A-2": ["WINDOW_INVALIDATED"] },
+    } satisfies ImpactSchema);
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    const chip = await screen.findByLabelText("Current plan V2");
+    expect(chip.textContent).toBe("Plan V1 → V2");
+
+    await user.click(screen.getByRole("button", { name: "Event" }));
+    await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
+    await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
+    await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    await screen.findByRole("list", { name: "Event impact" });
+
+    expect(screen.getByLabelText("Current plan V2").textContent).toBe("Plan V2");
   });
 });

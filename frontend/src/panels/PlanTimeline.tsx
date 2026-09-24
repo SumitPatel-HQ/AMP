@@ -5,20 +5,13 @@ import type {
   ScheduledActionSchema,
   UnscheduledEntrySchema,
 } from "../api/client";
+import { CHANGED_MARKER, FROZEN_STROKE, STATUS_COLORS } from "./timelinePalette";
 
 const HEIGHT = 28;
 const ROW_GAP = 6;
 const LEFT_LABEL_WIDTH = 110;
 const WIDTH = 720;
 
-const STATUS_COLORS: Record<ScheduledActionSchema["status"], string> = {
-  planned: "#3b82f6",
-  started: "#f59e0b",
-  completed: "#10b981",
-};
-
-const FROZEN_STROKE = "#e5e7eb";
-const CHANGED_MARKER = "#f472b6";
 const SELECTION_STROKE = "#e879f9";
 
 /** One timeline of one plan, with that plan's unscheduled requests beneath it. */
@@ -117,7 +110,7 @@ export function PlanTimeline({
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
       <h3 className="text-xs uppercase tracking-widest text-neutral-400">
-        {label} <span className="text-neutral-500">v{plan.version}</span>
+        {label} <span className="text-neutral-500">V{plan.version}</span>
       </h3>
       {plan.actions.length === 0 ? (
         <p className="text-sm text-neutral-500">Plan has no scheduled actions.</p>

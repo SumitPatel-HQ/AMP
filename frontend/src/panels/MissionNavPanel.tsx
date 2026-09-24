@@ -1,11 +1,15 @@
 import { useState } from "react";
 import type {
+  ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
   ObservationWindowSchema,
+  PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
+import { knownPlans, planLabel } from "../state/planContext";
+import { requestStatus, type RequestState } from "../state/requestStatus";
 import type { MissionSelection, ReplanResult } from "../state/types";
 import { clockTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
@@ -18,29 +22,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "events", label: "Events" },
   { id: "plans", label: "Plans" },
 ];
-
-/** Where a request stands in a plan, read straight off that plan. */
-type RequestPlanStatus =
-  | { kind: "scheduled"; actionStatus: string }
-  | { kind: "unscheduled"; reasonCode: string }
-  | { kind: "none" };
-
-function requestPlanStatus(
-  plan: MissionPlanSchema | null,
-  requestId: string,
-): RequestPlanStatus {
-  if (plan === null) {
-    return { kind: "none" };
-  }
-  const action = plan.actions.find((candidate) => candidate.request_id === requestId);
-  if (action !== undefined) {
-    return { kind: "scheduled", actionStatus: action.status };
-  }
-  const unscheduled = plan.unscheduled.find((entry) => entry.request_id === requestId);
-  return unscheduled === undefined
-    ? { kind: "none" }
-    : { kind: "unscheduled", reasonCode: unscheduled.reason_code };
-}
 
 const ROW =
   "grid w-full cursor-pointer items-baseline gap-x-2 border-l-2 px-2 py-1 text-left text-xs hover:bg-white/[0.04]";
@@ -55,16 +36,29 @@ function Empty({ children }: { children: string }) {
   return <p className="px-2 py-1.5 text-xs text-neutral-500">{children}</p>;
 }
 
+const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: string }> = {
+  completed: { dot: "bg-emerald-400", text: "text-emerald-400", label: "completed" },
+  started: { dot: "bg-amber-400", text: "text-amber-300", label: "started" },
+  planned: { dot: "bg-sky-400", text: "text-sky-300", label: "planned" },
+  invalid: { dot: "bg-red-500", text: "text-red-400", label: "invalid" },
+  unscheduled: { dot: "bg-neutral-500", text: "text-neutral-400", label: "unscheduled" },
+  "not-planned": { dot: "bg-neutral-700", text: "text-neutral-600", label: "not planned" },
+};
+
 function RequestList({
   scenario,
   plan,
+  impact,
+  diff,
   completedRequestIds,
   selectedRequestId,
   onSelectRequest,
 }: {
   scenario: ScenarioSchema;
   plan: MissionPlanSchema | null;
-  /** Live from mission state, so completion shows even where the plan lags. */
+  impact: ImpactSchema | null;
+  /** The last replan's diff; it marks changes only while its plan is current. */
+  diff: PlanDiffSchema | null;
   completedRequestIds: ReadonlySet<string>;
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
@@ -73,36 +67,33 @@ function RequestList({
     <ul aria-label="Observation requests">
       {scenario.requests.map((request) => {
         const selected = request.id === selectedRequestId;
-        const status = requestPlanStatus(plan, request.id);
+        const status = requestStatus(request.id, { plan, completedRequestIds, impact, diff });
+        const style = STATE_STYLE[status.state];
+        const detail = [status.change, status.reasonCode].filter((part) => part !== null);
         return (
           <li key={request.id}>
             <button
               type="button"
               aria-pressed={selected}
               data-selected={selected ? "true" : undefined}
-              data-plan-status={status.kind}
+              data-plan-status={status.state}
+              title={`deadline ${clockTime(request.deadline)} UTC`}
               onClick={() => onSelectRequest(selected ? null : request.id)}
-              className={`${ROW} grid-cols-[1fr_auto_auto] ${rowTone(selected)}`}
+              className={`${ROW} grid-cols-[auto_1fr_auto_5.5rem] items-center ${rowTone(selected)}`}
             >
+              <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
               <span className="truncate font-semibold">{request.id}</span>
               <span className="text-[10px] text-neutral-500" title="priority">
                 P{request.priority}
               </span>
-              <span className="text-[10px] tabular-nums text-neutral-500" title="deadline">
-                {clockTime(request.deadline)}
+              <span className={`truncate text-[10px] uppercase tracking-wide ${style.text}`}>
+                {style.label}
               </span>
-              <span className="col-span-3 flex gap-2 truncate text-[10px]">
-                {completedRequestIds.has(request.id) ? (
-                  <span className="text-emerald-400">completed</span>
-                ) : null}
-                {status.kind === "scheduled" ? (
-                  <span className="text-sky-300">{status.actionStatus}</span>
-                ) : status.kind === "unscheduled" ? (
-                  <span className="text-amber-300">unscheduled · {status.reasonCode}</span>
-                ) : (
-                  <span className="text-neutral-600">not planned</span>
-                )}
-              </span>
+              {detail.length === 0 ? null : (
+                <span className="col-span-3 col-start-2 truncate text-[10px] text-neutral-500">
+                  {detail.join(" · ")}
+                </span>
+              )}
             </button>
           </li>
         );
@@ -214,17 +205,6 @@ function EventList({
   );
 }
 
-/** The plan versions this session holds: the current one, and after a replan its parent. */
-function knownPlans(
-  plan: MissionPlanSchema | null,
-  replanResult: ReplanResult | null,
-): MissionPlanSchema[] {
-  if (replanResult !== null) {
-    return [replanResult.initialPlan, replanResult.revisedPlan];
-  }
-  return plan === null ? [] : [plan];
-}
-
 function PlanList({
   plan,
   replanResult,
@@ -254,7 +234,7 @@ function PlanList({
               onClick={() => onSelectPlan(selected ? null : candidate.id)}
               className={`${ROW} grid-cols-[auto_1fr_auto] ${rowTone(selected)}`}
             >
-              <span className="font-semibold">V{candidate.version}</span>
+              <span className="font-semibold">{planLabel(candidate.id, plans)}</span>
               <span className="truncate text-[10px] text-neutral-500">{candidate.id}</span>
               {current ? (
                 <span className="text-[10px] uppercase text-emerald-400">current</span>
@@ -281,6 +261,7 @@ export function MissionNavPanel({
   scenario,
   plan,
   replanResult,
+  impact,
   missionState,
   windows,
   events,
@@ -293,6 +274,7 @@ export function MissionNavPanel({
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
   replanResult: ReplanResult | null;
+  impact: ImpactSchema | null;
   missionState: MissionStateSchema | null;
   windows: ObservationWindowSchema[];
   events: MissionEventSchema[];
@@ -337,6 +319,8 @@ export function MissionNavPanel({
           <RequestList
             scenario={scenario}
             plan={plan}
+            impact={impact}
+            diff={replanResult?.diff ?? null}
             completedRequestIds={new Set(missionState?.completed_request_ids ?? [])}
             selectedRequestId={selection.requestId}
             onSelectRequest={onSelectRequest}
