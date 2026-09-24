@@ -1,4 +1,5 @@
 import type { MetricsSchema, PlanDiffSchema } from "../api/client";
+import { shortPlanId } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
 function formatPercent(value: number | null): string {
@@ -73,33 +74,36 @@ export function MetricsPanel({ diff }: { diff: PlanDiffSchema | null }) {
   if (before === null || after === null) {
     return (
       <PanelFrame title="Metrics">
-        <p className="text-sm text-neutral-500">Replan to compare plan metrics.</p>
+        <p className="text-xs text-neutral-500">Replan to compare plan metrics.</p>
       </PanelFrame>
     );
   }
 
   return (
-    <PanelFrame title="Metrics">
+    <PanelFrame
+      title="Metrics"
+      meta={`${shortPlanId(before.plan_id)} → ${shortPlanId(after.plan_id)}`}
+    >
       {diff?.request_pool_mismatch ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="mb-1 text-xs text-red-400">
           These two plans were measured against different request pools; the
           comparison above is not apples to apples.
         </p>
       ) : null}
-      <table className="w-full text-sm">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-widest text-neutral-500">
-            <th className="py-1 font-normal">Metric</th>
-            <th className="py-1 font-normal">Before</th>
-            <th className="py-1 font-normal">After</th>
+          <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+            <th className="py-0.5 font-normal">Metric</th>
+            <th className="py-0.5 font-normal">Before</th>
+            <th className="py-0.5 font-normal">After</th>
           </tr>
         </thead>
         <tbody>
           {buildRows(before, after).map((row) => (
             <tr key={row.label}>
-              <td className="py-1 pr-3 text-neutral-500">{row.label}</td>
-              <td className="py-1 pr-3 font-mono text-neutral-200">{row.before}</td>
-              <td className="py-1 font-mono text-neutral-200">{row.after}</td>
+              <td className="py-0.5 pr-3 text-neutral-500">{row.label}</td>
+              <td className="py-0.5 pr-3 font-mono text-neutral-200">{row.before}</td>
+              <td className="py-0.5 font-mono text-neutral-200">{row.after}</td>
             </tr>
           ))}
         </tbody>

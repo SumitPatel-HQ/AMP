@@ -415,6 +415,7 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
+    await user.click(screen.getByRole("button", { name: "Event" }));
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
@@ -770,5 +771,140 @@ describe("mission dashboard", () => {
     await waitFor(() =>
       expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("50%"),
     );
+  });
+
+  it("keeps mission identity, time, status and every lifecycle action in the mission bar", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const bar = screen.getByRole("banner");
+    expect(within(bar).getByText(scenario.name)).toBeTruthy();
+    expect(within(bar).getByText("2026-09-21 10:00:00 UTC")).toBeTruthy();
+    expect(within(bar).getByText("T+00:00:00 / 04:00:00")).toBeTruthy();
+    expect(within(bar).getByText("In progress")).toBeTruthy();
+    for (const name of ["Step", "Event", "Replan"]) {
+      expect(within(bar).getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  it("lists each request with the status the current plan gives it", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const rows = within(screen.getByRole("list", { name: "Observation requests" })).getAllByRole(
+      "button",
+    );
+    expect(rows.map((row) => row.getAttribute("data-plan-status"))).toEqual([
+      "scheduled",
+      "unscheduled",
+      "scheduled",
+    ]);
+    expect(rows[1].textContent).toContain("DEADLINE_VIOLATION");
+  });
+
+  it("highlights a request on the map and timeline when it is picked from the request list", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    const list = screen.getByRole("list", { name: "Observation requests" });
+    await user.click(within(list).getByRole("button", { name: /^OBS-A/ }));
+
+    expect(
+      screen.getByRole("button", { name: "Target OBS-A" }).getAttribute("data-selected"),
+    ).toBe("true");
+    expect(
+      container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
+    ).toBe("true");
+  });
+
+  it("selects a window's request along with the window, and marks the window the plan uses", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("tab", { name: /Windows/ }));
+    const row = within(screen.getByRole("list", { name: "Observation windows" })).getByRole(
+      "button",
+      { name: /WIN-OBS-A-1/ },
+    );
+    expect(row.textContent).toContain("in plan");
+    await user.click(row);
+
+    expect(row.getAttribute("data-selected")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Target OBS-A" }).getAttribute("data-selected"),
+    ).toBe("true");
+  });
+
+  it("lists both plan versions after a replan and marks the revised one current", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByText("v2 (2 scheduled)");
+
+    await user.click(screen.getByRole("tab", { name: /Plans/ }));
+    const rows = within(screen.getByRole("list", { name: "Mission plans" })).getAllByRole(
+      "button",
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain(plan.id);
+    expect(rows[1].textContent).toContain(revisedPlan.id);
+    expect(rows[1].textContent).toContain("current");
+    expect(rows[0].textContent).not.toContain("current");
+  });
+
+  it("lists injected events with their payload and whether they are active", async () => {
+    installSuccessfulApi();
+    const event = {
+      id: "EVT-1",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "CLOUD_BLOCK",
+      payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
+    } satisfies MissionEventSchema;
+    api.fetchEvents.mockResolvedValue([event]);
+    api.fetchState.mockResolvedValue({ ...missionState, active_event_ids: ["EVT-1"] });
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("tab", { name: /Events/ }));
+    const row = within(screen.getByRole("list", { name: "Mission events" })).getByRole(
+      "button",
+      { name: /EVT-1/ },
+    );
+    expect(row.textContent).toContain("CLOUD_BLOCK");
+    expect(row.textContent).toContain("WIN-OBS-A-1");
+    expect(row.textContent).toContain("active");
+    await user.click(row);
+    expect(row.getAttribute("data-selected")).toBe("true");
+  });
+
+  it("marks a request completed from live mission state and says so before any plan exists", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+    await screen.findByText(scenario.name);
+    expect(within(screen.getByRole("banner")).getByText("No plan")).toBeTruthy();
+
+    api.fetchState.mockResolvedValue({ ...missionState, completed_request_ids: ["OBS-A"] });
+    await user.click(screen.getByRole("button", { name: "Generate plan" }));
+    await screen.findByText("v1 (2 scheduled)");
+
+    const rows = within(screen.getByRole("list", { name: "Observation requests" })).getAllByRole(
+      "button",
+    );
+    expect(rows[0].textContent).toContain("completed");
+    expect(rows[1].textContent).not.toContain("completed");
   });
 });

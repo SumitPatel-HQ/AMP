@@ -12,13 +12,16 @@ export function TracePanel({
   onSelectRequest: (requestId: string | null) => void;
 }) {
   return (
-    <PanelFrame title="Decision trace">
+    <PanelFrame
+      title="Decision trace"
+      meta={traces.length === 0 ? undefined : `${traces.length} entries`}
+    >
       {traces.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-xs text-neutral-500">
           Replan to see why each request moved, was inserted, or was dropped.
         </p>
       ) : (
-        <ol aria-label="Decision trace" className="space-y-2 text-sm">
+        <ol aria-label="Decision trace" className="space-y-1 text-xs">
           {traces.map((trace) => {
             const selected =
               trace.request_id !== null && trace.request_id === selectedRequestId;
@@ -32,13 +35,13 @@ export function TracePanel({
                   data-request-id={requestId ?? undefined}
                   data-selected={selected ? "true" : undefined}
                   onClick={() => onSelectRequest(selected ? null : requestId)}
-                  className={`w-full rounded border p-2 text-left disabled:cursor-default ${
+                  className={`w-full border-l-2 px-2 py-1 text-left disabled:cursor-default ${
                     requestId === null ? "" : "cursor-pointer"
-                  } ${selected ? "border-fuchsia-400 bg-neutral-900" : "border-neutral-800"}`}
+                  } ${selected ? "border-fuchsia-400 bg-fuchsia-400/10" : "border-neutral-700"}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-neutral-200">{trace.request_id}</span>
-                    <span className="font-mono text-xs text-amber-400">
+                    <span className="font-mono text-[10px] text-amber-400">
                       {trace.reason_code}
                     </span>
                   </div>

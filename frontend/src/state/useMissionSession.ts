@@ -23,7 +23,8 @@ import type {
   ObservationWindowSchema,
   ScenarioSchema,
 } from "../api/client";
-import type { MissionSessionError, ReplanResult } from "./types";
+import { EMPTY_SELECTION } from "./types";
+import type { MissionSelection, MissionSessionError, ReplanResult } from "./types";
 
 export interface MissionSessionState {
   scenario: ScenarioSchema | null;
@@ -34,8 +35,8 @@ export interface MissionSessionState {
   impact: ImpactSchema | null;
   /** The last replan, or null while no replan has run on this plan. */
   replanResult: ReplanResult | null;
-  /** The request the reviewer is following across panels, if any. */
-  selectedRequestId: string | null;
+  /** The request, window, event and plan the reviewer is following, if any. */
+  selection: MissionSelection;
   loading: boolean;
   error: MissionSessionError | null;
   loadDemoScenario: () => Promise<void>;
@@ -44,6 +45,9 @@ export interface MissionSessionState {
   step: (seconds: number) => Promise<void>;
   injectCloudBlock: (requestId: string, windowId: string) => Promise<void>;
   selectRequest: (requestId: string | null) => void;
+  selectWindow: (windowId: string | null) => void;
+  selectEvent: (eventId: string | null) => void;
+  selectPlan: (planId: string | null) => void;
   dismissError: () => void;
 }
 
@@ -62,7 +66,7 @@ export function useMissionSession(): MissionSessionState {
   const [windows, setWindows] = useState<ObservationWindowSchema[]>([]);
   const [impact, setImpact] = useState<ImpactSchema | null>(null);
   const [replanResult, setReplanResult] = useState<ReplanResult | null>(null);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<MissionSelection>(EMPTY_SELECTION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<MissionSessionError | null>(null);
 
@@ -91,7 +95,7 @@ export function useMissionSession(): MissionSessionState {
       setWindows([]);
       setImpact(null);
       setReplanResult(null);
-      setSelectedRequestId(null);
+      setSelection(EMPTY_SELECTION);
       await refetchStateAndEvents(loaded.id);
     } catch (caught) {
       setError(describeError(caught));
@@ -113,6 +117,9 @@ export function useMissionSession(): MissionSessionState {
       setPlan(nextPlan);
       setImpact(null);
       setReplanResult(null);
+      // Regenerated windows and a fresh plan replace what a selected window or
+      // plan pointed at; the request survives because the scenario does.
+      setSelection((current) => ({ ...current, windowId: null, planId: null }));
       await refetchStateAndEvents(scenario.id);
     } catch (caught) {
       setError(describeError(caught));
@@ -139,8 +146,14 @@ export function useMissionSession(): MissionSessionState {
       setPlan(revisedPlan);
       // A request selected before this replan may not appear in its trace,
       // so it is cleared rather than left pointing at data this replan never
-      // touched.
-      setSelectedRequestId(null);
+      // touched. Its window goes with it, and so does a selected plan, which
+      // may drop out of the pair this replan now compares.
+      setSelection((current) => ({
+        ...current,
+        requestId: null,
+        windowId: null,
+        planId: null,
+      }));
       const [diff, traces] = await Promise.all([
         comparePlans(initialPlan.id, revisedPlan.id),
         fetchTraces(revisedPlan.id),
@@ -224,8 +237,35 @@ export function useMissionSession(): MissionSessionState {
     [scenario, refetchStateAndEvents],
   );
 
+  // A selected window belongs to one request, so choosing a request drops it.
   const selectRequest = useCallback(
-    (requestId: string | null) => setSelectedRequestId(requestId),
+    (requestId: string | null) =>
+      setSelection((current) => ({ ...current, requestId, windowId: null })),
+    [],
+  );
+
+  // Selecting a window also follows its request, so the panels that only know
+  // requests (map, timeline, trace) still highlight what the window is for.
+  const selectWindow = useCallback(
+    (windowId: string | null) =>
+      setSelection((current) => {
+        const window = windows.find((candidate) => candidate.id === windowId);
+        return {
+          ...current,
+          windowId,
+          requestId: window === undefined ? current.requestId : window.request_id,
+        };
+      }),
+    [windows],
+  );
+
+  const selectEvent = useCallback(
+    (eventId: string | null) => setSelection((current) => ({ ...current, eventId })),
+    [],
+  );
+
+  const selectPlan = useCallback(
+    (planId: string | null) => setSelection((current) => ({ ...current, planId })),
     [],
   );
 
@@ -239,7 +279,7 @@ export function useMissionSession(): MissionSessionState {
     windows,
     impact,
     replanResult,
-    selectedRequestId,
+    selection,
     loading,
     error,
     loadDemoScenario,
@@ -248,6 +288,9 @@ export function useMissionSession(): MissionSessionState {
     step,
     injectCloudBlock: injectCloudBlockEvent,
     selectRequest,
+    selectWindow,
+    selectEvent,
+    selectPlan,
     dismissError,
   };
 }

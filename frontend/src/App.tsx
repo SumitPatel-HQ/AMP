@@ -1,84 +1,72 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { ErrorBanner } from "./panels/ErrorBanner";
-import { EventPanel } from "./panels/EventPanel";
+import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
+import { MissionBar } from "./panels/MissionBar";
 import { MissionMapPanel } from "./panels/MissionMapPanel";
-import { ScenarioPanel } from "./panels/ScenarioPanel";
+import { MissionNavPanel } from "./panels/MissionNavPanel";
 import { StatePanel } from "./panels/StatePanel";
-import { SteppingPanel } from "./panels/SteppingPanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
 import { TracePanel } from "./panels/TracePanel";
 
-// Panels mount independently over this grid. Add, remove, or reorder an
-// entry here without any other panel needing to change.
-function DashboardPanels({ session }: { session: ReturnType<typeof useMissionSession> }) {
+type Session = ReturnType<typeof useMissionSession>;
+
+/**
+ * The mission workspace, one viewport tall. Mission objects to the left, the
+ * map at the centre and live state to the right; the timeline spans the full
+ * width beneath them, and the analysis of the last replan sits at the bottom.
+ * Each region scrolls on its own so none of them pushes the others off screen.
+ */
+function MissionWorkspace({ session }: { session: Session }) {
+  const { selection } = session;
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="lg:col-span-1">
-        <ScenarioPanel
-          scenario={session.scenario}
-          plan={session.plan}
-          loading={session.loading}
-          onLoadDemo={session.loadDemoScenario}
-          onGeneratePlan={session.generatePlan}
-        />
-      </div>
-      <div className="lg:col-span-1">
-        <StatePanel
-          state={session.missionState}
-          events={session.events}
-          satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
-        />
-      </div>
-      <div className="lg:col-span-1">
-        <SteppingPanel
-          missionState={session.missionState}
-          loading={session.loading}
-          onStep={session.step}
-        />
-      </div>
-      <div className="lg:col-span-3">
-        <TimelinePanel
-          scenario={session.scenario}
-          plan={session.plan}
-          replanResult={session.replanResult}
-          missionState={session.missionState}
-          selectedRequestId={session.selectedRequestId}
-          loading={session.loading}
-          onReplan={session.replan}
-          onSelectRequest={session.selectRequest}
-        />
-      </div>
-      <div className="lg:col-span-1">
-        <MetricsPanel diff={session.replanResult?.diff ?? null} />
-      </div>
-      <div className="lg:col-span-2">
+    <main className="grid min-h-0 flex-1 grid-cols-[minmax(230px,17rem)_minmax(0,1fr)_minmax(210px,15rem)] grid-rows-[minmax(280px,1fr)_minmax(190px,30%)_minmax(160px,24%)] gap-1 p-1">
+      <MissionNavPanel
+        scenario={session.scenario}
+        plan={session.plan}
+        replanResult={session.replanResult}
+        missionState={session.missionState}
+        windows={session.windows}
+        events={session.events}
+        selection={selection}
+        onSelectRequest={session.selectRequest}
+        onSelectWindow={session.selectWindow}
+        onSelectEvent={session.selectEvent}
+        onSelectPlan={session.selectPlan}
+      />
+      <MissionMapPanel
+        scenario={session.scenario}
+        plan={session.plan}
+        missionState={session.missionState}
+        selectedRequestId={selection.requestId}
+        onSelectRequest={session.selectRequest}
+      />
+      <StatePanel
+        state={session.missionState}
+        events={session.events}
+        satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
+        storageCapacityMb={session.scenario?.satellite.storage_capacity_mb ?? null}
+        requestCount={session.scenario?.requests.length ?? null}
+      />
+      <TimelinePanel
+        className="col-span-3"
+        scenario={session.scenario}
+        plan={session.plan}
+        replanResult={session.replanResult}
+        missionState={session.missionState}
+        selectedRequestId={selection.requestId}
+        onSelectRequest={session.selectRequest}
+      />
+      <div className="col-span-3 grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-1">
+        <ImpactPanel impact={session.impact} plan={session.plan} />
         <TracePanel
           traces={session.replanResult?.traces ?? []}
-          selectedRequestId={session.selectedRequestId}
+          selectedRequestId={selection.requestId}
           onSelectRequest={session.selectRequest}
         />
+        <MetricsPanel diff={session.replanResult?.diff ?? null} />
       </div>
-      <div className="lg:col-span-3">
-        <MissionMapPanel
-          scenario={session.scenario}
-          plan={session.plan}
-          missionState={session.missionState}
-          selectedRequestId={session.selectedRequestId}
-          onSelectRequest={session.selectRequest}
-        />
-      </div>
-      <div className="lg:col-span-3">
-        <EventPanel
-          scenario={session.scenario}
-          plan={session.plan}
-          windows={session.windows}
-          impact={session.impact}
-          loading={session.loading}
-          onInjectCloudBlock={session.injectCloudBlock}
-        />
-      </div>
-    </div>
+    </main>
   );
 }
 
@@ -86,12 +74,21 @@ function App() {
   const session = useMissionSession();
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 p-6">
-      <header>
-        <h1 className="text-lg font-semibold text-neutral-200">AMIS Mission Dashboard</h1>
-      </header>
+    <div className="flex h-screen min-h-[720px] min-w-[1100px] flex-col">
+      <MissionBar
+        scenario={session.scenario}
+        plan={session.plan}
+        missionState={session.missionState}
+        windows={session.windows}
+        loading={session.loading}
+        onLoadDemo={session.loadDemoScenario}
+        onGeneratePlan={session.generatePlan}
+        onStep={session.step}
+        onInjectCloudBlock={session.injectCloudBlock}
+        onReplan={session.replan}
+      />
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
-      <DashboardPanels session={session} />
+      <MissionWorkspace session={session} />
     </div>
   );
 }

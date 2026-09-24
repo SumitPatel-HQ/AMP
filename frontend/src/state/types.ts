@@ -25,3 +25,21 @@ export interface ReplanResult {
    */
   frozenAt: string;
 }
+
+/**
+ * The mission objects the reviewer is following across panels. Each field is
+ * independent: a panel reads the one it can show and ignores the rest.
+ */
+export interface MissionSelection {
+  requestId: string | null;
+  windowId: string | null;
+  eventId: string | null;
+  planId: string | null;
+}
+
+export const EMPTY_SELECTION: MissionSelection = {
+  requestId: null,
+  windowId: null,
+  eventId: null,
+  planId: null,
+};

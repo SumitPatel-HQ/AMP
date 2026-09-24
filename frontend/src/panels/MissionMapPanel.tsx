@@ -115,7 +115,7 @@ export function MissionMapPanel({
   if (scenario === null) {
     return (
       <PanelFrame title="Mission map">
-        <p className="text-sm text-neutral-500">
+        <p className="text-xs text-neutral-500">
           Load a scenario to see its observation targets.
         </p>
       </PanelFrame>
@@ -126,8 +126,20 @@ export function MissionMapPanel({
   const satelliteAt = satellite === null ? null : cssPosition(satellite.coordinate);
 
   return (
-    <PanelFrame title="Mission map">
-      <div className="relative w-full" style={{ aspectRatio: `${WIDTH} / ${HEIGHT}` }}>
+    <PanelFrame
+      title="Mission map"
+      meta={`${scenario.requests.length} targets`}
+      bodyClassName="flex items-center justify-center p-1 [container-type:size]"
+    >
+      {/* The map keeps its projection's aspect ratio at the largest size the
+          workspace allows, so targets stay registered to the land beneath. */}
+      <div
+        className="relative"
+        style={{
+          aspectRatio: `${WIDTH} / ${HEIGHT}`,
+          width: `min(100cqw, 100cqh * ${WIDTH / HEIGHT})`,
+        }}
+      >
         <svg
           aria-hidden="true"
           className="absolute inset-0 h-full w-full rounded bg-neutral-900"

@@ -63,18 +63,16 @@ export function TimelinePanel({
   replanResult,
   missionState,
   selectedRequestId,
-  loading,
-  onReplan,
   onSelectRequest,
+  className,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
   replanResult: ReplanResult | null;
   missionState: MissionStateSchema | null;
   selectedRequestId: string | null;
-  loading: boolean;
-  onReplan: () => void;
   onSelectRequest: (requestId: string | null) => void;
+  className?: string;
 }) {
   const views = scenario === null ? [] : timelineViews(plan, replanResult);
   // Both stacked timelines are read at the clock the replan ran at, so what
@@ -82,23 +80,17 @@ export function TimelinePanel({
   const frozenAt = replanResult?.frozenAt ?? missionState?.simulated_time ?? null;
 
   return (
-    <PanelFrame title="Timeline">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onReplan}
-          disabled={loading || plan === null}
-          className="rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
-        >
-          Replan
-        </button>
-      </div>
+    <PanelFrame
+      title="Mission timeline"
+      meta={views.map((view) => `v${view.plan.version}`).join(" → ") || undefined}
+      className={className}
+    >
       {scenario === null || views.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-xs text-neutral-500">
           Load a scenario and generate a plan to see scheduled actions.
         </p>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex max-w-[1100px] flex-col gap-4">
           {views.map((view) => (
             <PlanTimeline
               key={view.plan.id}

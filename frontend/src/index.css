@@ -1,7 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * Mission workspace surfaces. Restrained near-black layers separated by thin
+ * borders rather than shadows or rounded cards; the palette follows the dark
+ * operations-console treatment of koala73/worldmonitor (conceptual reference,
+ * no source copied).
+ */
 :root {
   color-scheme: dark;
+  --amis-bg: #0a0a0b;
+  --amis-surface: #121316;
+  --amis-border: #25272c;
 }
 
 html,
@@ -9,7 +18,12 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background-color: #0a0b0f;
+  background-color: var(--amis-bg);
   color: #d4d6dc;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #33363d transparent;
 }
