@@ -7,10 +7,13 @@ export function knownPlans(
   plan: MissionPlanSchema | null,
   replanResult: ReplanResult | null,
 ): MissionPlanSchema[] {
-  if (replanResult !== null) {
-    return [replanResult.initialPlan, replanResult.revisedPlan];
+  const plans = replanResult === null ? [] : [replanResult.initialPlan, replanResult.revisedPlan];
+  // After a version conflict the session holds the backend's current plan,
+  // which may belong to neither side of the last replan it saw.
+  if (plan !== null && !plans.some((candidate) => candidate.id === plan.id)) {
+    plans.push(plan);
   }
-  return plan === null ? [] : [plan];
+  return plans;
 }
 
 /**

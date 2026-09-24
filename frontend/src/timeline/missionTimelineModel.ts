@@ -396,7 +396,12 @@ export function buildMissionTimelineModel(
     },
     groups,
     items: [
-      ...buildWindowItems(input.windows, requestIds, input.selectedWindowId),
+      // Emergency windows arrive with their event, so they sit on its row too.
+      ...buildWindowItems(
+        input.windows,
+        new Set([...requestIds, ...emergencyIds]),
+        input.selectedWindowId,
+      ),
       ...buildActionItems(input),
       ...buildEventItems(input.events, requestIds, emergencyIds, input.selectedEventId),
     ],

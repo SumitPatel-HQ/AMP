@@ -160,8 +160,7 @@ describe("missionTransition", () => {
         kind: "event",
         eventId: "EVT-001",
         eventType: "CLOUD_BLOCK",
-        requestId: "OBS-B",
-        windowId: "WIN-OBS-B-1",
+        summary: "OBS-B / WIN-OBS-B-1",
         time: "2026-09-21T10:20:00Z",
       },
       {
@@ -237,7 +236,7 @@ describe("missionTransition", () => {
     expect(transition.phase).toBe("awaiting-replan");
     expect(transition.stages).toMatchObject([
       { kind: "plan", role: "evaluated", version: 2 },
-      { kind: "event", eventId: "EVT-002", requestId: "OBS-C" },
+      { kind: "event", eventId: "EVT-002", summary: "OBS-C / WIN-OBS-C-1" },
       { kind: "impact", affectedRequestIds: ["OBS-C"] },
       { kind: "awaiting-replan" },
     ]);
@@ -265,5 +264,62 @@ describe("missionTransition", () => {
       affectedRequestIds: [],
       reasonCodes: [],
     });
+  });
+
+  it("names a battery drop by the battery value it set", () => {
+    const batteryEvent = {
+      id: "EVT-001",
+      scenario_id: "SCN",
+      event_time: "2026-09-21T10:20:00Z",
+      event_type: "BATTERY_DROP",
+      payload: { satellite_id: "SAT-001", new_battery_wh: 60 },
+    } satisfies MissionEventSchema;
+
+    const transition = missionTransition({
+      scenario,
+      plan: planV1,
+      impact: impactOnV1,
+      events: [batteryEvent],
+      replanResult: null,
+    });
+
+    expect(transition.stages[1]).toMatchObject({
+      kind: "event",
+      eventType: "BATTERY_DROP",
+      summary: "SAT-001 battery → 60.0 Wh",
+    });
+  });
+
+  it("shows replanning in place of the awaited replan while the replan request runs", () => {
+    const transition = missionTransition({
+      scenario,
+      plan: planV1,
+      impact: impactOnV1,
+      events: [cloudEvent],
+      replanResult: null,
+      operation: "replan",
+    });
+
+    expect(transition.phase).toBe("awaiting-replan");
+    expect(transition.stages.map((stage) => stage.kind)).toEqual([
+      "plan",
+      "event",
+      "impact",
+      "replanning",
+    ]);
+  });
+
+  it("adds an injecting stage after the plan while an event request runs", () => {
+    const transition = missionTransition({
+      scenario,
+      plan: planV1,
+      impact: null,
+      events: [],
+      replanResult: null,
+      operation: "inject",
+    });
+
+    expect(transition.phase).toBe("planned");
+    expect(transition.stages.map((stage) => stage.kind)).toEqual(["plan", "injecting"]);
   });
 });

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
 from amis.domain import ActionStatus, EventType, PlanChangeType, ReasonCode, RequestStatus
 from amis.errors import ErrorCode
@@ -123,13 +123,46 @@ class CloudBlockPayloadSchema(ApiModel):
     window_id: str = Field(min_length=1)
 
 
+class BatteryDropPayloadSchema(ApiModel):
+    satellite_id: str = Field(min_length=1)
+    new_battery_wh: float = Field(ge=0, allow_inf_nan=False)
+
+
+class EmergencyTaskPayloadSchema(ApiModel):
+    """The emergency request and the explicit windows it arrives with."""
+
+    request: ObservationRequestSchema
+    windows: list[ObservationWindowSchema] = Field(min_length=1)
+
+
 class CloudBlockEventRequest(ApiModel):
     event_type: Literal[EventType.CLOUD_BLOCK]
     payload: CloudBlockPayloadSchema
 
 
-class MissionEventRequest(CloudBlockEventRequest):
-    """Current event request schema; extend here without changing the route."""
+class BatteryDropEventRequest(ApiModel):
+    event_type: Literal[EventType.BATTERY_DROP]
+    payload: BatteryDropPayloadSchema
+
+
+class EmergencyTaskEventRequest(ApiModel):
+    event_type: Literal[EventType.EMERGENCY_TASK]
+    payload: EmergencyTaskPayloadSchema
+
+
+class MissionEventRequest(
+    RootModel[
+        Annotated[
+            Union[
+                CloudBlockEventRequest,
+                BatteryDropEventRequest,
+                EmergencyTaskEventRequest,
+            ],
+            Field(discriminator="event_type"),
+        ]
+    ]
+):
+    """Every event the route accepts, chosen by ``event_type``."""
 
 
 class MissionEventFields(ApiModel):
@@ -143,8 +176,29 @@ class CloudBlockMissionEventSchema(MissionEventFields):
     payload: CloudBlockPayloadSchema
 
 
-class MissionEventSchema(CloudBlockMissionEventSchema):
-    """Current event response schema; extend here without changing the route."""
+class BatteryDropMissionEventSchema(MissionEventFields):
+    event_type: Literal[EventType.BATTERY_DROP]
+    payload: BatteryDropPayloadSchema
+
+
+class EmergencyTaskMissionEventSchema(MissionEventFields):
+    event_type: Literal[EventType.EMERGENCY_TASK]
+    payload: EmergencyTaskPayloadSchema
+
+
+class MissionEventSchema(
+    RootModel[
+        Annotated[
+            Union[
+                CloudBlockMissionEventSchema,
+                BatteryDropMissionEventSchema,
+                EmergencyTaskMissionEventSchema,
+            ],
+            Field(discriminator="event_type"),
+        ]
+    ]
+):
+    """Every event the log can hold, chosen by ``event_type``."""
 
 
 class ImpactSchema(ApiModel):

@@ -441,3 +441,174 @@ def test_plan_routes_remain_unambiguous_across_scenarios():
                 assert response.json()["scenario_id"] == scenario_id
 
     asyncio.run(run())
+
+
+async def _planned_canonical_scenario(client: AsyncClient) -> tuple[Scenario, dict]:
+    scenario = build_canonical_replan_scenario()
+    await client.post("/scenarios", json=scenario.to_dict())
+    await client.post(f"/scenarios/{scenario.id}/windows/generate")
+    plan = (await client.post(f"/scenarios/{scenario.id}/plan")).json()
+    return scenario, plan
+
+
+def test_battery_drop_event_updates_state_and_persists_impact_over_http():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario, version_one = await _planned_canonical_scenario(client)
+
+            injected = await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={
+                    "event_type": "BATTERY_DROP",
+                    "payload": {"satellite_id": "SAT-001", "new_battery_wh": 50.0},
+                },
+            )
+            assert injected.status_code == 201
+            assert injected.json()["event_type"] == "BATTERY_DROP"
+            assert injected.json()["payload"] == {
+                "satellite_id": "SAT-001",
+                "new_battery_wh": 50.0,
+            }
+
+            state = (await client.get(f"/scenarios/{scenario.id}/state")).json()
+            assert state["battery_wh"] == 50.0
+            assert state["active_event_ids"] == [injected.json()["id"]]
+
+            impact = (await client.get(f"/scenarios/{scenario.id}/impact")).json()
+            assert impact["event_id"] == injected.json()["id"]
+            assert impact["evaluated_plan_id"] == version_one["id"]
+            assert impact["invalid_unfrozen_action_ids"]
+            assert all(
+                "INSUFFICIENT_BATTERY" in impact["reason_codes"][action_id]
+                for action_id in impact["invalid_unfrozen_action_ids"]
+            )
+
+            listed = (await client.get(f"/scenarios/{scenario.id}/events")).json()
+            assert listed == [injected.json()]
+
+            over_capacity = await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={
+                    "event_type": "BATTERY_DROP",
+                    "payload": {"satellite_id": "SAT-001", "new_battery_wh": 9999.0},
+                },
+            )
+            assert over_capacity.status_code == 400
+            assert over_capacity.json()["error"]["code"] == "INVALID_EVENT"
+
+    asyncio.run(run())
+
+
+def test_emergency_task_event_adds_its_request_through_the_event_log_over_http():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario, _ = await _planned_canonical_scenario(client)
+
+            request = {
+                "id": "OBS-EMERGENCY",
+                "target_lat": 34.05,
+                "target_lon": -118.24,
+                "priority": 5,
+                "duration_s": 600.0,
+                "deadline": "2026-09-21T10:50:00+00:00",
+                "energy_cost_wh": 40.0,
+                "storage_cost_mb": 100.0,
+                "status": "pending",
+            }
+            window = {
+                "id": "WIN-OBS-EMERGENCY-1",
+                "request_id": "OBS-EMERGENCY",
+                "satellite_id": "SAT-001",
+                "start": "2026-09-21T10:40:00+00:00",
+                "end": "2026-09-21T10:55:00+00:00",
+                "valid": True,
+                "invalid_reason": None,
+            }
+            body = {
+                "event_type": "EMERGENCY_TASK",
+                "payload": {"request": request, "windows": [window]},
+            }
+            injected = await client.post(f"/scenarios/{scenario.id}/events", json=body)
+            assert injected.status_code == 201
+            assert injected.json()["event_type"] == "EMERGENCY_TASK"
+            assert injected.json()["payload"]["request"]["id"] == "OBS-EMERGENCY"
+            assert [item["id"] for item in injected.json()["payload"]["windows"]] == [
+                "WIN-OBS-EMERGENCY-1"
+            ]
+
+            # The scenario is immutable: the request lives in the event log.
+            loaded = (await client.get(f"/scenarios/{scenario.id}")).json()
+            assert Scenario.from_dict(loaded) == scenario
+
+            windows = await client.get(f"/scenarios/{scenario.id}/windows")
+            assert windows.status_code == 200
+            assert "WIN-OBS-EMERGENCY-1" in [item["id"] for item in windows.json()]
+
+            impact = (await client.get(f"/scenarios/{scenario.id}/impact")).json()
+            assert impact["event_id"] == injected.json()["id"]
+
+            listed = (await client.get(f"/scenarios/{scenario.id}/events")).json()
+            assert listed == [injected.json()]
+
+            duplicate = await client.post(f"/scenarios/{scenario.id}/events", json=body)
+            assert duplicate.status_code == 400
+            assert duplicate.json()["error"]["code"] == "INVALID_EVENT"
+
+    asyncio.run(run())
+
+
+def test_windows_route_reflects_a_cloud_block_invalidation():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario = build_canonical_replan_scenario()
+            await client.post("/scenarios", json=scenario.to_dict())
+
+            empty = await client.get(f"/scenarios/{scenario.id}/windows")
+            assert empty.status_code == 200
+            assert empty.json() == []
+
+            generated = (
+                await client.post(f"/scenarios/{scenario.id}/windows/generate")
+            ).json()
+            await client.post(f"/scenarios/{scenario.id}/plan")
+            await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={
+                    "event_type": "CLOUD_BLOCK",
+                    "payload": {"request_id": "OBS-B", "window_id": "WIN-OBS-B-1"},
+                },
+            )
+
+            listed = (await client.get(f"/scenarios/{scenario.id}/windows")).json()
+            assert [item["id"] for item in listed] == [item["id"] for item in generated]
+            blocked = next(item for item in listed if item["id"] == "WIN-OBS-B-1")
+            assert blocked["valid"] is False
+            assert blocked["invalid_reason"] == "WINDOW_INVALIDATED"
+
+            missing = await client.get("/scenarios/DOES-NOT-EXIST/windows")
+            assert missing.status_code == 404
+
+    asyncio.run(run())
+
+
+def test_unsupported_event_types_are_rejected_with_the_invalid_event_code():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario, _ = await _planned_canonical_scenario(client)
+
+            rejected = await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={"event_type": "COMMUNICATION_OUTAGE", "payload": {}},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json()["error"]["code"] == "INVALID_EVENT"
+
+    asyncio.run(run())

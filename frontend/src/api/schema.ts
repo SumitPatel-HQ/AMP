@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenario_id}/windows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Windows */
+        get: operations["get_windows_scenarios__scenario_id__windows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scenarios/{scenario_id}/plan": {
         parameters: {
             query?: never;
@@ -252,6 +269,67 @@ export interface components {
          * @enum {string}
          */
         ActionStatus: "planned" | "started" | "completed";
+        /** BatteryDropEventRequest */
+        BatteryDropEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "BATTERY_DROP";
+            payload: components["schemas"]["BatteryDropPayloadSchema"];
+        };
+        /** BatteryDropMissionEventSchema */
+        BatteryDropMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "BATTERY_DROP";
+            payload: components["schemas"]["BatteryDropPayloadSchema"];
+        };
+        /** BatteryDropPayloadSchema */
+        BatteryDropPayloadSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** New Battery Wh */
+            new_battery_wh: number;
+        };
+        /** CloudBlockEventRequest */
+        CloudBlockEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "CLOUD_BLOCK";
+            payload: components["schemas"]["CloudBlockPayloadSchema"];
+        };
+        /** CloudBlockMissionEventSchema */
+        CloudBlockMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "CLOUD_BLOCK";
+            payload: components["schemas"]["CloudBlockPayloadSchema"];
+        };
         /** CloudBlockPayloadSchema */
         CloudBlockPayloadSchema: {
             /** Request Id */
@@ -280,6 +358,42 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+        };
+        /** EmergencyTaskEventRequest */
+        EmergencyTaskEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "EMERGENCY_TASK";
+            payload: components["schemas"]["EmergencyTaskPayloadSchema"];
+        };
+        /** EmergencyTaskMissionEventSchema */
+        EmergencyTaskMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "EMERGENCY_TASK";
+            payload: components["schemas"]["EmergencyTaskPayloadSchema"];
+        };
+        /**
+         * EmergencyTaskPayloadSchema
+         * @description The emergency request and the explicit windows it arrives with.
+         */
+        EmergencyTaskPayloadSchema: {
+            request: components["schemas"]["ObservationRequestSchema"];
+            /** Windows */
+            windows: components["schemas"]["ObservationWindowSchema"][];
         };
         /** ErrorBody */
         ErrorBody: {
@@ -346,37 +460,14 @@ export interface components {
         };
         /**
          * MissionEventRequest
-         * @description Current event request schema; extend here without changing the route.
+         * @description Every event the route accepts, chosen by ``event_type``.
          */
-        MissionEventRequest: {
-            /**
-             * Event Type
-             * @constant
-             */
-            event_type: "CLOUD_BLOCK";
-            payload: components["schemas"]["CloudBlockPayloadSchema"];
-        };
+        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"];
         /**
          * MissionEventSchema
-         * @description Current event response schema; extend here without changing the route.
+         * @description Every event the log can hold, chosen by ``event_type``.
          */
-        MissionEventSchema: {
-            /** Id */
-            id: string;
-            /** Scenario Id */
-            scenario_id: string;
-            /**
-             * Event Time
-             * Format: date-time
-             */
-            event_time: string;
-            /**
-             * Event Type
-             * @constant
-             */
-            event_type: "CLOUD_BLOCK";
-            payload: components["schemas"]["CloudBlockPayloadSchema"];
-        };
+        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"];
         /** MissionPlanSchema */
         MissionPlanSchema: {
             /** Id */
@@ -708,6 +799,46 @@ export interface operations {
         };
     };
     generate_windows_scenarios__scenario_id__windows_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationWindowSchema"][];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_windows_scenarios__scenario_id__windows_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -309,6 +309,56 @@ describe("mission timeline model", () => {
     });
   });
 
+  it("draws the backend's window for an emergency request on the emergency row", () => {
+    const emergencyWindow = {
+      id: "WIN-OBS-EMG-1",
+      request_id: "OBS-EMG",
+      satellite_id: "SAT-001",
+      start: "2026-09-21T11:40:00Z",
+      end: "2026-09-21T11:55:00Z",
+      valid: true,
+      invalid_reason: null,
+    };
+    const emergencyEvent = {
+      id: "EVENT-EMG",
+      scenario_id: scenario.id,
+      event_time: "2026-09-21T11:30:00Z",
+      event_type: "EMERGENCY_TASK",
+      payload: {
+        request: {
+          id: "OBS-EMG",
+          target_lat: 19,
+          target_lon: 73,
+          priority: 5,
+          duration_s: 600,
+          deadline: "2026-09-21T14:00:00Z",
+          energy_cost_wh: 40,
+          storage_cost_mb: 100,
+          status: "pending",
+        },
+        windows: [emergencyWindow],
+      },
+    } satisfies MissionEventSchema;
+
+    const model = buildMissionTimelineModel({
+      scenario,
+      windows: [...windows, emergencyWindow],
+      plan,
+      missionState: state,
+      events: [emergencyEvent],
+      impact,
+      selectedRequestId: null,
+      selectedWindowId: null,
+      selectedEventId: null,
+      changeByRequestId: {},
+    });
+
+    expect(model.items.find((item) => item.id === "window:WIN-OBS-EMG-1")).toMatchObject({
+      group: "OBS-EMG",
+      kind: "window",
+    });
+  });
+
   it("routes a cloud block for an unknown request to the mission lane", () => {
     const strayEvent = {
       id: "EVENT-STRAY",

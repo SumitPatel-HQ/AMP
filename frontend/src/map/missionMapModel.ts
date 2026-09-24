@@ -6,6 +6,8 @@ import type {
   ScenarioSchema,
   ScheduledActionSchema,
 } from "../api/client";
+import { missionRequestPool } from "../state/missionEvent";
+import { eventAnchorRequestId } from "../timeline/missionTimelineModel";
 
 /** Longitude then latitude, the order every map library here takes. */
 export type Coordinate = readonly [number, number];
@@ -60,11 +62,11 @@ function targetCoordinate(request: ObservationRequestSchema): Coordinate {
 }
 
 function scheduledActionPoints(
-  scenario: ScenarioSchema,
+  requests: readonly ObservationRequestSchema[],
   plan: MissionPlanSchema | null,
 ): ScheduledActionPoint[] {
   const requestsById = new Map<string, ObservationRequestSchema>(
-    scenario.requests.map((request) => [request.id, request]),
+    requests.map((request) => [request.id, request]),
   );
   return (plan?.actions ?? [])
     .flatMap((action) => {
@@ -93,8 +95,9 @@ export function satellitePlacement(
   scenario: ScenarioSchema,
   plan: MissionPlanSchema | null,
   simulatedTime: string | null,
+  requests: readonly ObservationRequestSchema[] = scenario.requests,
 ): SatellitePlacement | null {
-  const points = scheduledActionPoints(scenario, plan);
+  const points = scheduledActionPoints(requests, plan);
   const first = points[0];
   if (first === undefined) {
     return null;
@@ -133,15 +136,21 @@ function targetBounds(targets: MapTarget[]): [number, number, number, number] | 
   return [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
 }
 
-/** Everything the map draws, derived only from data the session already holds. */
+/**
+ * Everything the map draws, derived only from data the session already holds.
+ * Emergency requests arrive through the event log rather than the immutable
+ * scenario, so the map draws the whole request pool, reading their targets
+ * from the events that carry them.
+ */
 export function buildMissionMapModel(
   scenario: ScenarioSchema,
   plan: MissionPlanSchema | null,
   missionState: MissionStateSchema | null,
   events: MissionEventSchema[],
 ): MissionMapModel {
+  const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
-  const targets = scenario.requests.map((request): MapTarget => {
+  const targets = requestPool.map((request): MapTarget => {
     const action = plan?.actions.find((candidate) => candidate.request_id === request.id) ?? null;
     const unscheduledReason =
       plan?.unscheduled.find((entry) => entry.request_id === request.id)?.reason_code ?? null;
@@ -154,15 +163,15 @@ export function buildMissionMapModel(
       action,
       unscheduledReason,
       eventIds: events
-        .filter((event) => event.payload.request_id === request.id)
+        .filter((event) => eventAnchorRequestId(event) === request.id)
         .map((event) => event.id),
     };
   });
 
   return {
     targets,
-    satellite: satellitePlacement(scenario, plan, missionState?.simulated_time ?? null),
-    planSequence: scheduledActionPoints(scenario, plan).map((point) => point.coordinate),
+    satellite: satellitePlacement(scenario, plan, missionState?.simulated_time ?? null, requestPool),
+    planSequence: scheduledActionPoints(requestPool, plan).map((point) => point.coordinate),
     bounds: targetBounds(targets),
   };
 }

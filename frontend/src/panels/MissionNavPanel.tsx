@@ -8,6 +8,7 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
+import { eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
 import { knownPlans, planLabel } from "../state/planContext";
 import { requestStatus, type RequestState } from "../state/requestStatus";
 import type { MissionSelection, ReplanResult } from "../state/types";
@@ -47,6 +48,7 @@ const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: stri
 
 function RequestList({
   scenario,
+  introduced,
   plan,
   impact,
   diff,
@@ -55,6 +57,8 @@ function RequestList({
   onSelectRequest,
 }: {
   scenario: ScenarioSchema;
+  /** Emergency requests the event log added; the scenario itself never lists them. */
+  introduced: IntroducedRequest[];
   plan: MissionPlanSchema | null;
   impact: ImpactSchema | null;
   /** The last replan's diff; it marks changes only while its plan is current. */
@@ -63,13 +67,21 @@ function RequestList({
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
+  const rows = [
+    ...scenario.requests.map((request) => ({ request, eventId: null as string | null })),
+    ...introduced.map(({ request, eventId }) => ({ request, eventId })),
+  ];
   return (
     <ul aria-label="Observation requests">
-      {scenario.requests.map((request) => {
+      {rows.map(({ request, eventId }) => {
         const selected = request.id === selectedRequestId;
         const status = requestStatus(request.id, { plan, completedRequestIds, impact, diff });
         const style = STATE_STYLE[status.state];
-        const detail = [status.change, status.reasonCode].filter((part) => part !== null);
+        const detail = [
+          eventId === null ? null : `emergency · ${eventId}`,
+          status.change,
+          status.reasonCode,
+        ].filter((part) => part !== null);
         return (
           <li key={request.id}>
             <button
@@ -77,6 +89,7 @@ function RequestList({
               aria-pressed={selected}
               data-selected={selected ? "true" : undefined}
               data-plan-status={status.state}
+              data-emergency={eventId === null ? undefined : "true"}
               title={`deadline ${clockTime(request.deadline)} UTC`}
               onClick={() => onSelectRequest(selected ? null : request.id)}
               className={`${ROW} grid-cols-[auto_1fr_auto_5.5rem] items-center ${rowTone(selected)}`}
@@ -192,9 +205,7 @@ function EventList({
               </span>
               <span className="col-span-2 flex gap-2 truncate text-[10px]">
                 <span className="text-amber-300">{event.event_type}</span>
-                <span className="text-neutral-500">
-                  {event.payload.request_id} · {event.payload.window_id}
-                </span>
+                <span className="truncate text-neutral-500">{eventSummary(event)}</span>
                 {activeIds.has(event.id) ? <span className="text-amber-400">active</span> : null}
               </span>
             </button>
@@ -285,8 +296,9 @@ export function MissionNavPanel({
   onSelectPlan: (planId: string | null) => void;
 }) {
   const [tab, setTab] = useState<Tab>("requests");
+  const introduced = introducedRequests(events);
   const counts: Record<Tab, number> = {
-    requests: scenario?.requests.length ?? 0,
+    requests: (scenario?.requests.length ?? 0) + introduced.length,
     windows: windows.length,
     events: events.length,
     plans: knownPlans(plan, replanResult).length,
@@ -318,6 +330,7 @@ export function MissionNavPanel({
         ) : tab === "requests" ? (
           <RequestList
             scenario={scenario}
+            introduced={introduced}
             plan={plan}
             impact={impact}
             diff={replanResult?.diff ?? null}

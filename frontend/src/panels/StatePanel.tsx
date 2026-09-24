@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { MissionEventSchema, MissionPlanSchema, MissionStateSchema } from "../api/client";
+import { eventSummary } from "../state/missionEvent";
 import { shortPlanId } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
@@ -146,7 +147,7 @@ export function StatePanel({
                   <span key={event.id} className="text-red-300">
                     {`${event.event_type} · ${event.id}`}
                     <span className="block text-[10px] text-neutral-500">
-                      {`${event.payload.request_id} / ${event.payload.window_id}`}
+                      {eventSummary(event)}
                     </span>
                   </span>
                 ))}

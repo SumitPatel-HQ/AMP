@@ -4,6 +4,7 @@ import type {
   ObservationWindowSchema,
   MissionPlanSchema,
   MissionStateSchema,
+  MissionEventRequest,
   MissionEventSchema,
   ImpactSchema,
   PlanDiffSchema,
@@ -77,18 +78,23 @@ export async function stepSimulation(
   );
 }
 
-export async function injectCloudBlock(
+export async function fetchWindows(scenarioId: string): Promise<ObservationWindowSchema[]> {
+  return unwrap(
+    await client.GET("/scenarios/{scenario_id}/windows", {
+      params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+/** Any event the backend accepts: CLOUD_BLOCK, BATTERY_DROP or EMERGENCY_TASK. */
+export async function injectEvent(
   scenarioId: string,
-  requestId: string,
-  windowId: string,
+  event: MissionEventRequest,
 ): Promise<MissionEventSchema> {
   return unwrap(
     await client.POST("/scenarios/{scenario_id}/events", {
       params: { path: { scenario_id: scenarioId } },
-      body: {
-        event_type: "CLOUD_BLOCK",
-        payload: { request_id: requestId, window_id: windowId },
-      },
+      body: event,
     }),
   );
 }

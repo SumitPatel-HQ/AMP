@@ -1,13 +1,14 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { missionTransition, type MissionTransition } from "./state/missionTransition";
 import { knownPlans, planLabel } from "./state/planContext";
-import { ErrorBanner } from "./panels/ErrorBanner";
+import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
 import { MissionBar } from "./panels/MissionBar";
 import { MissionMapPanel } from "./panels/MissionMapPanel";
 import { MissionNavPanel } from "./panels/MissionNavPanel";
 import { MissionTransitionStrip } from "./panels/MissionTransitionStrip";
+import { ReplanOutcomePanel } from "./panels/ReplanOutcomePanel";
 import { StatePanel } from "./panels/StatePanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
 import { TracePanel } from "./panels/TracePanel";
@@ -85,12 +86,23 @@ function MissionWorkspace({
         onSelectEvent={session.selectEvent}
       />
       <div className="col-span-3 grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-1">
-        <ImpactPanel
-          impact={session.impact}
-          events={session.events}
-          plans={plans}
-          earlier={!transition.stages.some((stage) => stage.kind === "impact")}
-        />
+        <div className="flex min-h-0 min-w-0 flex-col gap-1">
+          <ImpactPanel
+            impact={session.impact}
+            events={session.events}
+            plans={plans}
+            earlier={!transition.stages.some((stage) => stage.kind === "impact")}
+            selectedRequestId={selection.requestId}
+            onSelectRequest={session.selectRequest}
+            className="flex-1"
+          />
+          <ReplanOutcomePanel
+            replanResult={replanResult}
+            plans={plans}
+            selectedRequestId={selection.requestId}
+            onSelectRequest={session.selectRequest}
+          />
+        </div>
         <TracePanel
           traces={replanResult?.traces ?? []}
           planContext={replanContext}
@@ -111,6 +123,7 @@ function App() {
     impact: session.impact,
     events: session.events,
     replanResult: session.replanResult,
+    operation: session.operation,
   });
   // The bar names a previous version only while the strip still shows that replan.
   const previousStage = transition.stages.find(
@@ -127,14 +140,21 @@ function App() {
         awaitingReplan={transition.phase === "awaiting-replan"}
         missionState={session.missionState}
         windows={session.windows}
+        events={session.events}
         loading={session.loading}
+        replanning={session.operation === "replan"}
         onLoadDemo={session.loadDemoScenario}
         onGeneratePlan={session.generatePlan}
         onStep={session.step}
-        onInjectCloudBlock={session.injectCloudBlock}
+        onInjectEvent={session.injectEvent}
         onReplan={session.replan}
       />
       <MissionTransitionStrip transition={transition} hasScenario={session.scenario !== null} />
+      <PlanConflictBanner
+        conflict={session.planConflict}
+        plan={session.plan}
+        onDismiss={session.dismissPlanConflict}
+      />
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />
     </div>

@@ -8,6 +8,23 @@ import type {
 export interface MissionSessionError {
   code: ApiErrorCode | "CLIENT_ERROR";
   message: string;
+  /** The backend's error details, kept verbatim so no context is lost. */
+  details: Record<string, unknown>;
+}
+
+/** The mutation a mission request is running, while one is in flight. */
+export type MissionOperation = "inject" | "replan";
+
+/**
+ * A replan the backend refused because the plan it named was no longer
+ * current. The session refreshes to the backend's current plan instead of
+ * retrying, so the reviewer decides again against a known version.
+ */
+export interface PlanConflict {
+  /** The backend's PLAN_VERSION_CONFLICT message, shown verbatim. */
+  message: string;
+  expectedPlanId: string;
+  currentPlanId: string | null;
 }
 
 /** One replan: the plan it started from, the plan it produced, and their diff. */

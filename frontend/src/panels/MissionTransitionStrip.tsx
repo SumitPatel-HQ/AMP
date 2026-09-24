@@ -81,7 +81,7 @@ function EventCell({ stage }: { stage: EventStage }) {
       label={`Event ${stage.eventId}`}
       tone="event"
       title={`${stage.eventType ?? "Event"} · ${stage.eventId}`}
-      line={stage.requestId === null ? "payload unavailable" : `${stage.requestId} / ${stage.windowId}`}
+      line={stage.summary ?? "payload unavailable"}
       note={stage.time === null ? "time unavailable" : `at ${clockTime(stage.time)} UTC`}
     />
   );
@@ -123,6 +123,26 @@ function StageCell({ stage, afterReplan }: { stage: TransitionStage; afterReplan
           title="Awaiting replan"
           line="Replan builds the next plan version"
           note="from the current mission state"
+        />
+      );
+    case "injecting":
+      return (
+        <Stage
+          label="Injecting event"
+          tone="event"
+          title="Injecting event"
+          line="Waiting for the backend"
+          note="impact follows once it is persisted"
+        />
+      );
+    case "replanning":
+      return (
+        <Stage
+          label="Replanning"
+          tone="pending"
+          title="Replanning"
+          line="Building the next plan version"
+          note="the current version stays unchanged"
         />
       );
     case "no-event":

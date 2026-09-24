@@ -4,7 +4,8 @@ import type {
   MissionPlanSchema,
   ScenarioSchema,
 } from "../api/client";
-import type { ReplanResult } from "./types";
+import { eventSummary } from "./missionEvent";
+import type { MissionOperation, ReplanResult } from "./types";
 
 /**
  * One plan version in the transition. `evaluated` is the current plan an event
@@ -19,13 +20,13 @@ export interface PlanStage {
   requestCount: number;
 }
 
-/** The event whose impact the transition shows. Type and payload are null if unlisted. */
+/** The event whose impact the transition shows. Type and summary are null if unlisted. */
 export interface EventStage {
   kind: "event";
   eventId: string;
   eventType: MissionEventSchema["event_type"] | null;
-  requestId: string | null;
-  windowId: string | null;
+  /** What the payload carries, e.g. the blocked request/window or the new battery value. */
+  summary: string | null;
   time: string | null;
 }
 
@@ -42,7 +43,10 @@ export type TransitionStage =
   | EventStage
   | ImpactStage
   | { kind: "awaiting-replan" }
-  | { kind: "no-event" };
+  | { kind: "no-event" }
+  /** A request to the backend is running; the phase still reads only what it returned. */
+  | { kind: "injecting" }
+  | { kind: "replanning" };
 
 export type MissionPhase = "no-plan" | "planned" | "awaiting-replan" | "replanned";
 
@@ -72,8 +76,7 @@ function eventStage(eventId: string, events: MissionEventSchema[]): EventStage {
     kind: "event",
     eventId,
     eventType: event?.event_type ?? null,
-    requestId: event?.payload.request_id ?? null,
-    windowId: event?.payload.window_id ?? null,
+    summary: event === undefined ? null : eventSummary(event),
     time: event?.event_time ?? null,
   };
 }
@@ -94,12 +97,12 @@ function impactStage(impact: ImpactSchema, evaluatedPlan: MissionPlanSchema): Im
 }
 
 /**
- * Where the mission stands in its plan -> event -> impact -> replan loop, read
- * only from what the backend returned. An impact belongs to the plan it
- * evaluated, so it joins the transition only while that plan is either the
- * current one (awaiting a replan) or the one the last replan started from.
+ * The loop as the backend last reported it, read only from what it returned.
+ * An impact belongs to the plan it evaluated, so it joins the transition only
+ * while that plan is either the current one (awaiting a replan) or the one the
+ * last replan started from.
  */
-export function missionTransition({
+function settledTransition({
   scenario,
   plan,
   impact,
@@ -150,4 +153,29 @@ export function missionTransition({
   }
 
   return { phase: "planned", stages: [planStage(plan, "current", requestCount)] };
+}
+
+/**
+ * Where the mission stands in its plan -> event -> impact -> replan loop.
+ * While an inject or replan request is in flight the strip says so, but the
+ * phase only moves once the backend has answered and the session refetched.
+ */
+export function missionTransition(input: {
+  scenario: ScenarioSchema | null;
+  plan: MissionPlanSchema | null;
+  impact: ImpactSchema | null;
+  events: MissionEventSchema[];
+  replanResult: ReplanResult | null;
+  operation?: MissionOperation | null;
+}): MissionTransition {
+  const settled = settledTransition(input);
+  const operation = input.operation ?? null;
+  if (settled.phase === "no-plan" || operation === null) {
+    return settled;
+  }
+  if (operation === "inject") {
+    return { ...settled, stages: [...settled.stages, { kind: "injecting" }] };
+  }
+  const waiting = settled.stages.filter((stage) => stage.kind !== "awaiting-replan");
+  return { ...settled, stages: [...waiting, { kind: "replanning" }] };
 }

@@ -72,7 +72,14 @@ def create_app(
     *,
     window_provider: WindowProvider | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="AMIS REST API", version="0.1.0")
+    # One schema per model: the emergency payload reuses the scenario's request
+    # schema as input, which would otherwise split shared names into
+    # "-Input" and "-Output" variants for API clients.
+    app = FastAPI(
+        title="AMIS REST API",
+        version="0.1.0",
+        separate_input_output_schemas=False,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(get_cors_allowed_origins()),
@@ -166,6 +173,14 @@ def create_app(
         store.save(session)
         return [window.to_dict() for window in windows]
 
+    @app.get(
+        "/scenarios/{scenario_id}/windows",
+        response_model=list[ObservationWindowSchema],
+        responses=_documented_errors(404, 422),
+    )
+    def get_windows(scenario_id: ScenarioId) -> list[dict[str, Any]]:
+        return [window.to_dict() for window in store.load(scenario_id).get_windows()]
+
     @app.post(
         "/scenarios/{scenario_id}/plan",
         response_model=MissionPlanSchema,
@@ -209,8 +224,9 @@ def create_app(
         scenario_id: ScenarioId, request: MissionEventRequest
     ) -> dict[str, Any]:
         session = store.load(scenario_id)
+        event_request = request.root
         event = session.inject_event(
-            request.event_type, request.payload.model_dump(mode="json")
+            event_request.event_type, event_request.payload.model_dump(mode="json")
         )
         store.save(session)
         return event.to_dict()

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type {
+  MissionEventRequest,
+  MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
   ObservationWindowSchema,
@@ -13,7 +15,7 @@ import {
   REPLAN_BUTTON,
   REPLAN_BUTTON_PRIMARY,
 } from "./controls";
-import { CloudBlockControl } from "./CloudBlockControl";
+import { EventControl } from "./EventControl";
 
 /** hh:mm:ss of a non-negative span, the format the mission clock counts in. */
 function formatSpan(ms: number): string {
@@ -107,11 +109,13 @@ export function MissionBar({
   awaitingReplan,
   missionState,
   windows,
+  events,
   loading,
+  replanning,
   onLoadDemo,
   onGeneratePlan,
   onStep,
-  onInjectCloudBlock,
+  onInjectEvent,
   onReplan,
 }: {
   scenario: ScenarioSchema | null;
@@ -122,11 +126,14 @@ export function MissionBar({
   awaitingReplan: boolean;
   missionState: MissionStateSchema | null;
   windows: ObservationWindowSchema[];
+  events: MissionEventSchema[];
   loading: boolean;
+  /** A replan request is in flight. */
+  replanning: boolean;
   onLoadDemo: () => void;
   onGeneratePlan: () => void;
   onStep: (seconds: number) => void;
-  onInjectCloudBlock: (requestId: string, windowId: string) => void;
+  onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
   onReplan: () => void;
 }) {
   const [seconds, setSeconds] = useState(300);
@@ -219,21 +226,28 @@ export function MissionBar({
             aria-expanded={eventOpen}
             aria-controls="event-control"
             onClick={() => setEventOpen((open) => !open)}
-            disabled={scenario === null}
+            // The backend evaluates every event against the current plan, so
+            // there is nothing to inject into before one exists.
+            disabled={plan === null || missionState === null}
+            title={plan === null ? "Generate a plan first: events are evaluated against it" : undefined}
             className={eventOpen ? EVENT_BUTTON_OPEN : EVENT_BUTTON}
           >
             Event
           </button>
-          {eventOpen && scenario !== null ? (
+          {eventOpen && scenario !== null && plan !== null && missionState !== null ? (
             <div
               id="event-control"
-              className="absolute right-0 top-8 w-max max-w-[36rem] border border-[var(--amis-border)] bg-[var(--amis-surface)] p-2.5 shadow-lg shadow-black/60"
+              className="absolute right-0 top-8 w-max border border-[var(--amis-border)] bg-[var(--amis-surface)] p-2.5 shadow-lg shadow-black/60"
             >
-              <CloudBlockControl
+              <EventControl
                 scenario={scenario}
+                plan={plan}
+                missionState={missionState}
                 windows={windows}
+                events={events}
                 loading={loading}
-                onInjectCloudBlock={onInjectCloudBlock}
+                onInjectEvent={onInjectEvent}
+                onInjected={() => setEventOpen(false)}
               />
             </div>
           ) : null}
@@ -242,6 +256,12 @@ export function MissionBar({
           type="button"
           onClick={onReplan}
           disabled={loading || plan === null}
+          aria-busy={replanning}
+          title={
+            plan === null
+              ? "Generate a plan first"
+              : `Build the next version from Plan V${plan.version}; V${plan.version} stays unchanged`
+          }
           className={awaitingReplan ? REPLAN_BUTTON_PRIMARY : REPLAN_BUTTON}
         >
           Replan

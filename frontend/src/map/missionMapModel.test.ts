@@ -66,6 +66,34 @@ describe("mission map model", () => {
     expect(model.targets.map((target) => target.eventIds)).toEqual([[], ["EVT-001"]]);
   });
 
+  it("draws an emergency request's target from the event log and links it to its event", () => {
+    const model = buildMissionMapModel(scenario, null, missionState, [
+      {
+        id: "EVT-002",
+        scenario_id: scenario.id,
+        event_time: scenario.start_time,
+        event_type: "EMERGENCY_TASK",
+        payload: {
+          request: { ...scenario.requests[0], id: "OBS-EMERGENCY", target_lat: 34.05, target_lon: -118.24 },
+          windows: [],
+        },
+      },
+      {
+        id: "EVT-003",
+        scenario_id: scenario.id,
+        event_time: scenario.start_time,
+        event_type: "BATTERY_DROP",
+        payload: { satellite_id: "SAT-001", new_battery_wh: 100 },
+      },
+    ]);
+
+    expect(model.targets.map((target) => target.requestId)).toEqual(["OBS-A", "OBS-B", "OBS-EMERGENCY"]);
+    expect(model.targets[2].coordinate).toEqual([-118.24, 34.05]);
+    // A battery drop has no spatial association, so no target claims it.
+    expect(model.targets.map((target) => target.eventIds)).toEqual([[], [], ["EVT-002"]]);
+    expect(scenario.requests).toHaveLength(2);
+  });
+
   it("orders the plan sequence by action start and bounds every target", () => {
     const model = buildMissionMapModel(scenario, plan, missionState, []);
 

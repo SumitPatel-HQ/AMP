@@ -10,13 +10,15 @@ import {
   fetchPlan,
   fetchState,
   fetchTraces,
+  fetchWindows,
   generateWindows,
-  injectCloudBlock,
+  injectEvent as postEvent,
   replan as replanMission,
   stepSimulation,
 } from "../api/amis";
 import type {
   ImpactSchema,
+  MissionEventRequest,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
@@ -25,7 +27,13 @@ import type {
 } from "../api/client";
 import { eventAnchorRequestId, eventAnchorWindowId } from "../timeline/missionTimelineModel";
 import { EMPTY_SELECTION } from "./types";
-import type { MissionSelection, MissionSessionError, ReplanResult } from "./types";
+import type {
+  MissionOperation,
+  MissionSelection,
+  MissionSessionError,
+  PlanConflict,
+  ReplanResult,
+} from "./types";
 
 export interface MissionSessionState {
   scenario: ScenarioSchema | null;
@@ -39,24 +47,45 @@ export interface MissionSessionState {
   /** The request, window, event and plan the reviewer is following, if any. */
   selection: MissionSelection;
   loading: boolean;
+  /** The inject or replan request in flight, so the lifecycle can say so. */
+  operation: MissionOperation | null;
+  /** The last replan's version conflict, until the next mutation succeeds. */
+  planConflict: PlanConflict | null;
   error: MissionSessionError | null;
   loadDemoScenario: () => Promise<void>;
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
   step: (seconds: number) => Promise<void>;
-  injectCloudBlock: (requestId: string, windowId: string) => Promise<void>;
+  /** Resolves true once the backend accepted the event and the workspace refetched. */
+  injectEvent: (event: MissionEventRequest) => Promise<boolean>;
   selectRequest: (requestId: string | null) => void;
   selectWindow: (windowId: string | null) => void;
   selectEvent: (eventId: string | null) => void;
   selectPlan: (planId: string | null) => void;
   dismissError: () => void;
+  dismissPlanConflict: () => void;
 }
 
 function describeError(error: unknown): MissionSessionError {
   if (error instanceof ApiError) {
-    return { code: error.code, message: error.message };
+    return { code: error.code, message: error.message, details: error.details };
   }
-  return { code: "CLIENT_ERROR", message: String(error) };
+  return { code: "CLIENT_ERROR", message: String(error), details: {} };
+}
+
+/**
+ * The scenario's latest persisted impact, or null when no event has been
+ * injected yet (the backend answers SIMULATION_STATE_ERROR "no impact exists").
+ */
+async function fetchImpactIfAny(scenarioId: string): Promise<ImpactSchema | null> {
+  try {
+    return await fetchImpact(scenarioId);
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.code === "SIMULATION_STATE_ERROR") {
+      return null;
+    }
+    throw caught;
+  }
 }
 
 export function useMissionSession(): MissionSessionState {
@@ -69,6 +98,8 @@ export function useMissionSession(): MissionSessionState {
   const [replanResult, setReplanResult] = useState<ReplanResult | null>(null);
   const [selection, setSelection] = useState<MissionSelection>(EMPTY_SELECTION);
   const [loading, setLoading] = useState(false);
+  const [operation, setOperation] = useState<MissionOperation | null>(null);
+  const [planConflict, setPlanConflict] = useState<PlanConflict | null>(null);
   const [error, setError] = useState<MissionSessionError | null>(null);
 
   const refetchStateAndEvents = useCallback(async (scenarioId: string) => {
@@ -95,6 +126,7 @@ export function useMissionSession(): MissionSessionState {
       setWindows([]);
       setImpact(null);
       setReplanResult(null);
+      setPlanConflict(null);
       setSelection(EMPTY_SELECTION);
       await refetchStateAndEvents(loaded.id);
     } catch (caught) {
@@ -117,6 +149,7 @@ export function useMissionSession(): MissionSessionState {
       setPlan(nextPlan);
       setImpact(null);
       setReplanResult(null);
+      setPlanConflict(null);
       // Regenerated windows and a fresh plan replace what a selected window or
       // plan pointed at; the request survives because the scenario does.
       setSelection((current) => ({ ...current, windowId: null, planId: null }));
@@ -128,17 +161,49 @@ export function useMissionSession(): MissionSessionState {
     }
   }, [scenario, refetchStateAndEvents]);
 
+  /**
+   * A refused replan leaves the session pointing at a plan the backend has
+   * moved past. Rather than retry against a version nobody has looked at, the
+   * session loads the plan the backend names as current (and the mission
+   * context around it) and records the conflict for the reviewer.
+   */
+  const refreshAfterConflict = useCallback(
+    async (scenarioId: string, expectedPlanId: string, conflict: ApiError) => {
+      const reported = conflict.details["current_plan_id"];
+      const currentPlanId = typeof reported === "string" ? reported : null;
+      setPlanConflict({ message: conflict.message, expectedPlanId, currentPlanId });
+      try {
+        const [currentPlan, nextWindows, nextImpact] = await Promise.all([
+          currentPlanId === null ? Promise.resolve(null) : fetchPlan(currentPlanId),
+          fetchWindows(scenarioId),
+          fetchImpactIfAny(scenarioId),
+          refetchStateAndEvents(scenarioId),
+        ]);
+        if (currentPlan !== null) {
+          setPlan(currentPlan);
+        }
+        setWindows(nextWindows);
+        setImpact(nextImpact);
+      } catch (caught) {
+        setError(describeError(caught));
+      }
+    },
+    [refetchStateAndEvents],
+  );
+
   const replan = useCallback(async () => {
     if (scenario === null || plan === null) {
       return;
     }
     setLoading(true);
+    setOperation("replan");
     setError(null);
+    // The displayed plan is the version the reviewer decided against, so it
+    // is the version the server must still hold for this replan to be safe.
+    const initialPlan = plan;
     try {
-      // The displayed plan is the version the reviewer decided against, so it
-      // is the version the server must still hold for this replan to be safe.
-      const initialPlan = plan;
       const revisedPlan = await replanMission(scenario.id, initialPlan.id);
+      setPlanConflict(null);
       // The server has already committed to the new version, so the local
       // plan pointer must move with it even if the comparison below fails -
       // otherwise the next replan attempt would still send the stale id and
@@ -166,11 +231,18 @@ export function useMissionSession(): MissionSessionState {
         traces,
       });
     } catch (caught) {
-      setError(describeError(caught));
+      // A version conflict gets its own stale-plan notice, carrying the
+      // backend's code and message, instead of a second generic error.
+      if (caught instanceof ApiError && caught.code === "PLAN_VERSION_CONFLICT") {
+        await refreshAfterConflict(scenario.id, initialPlan.id, caught);
+      } else {
+        setError(describeError(caught));
+      }
     } finally {
+      setOperation(null);
       setLoading(false);
     }
-  }, [scenario, plan, refetchStateAndEvents]);
+  }, [scenario, plan, refetchStateAndEvents, refreshAfterConflict]);
 
   const step = useCallback(
     async (seconds: number) => {
@@ -206,34 +278,48 @@ export function useMissionSession(): MissionSessionState {
     [scenario, plan, replanResult],
   );
 
-  const injectCloudBlockEvent = useCallback(
-    async (requestId: string, windowId: string) => {
+  const injectEvent = useCallback(
+    async (event: MissionEventRequest): Promise<boolean> => {
       if (scenario === null) {
-        return;
+        return false;
       }
       setLoading(true);
+      setOperation("inject");
       setError(null);
       try {
-        await injectCloudBlock(scenario.id, requestId, windowId);
-        setWindows((current) =>
-          current.map((window) =>
-            window.id === windowId
-              ? { ...window, valid: false, invalid_reason: "WINDOW_INVALIDATED" }
-              : window,
-          ),
-        );
-        const [nextImpact] = await Promise.all([
+        const injected = await postEvent(scenario.id, event);
+        setPlanConflict(null);
+        // The backend owns what the event changed: window validity, the
+        // emergency request's windows, battery, and the persisted impact.
+        // Each is refetched rather than mirrored here.
+        const [nextState, nextEvents, nextWindows, nextImpact] = await Promise.all([
+          fetchState(scenario.id),
+          fetchEvents(scenario.id),
+          fetchWindows(scenario.id),
           fetchImpact(scenario.id),
-          refetchStateAndEvents(scenario.id),
         ]);
+        setMissionState(nextState);
+        setEvents(nextEvents);
+        setWindows(nextWindows);
         setImpact(nextImpact);
+        // Follow the injected event, and what it names, across every panel.
+        const requestId = eventAnchorRequestId(injected);
+        setSelection((current) => ({
+          ...current,
+          eventId: injected.id,
+          requestId: requestId ?? current.requestId,
+          windowId: requestId === null ? current.windowId : eventAnchorWindowId(injected),
+        }));
+        return true;
       } catch (caught) {
         setError(describeError(caught));
+        return false;
       } finally {
+        setOperation(null);
         setLoading(false);
       }
     },
-    [scenario, refetchStateAndEvents],
+    [scenario],
   );
 
   // A selected window belongs to one request, so choosing a request drops it.
@@ -286,6 +372,7 @@ export function useMissionSession(): MissionSessionState {
   );
 
   const dismissError = useCallback(() => setError(null), []);
+  const dismissPlanConflict = useCallback(() => setPlanConflict(null), []);
 
   return {
     scenario,
@@ -297,16 +384,19 @@ export function useMissionSession(): MissionSessionState {
     replanResult,
     selection,
     loading,
+    operation,
+    planConflict,
     error,
     loadDemoScenario,
     generatePlan,
     replan,
     step,
-    injectCloudBlock: injectCloudBlockEvent,
+    injectEvent,
     selectRequest,
     selectWindow,
     selectEvent,
     selectPlan,
     dismissError,
+    dismissPlanConflict,
   };
 }
