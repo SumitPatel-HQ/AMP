@@ -1,192 +1,286 @@
-import { geoEquirectangular, geoPath } from "d3-geo";
-import { feature } from "topojson-client";
-import landTopology from "world-atlas/land-110m.json";
-import type { GeometryCollection } from "topojson-specification";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
-  ObservationRequestSchema,
   ScenarioSchema,
 } from "../api/client";
+import type { MapHover, MissionMapEngine } from "../map/missionMapEngine";
+import { buildMissionMapModel, type MissionMapModel } from "../map/missionMapModel";
+import {
+  cssColor,
+  DEFAULT_VISIBILITY,
+  EVENT_COLOR,
+  type LayerVisibility,
+  SATELLITE_COLOR,
+  SELECTED_COLOR,
+  STATUS_COLORS,
+  STATUS_LABELS,
+} from "../map/palette";
+import { clockTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
-const WIDTH = 720;
-const HEIGHT = 360;
+const LAYER_TOGGLES: { key: keyof LayerVisibility; label: string }[] = [
+  { key: "labels", label: "Labels" },
+  { key: "sequence", label: "Plan sequence" },
+  { key: "satellite", label: "Satellite" },
+  { key: "events", label: "Event impact" },
+];
 
-const land = feature(
-  landTopology,
-  landTopology.objects.land as GeometryCollection,
-);
-const projection = geoEquirectangular().fitSize([WIDTH, HEIGHT], { type: "Sphere" });
-const landPath = geoPath(projection)(land) ?? "";
+const OVERLAY_BOX =
+  "border border-[var(--amis-border)] bg-[#0b0d10]/90 text-[10px] text-neutral-300 backdrop-blur-sm";
 
-/** Longitude then latitude, the order d3-geo projections take. */
-type Coordinate = readonly [number, number];
-
-/** Where the satellite is drawn, and the request it is over if it is observing. */
-interface SatellitePlacement {
-  coordinate: Coordinate;
-  overRequestId: string | null;
-}
-
-/** One scheduled action reduced to when it runs and where it points. */
-interface ScheduledActionPoint {
-  requestId: string;
-  startMs: number;
-  endMs: number;
-  coordinate: Coordinate;
-}
-
-function scheduledActionPoints(
-  scenario: ScenarioSchema,
-  plan: MissionPlanSchema | null,
-): ScheduledActionPoint[] {
-  const requestsById = new Map<string, ObservationRequestSchema>(
-    scenario.requests.map((request) => [request.id, request]),
+function LayersBox({
+  visibility,
+  onToggle,
+}: {
+  visibility: LayerVisibility;
+  onToggle: (key: keyof LayerVisibility) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={`${OVERLAY_BOX} absolute left-2 top-2 w-36`}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between px-2 py-1 uppercase tracking-wider text-neutral-400 hover:text-neutral-200"
+      >
+        Layers <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+      </button>
+      {open ? (
+        <ul aria-label="Map layers" className="border-t border-[var(--amis-border)] py-1">
+          {LAYER_TOGGLES.map(({ key, label }) => (
+            <li key={key}>
+              <label className="flex cursor-pointer items-center gap-2 px-2 py-0.5 uppercase tracking-wide hover:bg-white/[0.04]">
+                <input
+                  type="checkbox"
+                  checked={visibility[key]}
+                  onChange={() => onToggle(key)}
+                  className="h-3 w-3 accent-sky-500"
+                />
+                {label}
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
-  return (plan?.actions ?? [])
-    .flatMap((action) => {
-      const request = requestsById.get(action.request_id);
-      return request === undefined
-        ? []
-        : [
-            {
-              requestId: action.request_id,
-              startMs: new Date(action.start).getTime(),
-              endMs: new Date(action.end).getTime(),
-              coordinate: [request.target_lon, request.target_lat] as Coordinate,
-            },
-          ];
-    })
-    .sort((left, right) => left.startMs - right.startMs);
+}
+
+function MapControls({ engine }: { engine: MissionMapEngine | null }) {
+  const button =
+    "flex h-6 w-6 items-center justify-center text-sm text-neutral-300 hover:bg-white/[0.06] disabled:opacity-40";
+  return (
+    <div className={`${OVERLAY_BOX} absolute right-2 top-2 flex flex-col divide-y divide-[var(--amis-border)]`}>
+      <button type="button" aria-label="Zoom in" disabled={engine === null} onClick={() => engine?.zoomBy(1)} className={button}>
+        +
+      </button>
+      <button type="button" aria-label="Zoom out" disabled={engine === null} onClick={() => engine?.zoomBy(-1)} className={button}>
+        −
+      </button>
+      <button type="button" aria-label="Fit targets" disabled={engine === null} onClick={() => engine?.fitTargets()} className={button}>
+        ⌂
+      </button>
+    </div>
+  );
+}
+
+function Swatch({ color, ring = false }: { color: string; ring?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-2 w-2 rounded-full"
+      style={ring ? { boxShadow: `0 0 0 1.5px ${color}` } : { backgroundColor: color }}
+    />
+  );
+}
+
+function Legend() {
+  return (
+    <ul
+      aria-label="Map legend"
+      className={`${OVERLAY_BOX} absolute bottom-2 left-2 flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1 uppercase tracking-wide`}
+    >
+      {(Object.keys(STATUS_COLORS) as (keyof typeof STATUS_COLORS)[]).map((status) => (
+        <li key={status} className="flex items-center gap-1.5">
+          <Swatch color={cssColor(STATUS_COLORS[status])} />
+          {STATUS_LABELS[status]}
+        </li>
+      ))}
+      <li className="flex items-center gap-1.5">
+        <Swatch color={cssColor(EVENT_COLOR)} ring />
+        Event
+      </li>
+      <li className="flex items-center gap-1.5">
+        <Swatch color={cssColor(SATELLITE_COLOR)} ring />
+        Satellite
+      </li>
+      <li className="flex items-center gap-1.5">
+        <Swatch color={cssColor(SELECTED_COLOR)} ring />
+        Selected
+      </li>
+    </ul>
+  );
+}
+
+/** The detail card beside whatever the pointer is over, read from the model. */
+function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }) {
+  const style = { left: hover.x + 14, top: hover.y + 14 };
+  if (hover.kind === "satellite") {
+    const satellite = model.satellite;
+    if (satellite === null) return null;
+    return (
+      <div role="tooltip" style={style} className={`${OVERLAY_BOX} pointer-events-none absolute px-2 py-1.5`}>
+        <p className="font-semibold text-orange-300">{satellite.satelliteId}</p>
+        <p className="text-neutral-400">
+          {satellite.overRequestId === null
+            ? "at the last target its plan visited"
+            : `observing ${satellite.overRequestId}`}
+        </p>
+        <p className="text-neutral-600">position read from the plan, not an orbit</p>
+      </div>
+    );
+  }
+  const target = model.targets.find((candidate) => candidate.requestId === hover.id);
+  if (target === undefined) return null;
+  return (
+    <div role="tooltip" style={style} className={`${OVERLAY_BOX} pointer-events-none absolute min-w-40 px-2 py-1.5`}>
+      <p className="flex items-center justify-between gap-3">
+        <span className="font-semibold text-neutral-100">{target.requestId}</span>
+        <span className="text-neutral-500">P{target.priority}</span>
+      </p>
+      <p style={{ color: cssColor(STATUS_COLORS[target.status]) }}>
+        {STATUS_LABELS[target.status]}
+        {target.action === null ? "" : ` · ${target.action.status}`}
+      </p>
+      {target.action === null ? null : (
+        <p className="text-neutral-400">
+          action {clockTime(target.action.start)}–{clockTime(target.action.end)} · {target.action.window_id}
+        </p>
+      )}
+      {target.unscheduledReason === null ? null : (
+        <p className="text-amber-300">{target.unscheduledReason}</p>
+      )}
+      <p className="text-neutral-500">deadline {clockTime(target.deadline)}</p>
+      {target.eventIds.length === 0 ? null : (
+        <p className="text-red-300">{target.eventIds.join(", ")}</p>
+      )}
+    </div>
+  );
 }
 
 /**
- * The satellite is drawn over the target its current action observes, and over
- * the last one it observed otherwise. The domain holds no satellite position,
- * so this reads one off the plan rather than inventing geography: with no
- * scheduled action there is nothing to read and nothing is drawn.
+ * The central spatial workspace: a dark vector basemap with the mission's
+ * targets, plan sequence and inferred satellite position drawn over it.
  */
-function satellitePlacement(
-  scenario: ScenarioSchema,
-  plan: MissionPlanSchema | null,
-  simulatedTime: string | null,
-): SatellitePlacement | null {
-  const points = scheduledActionPoints(scenario, plan);
-  const first = points[0];
-  if (first === undefined) {
-    return null;
-  }
-  if (simulatedTime === null) {
-    return { coordinate: first.coordinate, overRequestId: null };
-  }
-  const now = new Date(simulatedTime).getTime();
-
-  const observing = points.find((point) => point.startMs <= now && now <= point.endMs);
-  if (observing !== undefined) {
-    return { coordinate: observing.coordinate, overRequestId: observing.requestId };
-  }
-  const previous = points.filter((point) => point.endMs < now).at(-1);
-  return { coordinate: (previous ?? first).coordinate, overRequestId: null };
-}
-
-/** Projects a coordinate to a position within the map's own box. */
-function cssPosition(coordinate: Coordinate): { left: string; top: string } | null {
-  const point = projection([coordinate[0], coordinate[1]]);
-  if (point === null) {
-    return null;
-  }
-  return { left: `${(point[0] / WIDTH) * 100}%`, top: `${(point[1] / HEIGHT) * 100}%` };
-}
-
 export function MissionMapPanel({
   scenario,
   plan,
   missionState,
+  events,
   selectedRequestId,
   onSelectRequest,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
   missionState: MissionStateSchema | null;
+  events: MissionEventSchema[];
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
-  if (scenario === null) {
-    return (
-      <PanelFrame title="Mission map">
-        <p className="text-xs text-neutral-500">
-          Load a scenario to see its observation targets.
-        </p>
-      </PanelFrame>
-    );
-  }
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [engine, setEngine] = useState<MissionMapEngine | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [basemap, setBasemap] = useState<string | null>(null);
+  const [hover, setHover] = useState<MapHover | null>(null);
+  const [visibility, setVisibility] = useState<LayerVisibility>(DEFAULT_VISIBILITY);
 
-  const satellite = satellitePlacement(scenario, plan, missionState?.simulated_time ?? null);
-  const satelliteAt = satellite === null ? null : cssPosition(satellite.coordinate);
+  // The engine outlives renders, so it reads selection through a ref rather
+  // than capturing the values from the render that created it.
+  const selectionRef = useRef({ selectedRequestId, onSelectRequest });
+  useEffect(() => {
+    selectionRef.current = { selectedRequestId, onSelectRequest };
+  }, [selectedRequestId, onSelectRequest]);
+
+  const model = useMemo(
+    () => (scenario === null ? null : buildMissionMapModel(scenario, plan, missionState, events)),
+    [scenario, plan, missionState, events],
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container === null) return;
+    let created: MissionMapEngine | null = null;
+    let cancelled = false;
+    let observer: ResizeObserver | null = null;
+
+    // MapLibre and deck.gl load only once the map mounts, keeping them out of
+    // the entry bundle.
+    import("../map/missionMapEngine")
+      .then(({ createMissionMapEngine }) => {
+        if (cancelled) return;
+        created = createMissionMapEngine(container, {
+          onPickTarget: (requestId) => {
+            const { selectedRequestId: current, onSelectRequest: select } = selectionRef.current;
+            select(current === requestId ? null : requestId);
+          },
+          onHover: setHover,
+          onBasemap: setBasemap,
+        });
+        setEngine(created);
+        if (typeof ResizeObserver !== "undefined") {
+          observer = new ResizeObserver(() => created?.resize());
+          observer.observe(container);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setFailure(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      created?.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (engine === null || model === null) return;
+    engine.render({ model, selectedRequestId, visibility });
+  }, [engine, model, selectedRequestId, visibility]);
+
+  const meta = [
+    scenario === null ? null : `${scenario.requests.length} targets`,
+    basemap,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
 
   return (
-    <PanelFrame
-      title="Mission map"
-      meta={`${scenario.requests.length} targets`}
-      bodyClassName="flex items-center justify-center p-1 [container-type:size]"
-    >
-      {/* The map keeps its projection's aspect ratio at the largest size the
-          workspace allows, so targets stay registered to the land beneath. */}
-      <div
-        className="relative"
-        style={{
-          aspectRatio: `${WIDTH} / ${HEIGHT}`,
-          width: `min(100cqw, 100cqh * ${WIDTH / HEIGHT})`,
-        }}
-      >
-        <svg
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full rounded bg-neutral-900"
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        >
-          <path d={landPath} fill="#1f2937" stroke="#374151" strokeWidth={0.5} />
-        </svg>
-        <div
-          role="group"
-          aria-label="Observation targets"
-          className="absolute inset-0"
-        >
-          {scenario.requests.map((request) => {
-            const at = cssPosition([request.target_lon, request.target_lat]);
-            if (at === null) {
-              return null;
-            }
-            const selected = request.id === selectedRequestId;
-            return (
-              <button
-                key={request.id}
-                type="button"
-                data-request-id={request.id}
-                data-selected={selected ? "true" : undefined}
-                aria-pressed={selected}
-                aria-label={`Target ${request.id}`}
-                title={`${request.id} · priority ${request.priority}`}
-                onClick={() => onSelectRequest(selected ? null : request.id)}
-                style={at}
-                className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border ${
-                  selected
-                    ? "border-fuchsia-300 bg-fuchsia-400"
-                    : "border-sky-300 bg-sky-500"
-                }`}
-              />
-            );
-          })}
-          {satelliteAt === null ? null : (
-            <div
-              aria-label={`Satellite ${scenario.satellite.id}`}
-              data-over-request={satellite?.overRequestId ?? undefined}
-              style={satelliteAt}
-              className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-amber-200 bg-amber-400"
-            />
-          )}
-        </div>
+    <PanelFrame title="Mission map" meta={meta || undefined} bodyClassName="relative overflow-hidden">
+      {/* MapLibre makes its container position: relative, so the container
+          fills a positioned wrapper rather than positioning itself. */}
+      <div className="absolute inset-0 bg-[#0b0d10]">
+        <div ref={containerRef} data-testid="mission-map" className="h-full w-full" />
       </div>
+      {failure !== null ? (
+        <p role="alert" className="absolute inset-x-0 top-1/2 text-center text-xs text-red-400">
+          Map unavailable: {failure}
+        </p>
+      ) : scenario === null ? (
+        <p className="absolute inset-x-0 top-1/2 text-center text-xs text-neutral-500">
+          Load a scenario to see its observation targets.
+        </p>
+      ) : null}
+      <LayersBox
+        visibility={visibility}
+        onToggle={(key) => setVisibility((current) => ({ ...current, [key]: !current[key] }))}
+      />
+      <MapControls engine={engine} />
+      {scenario === null ? null : <Legend />}
+      {hover !== null && model !== null ? <HoverCard hover={hover} model={model} /> : null}
     </PanelFrame>
   );
 }

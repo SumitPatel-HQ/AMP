@@ -38,6 +38,7 @@ function MissionWorkspace({ session }: { session: Session }) {
         scenario={session.scenario}
         plan={session.plan}
         missionState={session.missionState}
+        events={session.events}
         selectedRequestId={selection.requestId}
         onSelectRequest={session.selectRequest}
       />

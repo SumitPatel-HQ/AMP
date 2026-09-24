@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { fakeMap } from "./test/fakeMapEngine";
 import { ApiError } from "./api/amis";
 import type {
   DecisionTraceSchema,
@@ -815,9 +816,7 @@ describe("mission dashboard", () => {
     const list = screen.getByRole("list", { name: "Observation requests" });
     await user.click(within(list).getByRole("button", { name: /^OBS-A/ }));
 
-    expect(
-      screen.getByRole("button", { name: "Target OBS-A" }).getAttribute("data-selected"),
-    ).toBe("true");
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
     expect(
       container.querySelector('svg [data-request-id="OBS-A"]')?.getAttribute("data-selected"),
     ).toBe("true");
@@ -838,9 +837,7 @@ describe("mission dashboard", () => {
     await user.click(row);
 
     expect(row.getAttribute("data-selected")).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "Target OBS-A" }).getAttribute("data-selected"),
-    ).toBe("true");
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
   });
 
   it("lists both plan versions after a replan and marks the revised one current", async () => {
