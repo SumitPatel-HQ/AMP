@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "predev": "npm run generate:api",
-    "dev": "vite",
+    "dev": "vite --host",
     "prebuild": "npm run generate:api",
     "build": "npm run build:bundle",
     "build:bundle": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run --environment jsdom",
-    "preview": "vite preview",
+    "preview": "vite preview --host",
     "generate:api": "node scripts/generate-api.mjs"
   },
   "dependencies": {

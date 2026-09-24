@@ -1,7 +1,8 @@
 import createClient from "openapi-fetch";
 import type { paths, components } from "./schema";
 
-const API_BASE_URL = import.meta.env.VITE_AMIS_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_AMIS_API_URL ?? `http://${window.location.hostname}:8000`;
 
 export const client = createClient<paths>({ baseUrl: API_BASE_URL });
 
