@@ -219,6 +219,7 @@ export function PlanTimeline({
 }: PlanTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<Timeline | null>(null);
+  const keyboardFocusedItemRef = useRef<{ kind: string; id: string } | null>(null);
   const hasMissionNowRef = useRef(false);
   const itemByIdRef = useRef(new Map<string | number, MissionTimelineItem>());
 
@@ -292,6 +293,10 @@ export function PlanTimeline({
       if (element === null || !container.contains(element)) {
         return;
       }
+      const id = element.dataset.actionId ?? element.dataset.windowId ?? element.dataset.eventId;
+      if (id !== undefined) {
+        keyboardFocusedItemRef.current = { kind: element.dataset.kind ?? "", id };
+      }
       event.preventDefault();
       event.stopPropagation();
       selectElement(element);
@@ -339,9 +344,37 @@ export function PlanTimeline({
     if (timeline === null) {
       return;
     }
+    const container = containerRef.current;
+    const activeItem =
+      container !== null && document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLElement>(".vis-item[data-kind]")
+        : null;
+    const focusedIdentity =
+      activeItem !== null && container?.contains(activeItem)
+        ? {
+            kind: activeItem.dataset.kind,
+            id:
+              activeItem.dataset.actionId ??
+              activeItem.dataset.windowId ??
+              activeItem.dataset.eventId,
+          }
+        : document.activeElement === document.body
+          ? keyboardFocusedItemRef.current
+          : null;
     timeline.setData({ groups: model.groups, items: model.items });
     timeline.redraw();
-    if (containerRef.current !== null) decorateTimelineItems(containerRef.current);
+    if (container !== null) {
+      decorateTimelineItems(container);
+      if (focusedIdentity?.id !== undefined) {
+        const replacement = Array.from(container.querySelectorAll<HTMLElement>(".vis-item[data-kind]"))
+          .find((element) =>
+            element.dataset.kind === focusedIdentity.kind &&
+            (element.dataset.actionId ?? element.dataset.windowId ?? element.dataset.eventId) === focusedIdentity.id,
+          );
+        replacement?.focus();
+      }
+    }
+    keyboardFocusedItemRef.current = null;
     timeline.setSelection(selectedItemIds(model.items));
     if (model.bounds.current === null) {
       if (hasMissionNowRef.current) {

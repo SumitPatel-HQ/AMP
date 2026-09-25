@@ -113,6 +113,7 @@ export function MissionBar({
   loading,
   replanning,
   replanBlocked = false,
+  missionContextStale = false,
   onLoadDemo,
   onGeneratePlan,
   onStep,
@@ -132,6 +133,7 @@ export function MissionBar({
   /** A replan request is in flight. */
   replanning: boolean;
   replanBlocked?: boolean;
+  missionContextStale?: boolean;
   onLoadDemo: () => void;
   onGeneratePlan: () => void;
   onStep: (seconds: number) => void;
@@ -216,14 +218,15 @@ export function MissionBar({
           min={1}
           step={1}
           value={seconds}
-          disabled={missionState === null || missionState.mission_complete}
+          disabled={missionContextStale || missionState === null || missionState.mission_complete}
           onChange={(event) => setSeconds(Number(event.target.value))}
           className={`${CONTROL_INPUT} w-16`}
         />
         <button
           type="button"
           onClick={() => onStep(seconds)}
-          disabled={loading || missionState === null || missionState.mission_complete || !(seconds > 0)}
+          disabled={loading || missionContextStale || missionState === null || missionState.mission_complete || !(seconds > 0)}
+          title={missionContextStale ? "Refresh the current plan before stepping the mission" : undefined}
           className={CONTROL_BUTTON}
         >
           Step
@@ -245,8 +248,8 @@ export function MissionBar({
             onClick={() => setEventOpen((open) => !open)}
             // The backend evaluates every event against the current plan, so
             // there is nothing to inject into before one exists.
-            disabled={loading || plan === null || missionState === null || missionState.mission_complete}
-            title={plan === null ? "Generate a plan first: events are evaluated against it" : undefined}
+            disabled={loading || missionContextStale || plan === null || missionState === null || missionState.mission_complete}
+            title={missionContextStale ? "Refresh the current plan before injecting an event" : plan === null ? "Generate a plan first: events are evaluated against it" : undefined}
             className={eventVisible ? EVENT_BUTTON_OPEN : EVENT_BUTTON}
           >
             Event
@@ -275,7 +278,9 @@ export function MissionBar({
           disabled={loading || plan === null || missionState?.mission_complete === true || replanBlocked}
           aria-busy={replanning}
           title={
-            plan === null
+            replanBlocked
+              ? "Refresh the backend's current plan before replanning"
+              : plan === null
               ? "Generate a plan first"
               : `Build the next version from Plan V${plan.version}; V${plan.version} stays unchanged`
           }

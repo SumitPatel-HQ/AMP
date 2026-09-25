@@ -67,6 +67,7 @@ export interface MissionSessionState {
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
   retryComparison: () => Promise<void>;
+  retryMissionRefresh: () => Promise<void>;
   step: (seconds: number) => Promise<void>;
   /** Resolves true once the backend accepted the event and the workspace refetched. */
   injectEvent: (event: MissionEventRequest) => Promise<boolean>;
@@ -160,6 +161,12 @@ export function useMissionSession(): MissionSessionState {
       };
       const loaded = await createScenario(demoSession);
       setScenario(loaded);
+      setMissionState(null);
+      setEvents([]);
+      // Until the backend's pool arrives, the new scenario's own requests are
+      // the pool; the previous scenario's pool and metrics describe nothing.
+      setRequestPool(loaded.requests);
+      setMetrics(null);
       setPlan(null);
       setPlans([]);
       setWindows([]);
@@ -250,6 +257,32 @@ export function useMissionSession(): MissionSessionState {
    * the replan it compares still produced the current plan it is refetched
    * alongside that state.
    */
+  const retryMissionRefresh = useCallback(async () => {
+    if (scenario === null || planConflict === null || planConflict.currentPlanId === null) return;
+    const currentPlanId = planConflict.currentPlanId;
+    setLoading(true);
+    setError(null);
+    try {
+      const [currentPlan, nextWindows, nextImpact] = await Promise.all([
+        fetchPlan(currentPlanId),
+        fetchWindows(scenario.id),
+        fetchImpactIfAny(scenario.id),
+        refetchStateAndEvents(scenario.id),
+        refetchPoolAndMetrics(scenario.id, currentPlanId),
+      ]);
+      setPlan(currentPlan);
+      setWindows(nextWindows);
+      setImpact(nextImpact);
+      rememberPlan(currentPlan);
+      setStalePlan(false);
+      setSelection((current) => ({ ...current, planId: null }));
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [scenario, planConflict, refetchStateAndEvents, refetchPoolAndMetrics, rememberPlan]);
+
   const refreshComparison = useCallback(
     async (currentPlan: MissionPlanSchema) => {
       if (replanResult === null || replanResult.revisedPlan.id !== currentPlan.id) {
@@ -266,7 +299,7 @@ export function useMissionSession(): MissionSessionState {
   );
 
   const replan = useCallback(async () => {
-    if (scenario === null || plan === null) {
+    if (scenario === null || plan === null || stalePlan) {
       return;
     }
     setLoading(true);
@@ -327,10 +360,10 @@ export function useMissionSession(): MissionSessionState {
       setOperation(null);
       setLoading(false);
     }
-  }, [scenario, plan, refetchStateAndEvents, refetchPoolAndMetrics, refreshAfterConflict, rememberPlan]);
+  }, [scenario, plan, stalePlan, refetchStateAndEvents, refetchPoolAndMetrics, refreshAfterConflict, rememberPlan]);
 
   const retryComparison = useCallback(async () => {
-    if (plan === null || plan.parent_plan_id === null) return;
+    if (scenario === null || plan === null || plan.parent_plan_id === null) return;
     setLoading(true);
     setError(null);
     try {
@@ -340,6 +373,10 @@ export function useMissionSession(): MissionSessionState {
         comparePlans(parentId, plan.id),
         fetchTraces(plan.id),
       ]);
+      await Promise.all([
+        refetchStateAndEvents(scenario.id),
+        refetchPoolAndMetrics(scenario.id, plan.id),
+      ]);
       rememberPlan(initialPlan);
       setReplanResult({ initialPlan, revisedPlan: plan, diff, traces });
     } catch (caught) {
@@ -347,11 +384,11 @@ export function useMissionSession(): MissionSessionState {
     } finally {
       setLoading(false);
     }
-  }, [plan, plans, rememberPlan]);
+  }, [scenario, plan, plans, refetchStateAndEvents, refetchPoolAndMetrics, rememberPlan]);
 
   const step = useCallback(
     async (seconds: number) => {
-      if (scenario === null) {
+      if (scenario === null || stalePlan) {
         return;
       }
       setLoading(true);
@@ -368,20 +405,19 @@ export function useMissionSession(): MissionSessionState {
           rememberPlan(refreshedPlan);
           await refreshComparison(refreshedPlan);
         };
-        await refreshPlan();
-        await refetchPoolAndMetrics(scenario.id, plan?.id ?? null);
+        await Promise.all([refreshPlan(), refetchPoolAndMetrics(scenario.id, plan?.id ?? null)]);
       } catch (caught) {
         setError(describeError(caught));
       } finally {
         setLoading(false);
       }
     },
-    [scenario, plan, refreshComparison, refetchPoolAndMetrics, rememberPlan],
+    [scenario, plan, stalePlan, refreshComparison, refetchPoolAndMetrics, rememberPlan],
   );
 
   const injectEvent = useCallback(
     async (event: MissionEventRequest): Promise<boolean> => {
-      if (scenario === null) {
+      if (scenario === null || stalePlan) {
         return false;
       }
       setLoading(true);
@@ -426,7 +462,7 @@ export function useMissionSession(): MissionSessionState {
         setLoading(false);
       }
     },
-    [scenario, plan, refetchPoolAndMetrics, refreshComparison],
+    [scenario, plan, stalePlan, refetchPoolAndMetrics, refreshComparison],
   );
 
   // A selected window belongs to one request, so choosing a request drops it.
@@ -504,6 +540,7 @@ export function useMissionSession(): MissionSessionState {
     generatePlan,
     replan,
     retryComparison,
+    retryMissionRefresh,
     step,
     injectEvent,
     selectRequest,

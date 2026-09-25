@@ -174,6 +174,7 @@ function App() {
         loading={session.loading}
         replanning={session.operation === "replan"}
         replanBlocked={session.stalePlan}
+        missionContextStale={session.stalePlan}
         onLoadDemo={session.loadDemoScenario}
         onGeneratePlan={session.generatePlan}
         onStep={session.step}
@@ -186,6 +187,7 @@ function App() {
         conflict={session.planConflict}
         plan={session.plan}
         onDismiss={session.dismissPlanConflict}
+        onRetryMissionRefresh={session.retryMissionRefresh}
       />
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />

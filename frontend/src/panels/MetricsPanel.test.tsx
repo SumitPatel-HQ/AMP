@@ -70,6 +70,13 @@ describe("metrics panel", () => {
     expect(screen.getByText("Generate a plan to evaluate it.")).toBeTruthy();
   });
 
+  it("says the current plan is being evaluated, not that none exists, until its metrics arrive", () => {
+    render(<MetricsPanel currentPlanId="PLAN-2" metrics={metricsBefore} diff={null} plans={plans} />);
+
+    expect(screen.queryByText("Generate a plan to evaluate it.")).toBeNull();
+    expect(screen.getByText("Evaluating V2…")).toBeTruthy();
+  });
+
   it("evaluates the current plan on its own before any replan", () => {
     render(
       <MetricsPanel currentPlanId="PLAN-1" metrics={metricsBefore} diff={null} plans={plans} />,

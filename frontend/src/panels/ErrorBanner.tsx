@@ -73,10 +73,12 @@ export function PlanConflictBanner({
   conflict,
   plan,
   onDismiss,
+  onRetryMissionRefresh,
 }: {
   conflict: PlanConflict | null;
   plan: MissionPlanSchema | null;
   onDismiss: () => void;
+  onRetryMissionRefresh: () => void;
 }) {
   if (conflict === null) {
     return null;
@@ -96,16 +98,25 @@ export function PlanConflictBanner({
         }. `}
         {refreshed
           ? `Plan context refreshed to V${plan.version}; review it, then Replan again.`
-          : "The current plan could not be loaded; reload the mission before replanning."}
+          : conflict.currentPlanId === null
+            ? "The backend did not identify its current plan. Generate a new plan to resume mission actions."
+            : "The current plan could not be loaded. Mutations are paused until it can be refreshed."}
       </span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="text-amber-300 hover:text-amber-100"
-        aria-label="Dismiss stale plan notice"
-      >
-        ×
-      </button>
+      {refreshed || conflict.currentPlanId === null ? null : (
+        <button type="button" onClick={onRetryMissionRefresh} className="shrink-0 text-amber-300 hover:text-amber-100" aria-label="Retry loading current plan">
+          Retry refresh
+        </button>
+      )}
+      {refreshed ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-amber-300 hover:text-amber-100"
+          aria-label="Dismiss stale plan notice"
+        >
+          ×
+        </button>
+      ) : null}
     </div>
   );
 }

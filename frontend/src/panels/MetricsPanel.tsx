@@ -66,6 +66,7 @@ export function MetricsPanel({
   metrics,
   diff,
   plans = [],
+  selectedPlanId = null,
 }: {
   currentPlanId: string | null;
   /** The current plan's own metrics. */
@@ -74,18 +75,23 @@ export function MetricsPanel({
   diff: PlanDiffSchema | null;
   /** The plan versions the session holds, so columns name them as V1, V2. */
   plans?: readonly MissionPlanSchema[];
+  selectedPlanId?: string | null;
 }) {
+  const label = (planId: string) => planLabel(planId, plans);
   const subject = metricsSubject(currentPlanId, metrics, diff);
   if (subject === null) {
     return (
       <PanelFrame title="Mission evaluation">
-        <p className="text-xs text-neutral-500">Generate a plan to evaluate it.</p>
+        <p className="text-xs text-neutral-500">
+          {currentPlanId === null
+            ? "Generate a plan to evaluate it."
+            : `Evaluating ${label(currentPlanId)}…`}
+        </p>
       </PanelFrame>
     );
   }
 
   const view = metricsView(subject);
-  const label = (planId: string) => planLabel(planId, plans);
   const comparing = view.beforePlanId !== null;
   const versions =
     view.beforePlanId === null
@@ -103,11 +109,11 @@ export function MetricsPanel({
           <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
             <th className="py-0.5 font-normal">Metric</th>
             {view.beforePlanId === null ? null : (
-              <th className="py-0.5 font-normal" title={view.beforePlanId}>
+              <th className={`py-0.5 font-normal ${selectedPlanId === view.beforePlanId ? "bg-fuchsia-400/10 text-fuchsia-200" : ""}`} title={view.beforePlanId}>
                 {label(view.beforePlanId)}
               </th>
             )}
-            <th className="py-0.5 font-normal" title={view.afterPlanId}>
+            <th className={`py-0.5 font-normal ${selectedPlanId === view.afterPlanId ? "bg-fuchsia-400/10 text-fuchsia-200" : ""}`} title={view.afterPlanId}>
               {label(view.afterPlanId)}
             </th>
             {comparing ? <th className="py-0.5 font-normal">Δ</th> : null}
@@ -118,10 +124,10 @@ export function MetricsPanel({
             <tr key={row.key} title={row.hint}>
               <td className="py-px pr-3 text-neutral-400">{row.label}</td>
               {row.before === null ? null : (
-                <td className="py-px pr-3 tabular-nums text-neutral-400">{row.before}</td>
+                <td className={`py-px pr-3 tabular-nums text-neutral-400 ${selectedPlanId === view.beforePlanId ? "bg-fuchsia-400/10" : ""}`}>{row.before}</td>
               )}
               <td
-                className={`py-px pr-3 tabular-nums ${row.warn ? "text-amber-300" : "text-neutral-100"}`}
+                className={`py-px pr-3 tabular-nums ${row.warn ? "text-amber-300" : "text-neutral-100"} ${selectedPlanId === view.afterPlanId ? "bg-fuchsia-400/10" : ""}`}
               >
                 {row.after}
               </td>

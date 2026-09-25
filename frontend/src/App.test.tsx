@@ -333,6 +333,22 @@ describe("mission dashboard", () => {
     expect(screen.queryByRole("button", { name: "Dismiss error" })).toBeNull();
   });
 
+  it("clears the old mission state when a new scenario refresh fails", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    expect(screen.getByText("500.0 Wh")).toBeTruthy();
+
+    api.fetchState.mockRejectedValueOnce(new Error("state unavailable"));
+    await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+    await screen.findByRole("alert");
+
+    expect(screen.queryByText("500.0 Wh")).toBeNull();
+    expect(screen.queryByLabelText("Current plan V1")).toBeNull();
+    expect(screen.getByRole("region", { name: "Mission state" }).textContent).toContain("Load a scenario");
+  });
+
   it("shows an API error message with its code", async () => {
     installSuccessfulApi();
     api.fetchDemoScenario.mockRejectedValue(
@@ -718,7 +734,7 @@ describe("mission dashboard", () => {
     action()?.focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(action()?.dataset.selected).toBe("true"));
-    action()?.focus();
+    expect(document.activeElement).toBe(action());
     await user.keyboard(" ");
     await waitFor(() => expect(action()?.dataset.selected).toBe("false"));
   });
@@ -755,20 +771,47 @@ describe("mission dashboard", () => {
     expect(readings()).toContain("11:05 UTC");
   });
 
-  it("keeps replan disabled after a stale conflict whose current plan could not load", async () => {
+  it("still evaluates the revised plan when the replan's comparison cannot be fetched", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    api.comparePlans.mockRejectedValueOnce(new Error("comparison unavailable"));
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+
+    const evaluation = screen.getByRole("region", { name: "Mission evaluation" });
+    await waitFor(() =>
+      expect(
+        within(evaluation).getAllByRole("columnheader").map((cell) => cell.textContent),
+      ).toEqual(["Metric", "V2"]),
+    );
+    expect(api.fetchMetrics).toHaveBeenCalledWith(revisedPlan.id);
+  });
+
+  it("pauses mission mutations and retries current-plan recovery after a stale conflict", async () => {
     installSuccessfulApi();
     api.replan.mockRejectedValueOnce(new ApiError({
       error: { code: "PLAN_VERSION_CONFLICT", message: "stale plan", details: { current_plan_id: "SCN-002:PLAN-9" } },
     }));
-    api.fetchPlan.mockRejectedValueOnce(new Error("plan unavailable"));
+    api.fetchPlan.mockRejectedValueOnce(new Error("plan unavailable")).mockResolvedValueOnce({
+      ...revisedPlan,
+      id: "SCN-002:PLAN-9",
+      version: 9,
+    });
     const user = userEvent.setup();
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByRole("status", { name: "Stale plan" });
-    await user.click(screen.getByRole("button", { name: "Dismiss stale plan notice" }));
-    expect((screen.getByRole("button", { name: "Replan" }) as HTMLButtonElement).disabled).toBe(true);
+    for (const name of ["Step", "Event", "Replan"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    await user.click(screen.getByRole("button", { name: "Retry loading current plan" }));
+    expect(await screen.findByLabelText("Current plan V9")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Replan" }) as HTMLButtonElement).disabled).toBe(false);
     expect(api.replan).toHaveBeenCalledTimes(1);
   });
 
@@ -784,6 +827,27 @@ describe("mission dashboard", () => {
 
     await user.click(await screen.findByRole("button", { name: "Retry comparison" }));
     expect(await screen.findByRole("list", { name: "Plan comparison" })).toBeTruthy();
+  });
+
+  it("retries failed post-replan mission context together with the comparison", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    api.fetchMetrics.mockRejectedValueOnce(new Error("metrics unavailable"));
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+    expect(screen.getByText("Evaluating V2…")).toBeTruthy();
+
+    await user.click(await screen.findByRole("button", { name: "Retry comparison" }));
+    expect(await screen.findByRole("list", { name: "Plan comparison" })).toBeTruthy();
+    expect(
+      within(screen.getByRole("region", { name: "Mission evaluation" }))
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["Metric", "V1", "V2", "Δ"]);
+    expect(api.fetchMetrics).toHaveBeenCalledTimes(3);
   });
 
   it("marks a request the backend expired, which the immutable scenario never reports", async () => {

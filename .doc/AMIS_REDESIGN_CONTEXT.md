@@ -690,31 +690,9 @@ Summary: present version-bound metrics compactly (`null`=N/A), write the UI→fr
 
 ### Prompt 7 — Cross-Surface Integration + UX/Visual Polish + Cleanup
 
-**References:** use all three reference projects only for the areas assigned to them. AMIS remains authoritative.
+Full spec moved to `./AMIS_PROMPT_7_INTEGRATION_POLISH.md` — that file is authoritative for this stage.
 
-This is not a redesign-from-scratch prompt. It is the integration pass after all primary workflows exist.
-
-**Implement:**
-- finish synchronized selection across requests/windows, map, timeline, events, plan comparison and traces;
-- make hover/focus/highlight states consistent;
-- ensure selected objects remain understandable when moving between panels;
-- refine loading, empty, error, stale/conflict and completed-mission states;
-- improve keyboard/focus behavior for primary controls where practical;
-- refine responsive behavior for target desktop/laptop widths without sacrificing operational density;
-- normalize spacing, typography, borders, panel chrome and status semantics into one coherent visual system;
-- reduce decorative card styling and wasted whitespace;
-- ensure the map and timeline remain the dominant operational surfaces;
-- remove obsolete components/styles left by the old dashboard only after confirming they are unused;
-- perform reasonable render/performance cleanup (avoid unnecessary refetch loops/re-renders; still no polling);
-- verify the canonical cloud, battery and emergency workflows end-to-end through the UI.
-
-**Final verification:**
-- frontend build/typecheck passes;
-- relevant frontend tests pass;
-- backend regression tests pass if Prompt 6 changed APIs;
-- no console-breaking errors in the canonical flow;
-- all user actions use real backend data;
-- final UI visually communicates the research story: **Plan -> Disruption -> Impact -> Adaptive Replan -> Explanation -> Evaluation**.
+Summary: final sync of selection/hover/focus across all surfaces, coherent states, responsive density, visual-system normalization with map + `vis-timeline` dominant, dead-code removal, render cleanup with no polling, end-to-end cloud/battery/emergency verification.
 
 ### Why the original 11 prompts were merged
 

@@ -54,7 +54,7 @@ The "Fix" column records what Prompt 6 changed. Every backend change links to a 
 | Mission-time marker | ← `missionState.simulated_time` | `MissionStateSchema` | `MissionState` | states | supported | — |
 | Event markers at their mission time | ← `events` | `MissionEventSchema.event_time` | `MissionEvent` | events | supported | — |
 | Impacted and changed items | ← `impact`, `replanResult.diff` | `ImpactSchema`, `PlanDiffSchema` | `Impact`, `PlanDiff` | impacts; the diff is recomputed | supported | — |
-| Expired request groups | `buildMissionTimelineModel` does not read expiry | `GET /scenarios/{id}/requests` now provides it | `ObservationRequest.status` | session `RequestPool` | awkward. An expired request has no action item, and its group reads as unscheduled. | None in Prompt 6. The contract gap is closed; the request list and the map show expiry. Timeline styling belongs to Prompt 7's cross-surface pass. |
+| Request status on group rows | Group labels show only the request id and priority, for every status | `GET /scenarios/{id}/requests` provides status if a later pass wants it | `ObservationRequest.status` | session `RequestPool` | supported. The timeline shows no request status for any state, so it cannot contradict the request list or the map. An expired request simply has no action item. | None. Showing status on timeline rows would be a Prompt 7 design choice, not a contract gap. |
 | Previous plan's placement after a replan | ← `replanResult.initialPlan` | `MissionPlanSchema` (from before the replan) | `MissionPlan` | plans | supported | — |
 
 ### Events

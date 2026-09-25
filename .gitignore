@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+pytest-of-*/
 *.egg-info/
 .venv/
 venv/
+.mypy_cache/
+node-compile-cache/
+.tmp-amis-review/
+package-lock.json
