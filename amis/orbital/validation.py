@@ -15,6 +15,13 @@ def preview(scenario: Scenario, provider: ScenarioWindowProvider | None = None, 
     warnings: list[str] = []
     policy = scenario.window_policy
     orbit = scenario.satellite.orbit
+    if policy is not None:
+        if policy.provider not in ("synthetic", "canonical_demo", "orbital"):
+            errors.append(f"Unknown window provider: {policy.provider}.")
+        if not 0 <= policy.max_off_nadir_deg <= 60:
+            errors.append("Maximum off-nadir angle must be within 0 to 60 degrees.")
+        if policy.min_sun_elevation_deg is not None and not -10 <= policy.min_sun_elevation_deg <= 60:
+            errors.append("Minimum sun elevation must be within -10 to 60 degrees or null.")
     if policy and policy.provider == "orbital":
         if orbit is None:
             errors.append("Orbital missions require satellite elements.")

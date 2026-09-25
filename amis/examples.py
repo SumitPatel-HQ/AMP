@@ -5,21 +5,37 @@ from datetime import timedelta
 
 from amis.demo import build_canonical_replan_scenario, build_emergency_replan_fixture
 from amis.domain import ObservationRequest, Satellite, Scenario, WindowPolicy
-from amis.orbital.elements import catalogue
 
 
-def examples() -> dict[str, Scenario]:
+def cloud_example() -> Scenario:
+    cloud = build_canonical_replan_scenario()
+    return replace(cloud, window_policy=WindowPolicy("canonical_demo"))
+
+
+def legacy_examples() -> dict[str, Scenario]:
     cloud = build_canonical_replan_scenario()
     emergency, _ = build_emergency_replan_fixture()
     return {
         "cloud": replace(cloud, window_policy=WindowPolicy("canonical_demo")),
         "battery": replace(cloud, id="SCN-EX-BATTERY", name="Battery drop demo", window_policy=WindowPolicy("canonical_demo")),
         "emergency": replace(emergency, id="SCN-EX-EMERGENCY", window_policy=WindowPolicy("canonical_demo")),
-        "orbital": orbital_example(),
     }
 
 
+def examples() -> dict[str, Scenario]:
+    result = legacy_examples()
+    try:
+        result["orbital"] = orbital_example()
+    except ModuleNotFoundError:
+        # The orbital stack (skyfield/sgp4) is optional at runtime: legacy
+        # demo routes must keep working without it.
+        pass
+    return result
+
+
 def orbital_example() -> Scenario:
+    from amis.orbital.elements import catalogue
+
     orbit = catalogue()[0]
     start = orbit.epoch.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     end = start + timedelta(days=4)

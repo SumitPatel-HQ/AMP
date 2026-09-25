@@ -33,7 +33,7 @@ from amis.api_schemas import (
     TleParseRequest,
     GroundTrackPointSchema,
 )
-from amis.examples import examples
+from amis.examples import cloud_example, examples
 from amis.domain import Scenario
 from amis.orbital.elements import catalogue, from_tle
 from amis.orbital.track import ground_track
@@ -155,7 +155,7 @@ def create_app(
         response_model_exclude_unset=True,
     )
     def get_demo_scenario() -> dict[str, Any]:
-        return examples()["cloud"].to_dict()
+        return cloud_example().to_dict()
 
     @app.get("/examples", response_model=list[ScenarioSummarySchema])
     def list_examples() -> list[dict[str, Any]]:

@@ -164,16 +164,26 @@ class GreedyPlanner:
                 placed_actions.append(placed_action)
                 projection.commit(placed_action)
                 action_number += 1
-            else:
+            elif not candidates:
+                # Zero candidate windows for this target in the mission: an
+                # honest no-window reason, not a generic fallback. A request
+                # that held a placement and lost every window reports the
+                # no-alternative case instead.
                 unscheduled.append(
                     UnscheduledEntry(
                         request_id=request.id,
                         reason_code=(
-                            ReasonCode.NO_OBSERVATION_WINDOW
-                            if not candidates and scenario.window_policy is not None
-                            and previous_window_id is None
-                            else _unscheduled_reason(last_violation, previous_window_id)
+                            ReasonCode.NO_ALTERNATIVE_WINDOW
+                            if previous_window_id is not None
+                            else ReasonCode.NO_OBSERVATION_WINDOW
                         ),
+                    )
+                )
+            else:
+                unscheduled.append(
+                    UnscheduledEntry(
+                        request_id=request.id,
+                        reason_code=_unscheduled_reason(last_violation, previous_window_id),
                     )
                 )
 

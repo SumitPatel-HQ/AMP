@@ -91,6 +91,10 @@ class OrbitalWindowProvider:
                     continue
                 sun_elevation = None
                 if eph is not None:
+                    # Wave 1 has no per-request sensor type, so every request
+                    # is treated as an optical daylight request while a sun
+                    # minimum is set; null min_sun_elevation_deg means a
+                    # sensor that needs no daylight and skips this filter.
                     sun_elevation = float((eph["earth"] + target).at(ts.from_datetime(peak_time)).observe(eph["sun"]).apparent().altaz()[0].degrees)
                     if not math.isfinite(sun_elevation) or (min_sun is not None and sun_elevation < min_sun):
                         continue
