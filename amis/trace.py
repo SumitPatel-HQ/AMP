@@ -11,7 +11,7 @@ part, and the system must work with none present.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Mapping, Optional
 
 from amis.diff import CHANGED_CHANGE_TYPES
 from amis.domain import (
@@ -43,6 +43,7 @@ _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
     ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE: "an alternative window was available",
     ReasonCode.NO_ALTERNATIVE_WINDOW: "no other window fits it",
     ReasonCode.REQUEST_UNCHANGED: "nothing the event changed affected it",
+    ReasonCode.HIGHER_PRIORITY_TASK_INSERTED: "it entered the pool and was scheduled",
 }
 
 _CONSTRAINT_BY_REASON_CODE: dict[ReasonCode, Optional[str]] = {
@@ -62,8 +63,17 @@ def build_traces(
     current: MissionPlan,
     diff: PlanDiff,
     event_id: Optional[str] = None,
+    event_ids_by_request: Optional[Mapping[str, str]] = None,
     first_trace_number: int = 1,
 ) -> tuple[DecisionTrace, ...]:
+    """``event_id`` is the fallback (the overall triggering event, or the
+    only event there is). ``event_ids_by_request`` overrides it per
+    request when more than one event occurred since ``previous`` and a
+    specific event can be attributed to that request's change (GAP-08);
+    a request absent from the mapping (for example a newly arrived
+    request with no previous action to check) keeps the fallback.
+    """
+
     previous_actions = {action.request_id: action for action in previous.actions}
     current_actions = {action.request_id: action for action in current.actions}
 
@@ -77,7 +87,7 @@ def build_traces(
             DecisionTrace(
                 id=format_id(TRACE_ID_PREFIX, first_trace_number + offset),
                 plan_id=current.id,
-                event_id=event_id,
+                event_id=(event_ids_by_request or {}).get(entry.request_id, event_id),
                 request_id=entry.request_id,
                 reason_code=entry.reason_code,
                 previous_action=previous_action,

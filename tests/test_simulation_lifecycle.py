@@ -117,12 +117,17 @@ def test_deadline_passage_expires_an_incomplete_request_permanently():
 
 
 def test_expired_and_completed_requests_are_excluded_from_a_later_plan():
+    # A later planning pass, now that plan() rejects a second call
+    # (GAP-05), goes through replan(): completed OBS-A is carried
+    # forward frozen (its cost is not lost), and expired OBS-B is
+    # invisible to planning entirely, not reported as unscheduled.
     session = _planned_session()
     session.step(10)
 
-    later_plan = session.plan()
+    later_plan = session.replan()
 
-    assert later_plan.actions == ()
+    assert {action.request_id for action in later_plan.actions} == {"OBS-A"}
+    assert later_plan.actions[0].status is ActionStatus.COMPLETED
     assert later_plan.unscheduled == ()
     assert _request_statuses(session) == {
         "OBS-A": RequestStatus.COMPLETED,
@@ -142,6 +147,44 @@ def test_step_clamps_at_scenario_end_and_rejects_a_further_step():
         session.step(1)
 
     assert raised.value.code == "SIMULATION_STATE_ERROR"
+
+
+def test_mission_complete_rejects_further_events_and_replans():
+    # Regression for GAP-05: POST /events and POST /replan used to be
+    # accepted after mission_complete, silently rewriting a "finished"
+    # mission's history.
+    session = _planned_session()
+    session.step(100)
+    assert session.get_state().mission_complete is True
+
+    with pytest.raises(SimulationStateError, match="mission is complete"):
+        session.inject_battery_drop("SAT-001", 10.0)
+
+    with pytest.raises(SimulationStateError, match="mission is complete"):
+        session.replan()
+
+
+def test_plan_rejects_a_second_call_once_a_plan_exists():
+    # Regression for GAP-05: a second plan() call used to append another
+    # version=1, parent=None plan, corrupting the version lineage
+    # replan() and compare_versions() depend on.
+    session = _planned_session()
+
+    with pytest.raises(SimulationStateError, match="already exists"):
+        session.plan()
+
+    assert len(session.get_plans()) == 1
+
+
+def test_generate_windows_rejects_regeneration_once_a_plan_exists():
+    # Regression for GAP-05: regenerating windows after a plan exists
+    # used to silently discard any invalidation an event already made
+    # (e.g. a CLOUD_BLOCK's window.valid=False), leaving the event log
+    # unable to explain the persisted window state.
+    session = _planned_session()
+
+    with pytest.raises(SimulationStateError, match="cannot be regenerated"):
+        session.generate_windows()
 
 
 def test_step_requires_a_plan_and_a_positive_number_of_seconds():

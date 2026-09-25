@@ -21,6 +21,7 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
   ALTERNATIVE_WINDOW_AVAILABLE: "Alternative window available",
   NO_ALTERNATIVE_WINDOW: "No alternative window",
   REQUEST_UNCHANGED: "Unaffected by the event",
+  HIGHER_PRIORITY_TASK_INSERTED: "Entered the pool and was scheduled",
 };
 
 /** Changed decisions first, clock outcomes and non-changes last and quiet. */

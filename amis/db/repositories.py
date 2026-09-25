@@ -134,22 +134,34 @@ class SqlObservationWindowRepository:
         self._engine = engine
 
     def replace_for_scenario(
-        self, scenario_id: str, windows: tuple[ObservationWindow, ...]
+        self,
+        scenario_id: str,
+        windows: tuple[ObservationWindow, ...],
+        *,
+        connection: Connection | None = None,
     ) -> None:
+        if connection is not None:
+            self._do_replace(connection, scenario_id, windows)
+            return
         with self._engine.begin() as conn:
-            conn.execute(
-                delete(schema.observation_windows).where(
-                    schema.observation_windows.c.scenario_id == scenario_id
-                )
+            self._do_replace(conn, scenario_id, windows)
+
+    def _do_replace(
+        self, conn: Connection, scenario_id: str, windows: tuple[ObservationWindow, ...]
+    ) -> None:
+        conn.execute(
+            delete(schema.observation_windows).where(
+                schema.observation_windows.c.scenario_id == scenario_id
             )
-            if windows:
-                conn.execute(
-                    insert(schema.observation_windows),
-                    [
-                        {"scenario_id": scenario_id, "seq": seq, **window.to_dict()}
-                        for seq, window in enumerate(windows)
-                    ],
-                )
+        )
+        if windows:
+            conn.execute(
+                insert(schema.observation_windows),
+                [
+                    {"scenario_id": scenario_id, "seq": seq, **window.to_dict()}
+                    for seq, window in enumerate(windows)
+                ],
+            )
 
     def list_for_scenario(self, scenario_id: str) -> tuple[ObservationWindow, ...]:
         with self._engine.begin() as conn:
@@ -178,84 +190,97 @@ class SqlPlanRepository:
         plans: tuple[MissionPlan, ...],
         *,
         expected_current_plan_id: str | None = None,
+        connection: Connection | None = None,
     ) -> None:
+        if connection is not None:
+            self._do_replace(connection, scenario_id, plans, expected_current_plan_id)
+            return
         with self._engine.begin() as conn:
-            current_row = (
-                conn.execute(
-                    select(schema.mission_plans.c.id)
-                    .where(schema.mission_plans.c.scenario_id == scenario_id)
-                    .order_by(schema.mission_plans.c.version.desc())
-                    .limit(1)
-                    .with_for_update()
-                )
-                .mappings()
-                .first()
-            )
-            current_id = current_row["id"] if current_row is not None else None
-            if (
-                expected_current_plan_id is not None
-                and current_id != expected_current_plan_id
-            ):
-                raise PlanVersionConflictError(
-                    "replan named a plan version that is no longer current",
-                    details={
-                        "expected_parent_plan_id": expected_current_plan_id,
-                        "current_plan_id": current_id,
-                    },
-                )
+            self._do_replace(conn, scenario_id, plans, expected_current_plan_id)
 
-            # SQLite does not enforce ON DELETE CASCADE unless a pragma
-            # is set per connection, so a plan's own scheduled_actions
-            # and unscheduled_entries are deleted explicitly here rather
-            # than relied on to cascade from deleting mission_plans.
-            existing_plan_ids = [
-                row["id"]
-                for row in conn.execute(
-                    select(schema.mission_plans.c.id).where(
-                        schema.mission_plans.c.scenario_id == scenario_id
-                    )
-                )
-                .mappings()
-                .all()
-            ]
+    def _do_replace(
+        self,
+        conn: Connection,
+        scenario_id: str,
+        plans: tuple[MissionPlan, ...],
+        expected_current_plan_id: str | None,
+    ) -> None:
+        current_row = (
             conn.execute(
-                delete(schema.scheduled_actions).where(
-                    schema.scheduled_actions.c.plan_id.in_(existing_plan_ids)
-                )
+                select(schema.mission_plans.c.id)
+                .where(schema.mission_plans.c.scenario_id == scenario_id)
+                .order_by(schema.mission_plans.c.version.desc())
+                .limit(1)
+                .with_for_update()
             )
-            conn.execute(
-                delete(schema.unscheduled_entries).where(
-                    schema.unscheduled_entries.c.plan_id.in_(existing_plan_ids)
-                )
+            .mappings()
+            .first()
+        )
+        current_id = current_row["id"] if current_row is not None else None
+        if (
+            expected_current_plan_id is not None
+            and current_id != expected_current_plan_id
+        ):
+            raise PlanVersionConflictError(
+                "replan named a plan version that is no longer current",
+                details={
+                    "expected_parent_plan_id": expected_current_plan_id,
+                    "current_plan_id": current_id,
+                },
             )
-            conn.execute(
-                delete(schema.mission_plans).where(
+
+        # SQLite does not enforce ON DELETE CASCADE unless a pragma
+        # is set per connection, so a plan's own scheduled_actions
+        # and unscheduled_entries are deleted explicitly here rather
+        # than relied on to cascade from deleting mission_plans.
+        existing_plan_ids = [
+            row["id"]
+            for row in conn.execute(
+                select(schema.mission_plans.c.id).where(
                     schema.mission_plans.c.scenario_id == scenario_id
                 )
             )
+            .mappings()
+            .all()
+        ]
+        conn.execute(
+            delete(schema.scheduled_actions).where(
+                schema.scheduled_actions.c.plan_id.in_(existing_plan_ids)
+            )
+        )
+        conn.execute(
+            delete(schema.unscheduled_entries).where(
+                schema.unscheduled_entries.c.plan_id.in_(existing_plan_ids)
+            )
+        )
+        conn.execute(
+            delete(schema.mission_plans).where(
+                schema.mission_plans.c.scenario_id == scenario_id
+            )
+        )
 
-            for plan in plans:
-                conn.execute(
-                    insert(schema.mission_plans).values(
-                        **_without(plan.to_dict(), "actions", "unscheduled")
-                    )
+        for plan in plans:
+            conn.execute(
+                insert(schema.mission_plans).values(
+                    **_without(plan.to_dict(), "actions", "unscheduled")
                 )
-                if plan.actions:
-                    conn.execute(
-                        insert(schema.scheduled_actions),
-                        [
-                            {"plan_id": plan.id, "seq": seq, **action.to_dict()}
-                            for seq, action in enumerate(plan.actions)
-                        ],
-                    )
-                if plan.unscheduled:
-                    conn.execute(
-                        insert(schema.unscheduled_entries),
-                        [
-                            {"plan_id": plan.id, "seq": seq, **entry.to_dict()}
-                            for seq, entry in enumerate(plan.unscheduled)
-                        ],
-                    )
+            )
+            if plan.actions:
+                conn.execute(
+                    insert(schema.scheduled_actions),
+                    [
+                        {"plan_id": plan.id, "seq": seq, **action.to_dict()}
+                        for seq, action in enumerate(plan.actions)
+                    ],
+                )
+            if plan.unscheduled:
+                conn.execute(
+                    insert(schema.unscheduled_entries),
+                    [
+                        {"plan_id": plan.id, "seq": seq, **entry.to_dict()}
+                        for seq, entry in enumerate(plan.unscheduled)
+                    ],
+                )
 
     def list_for_scenario(self, scenario_id: str) -> tuple[MissionPlan, ...]:
         with self._engine.begin() as conn:
@@ -324,22 +349,34 @@ class SqlEventRepository:
         self._engine = engine
 
     def replace_for_scenario(
-        self, scenario_id: str, events: tuple[MissionEvent, ...]
+        self,
+        scenario_id: str,
+        events: tuple[MissionEvent, ...],
+        *,
+        connection: Connection | None = None,
     ) -> None:
+        if connection is not None:
+            self._do_replace(connection, scenario_id, events)
+            return
         with self._engine.begin() as conn:
-            conn.execute(
-                delete(schema.mission_events).where(
-                    schema.mission_events.c.scenario_id == scenario_id
-                )
+            self._do_replace(conn, scenario_id, events)
+
+    def _do_replace(
+        self, conn: Connection, scenario_id: str, events: tuple[MissionEvent, ...]
+    ) -> None:
+        conn.execute(
+            delete(schema.mission_events).where(
+                schema.mission_events.c.scenario_id == scenario_id
             )
-            if events:
-                conn.execute(
-                    insert(schema.mission_events),
-                    [
-                        {"seq": seq, **event.to_dict()}
-                        for seq, event in enumerate(events)
-                    ],
-                )
+        )
+        if events:
+            conn.execute(
+                insert(schema.mission_events),
+                [
+                    {"seq": seq, **event.to_dict()}
+                    for seq, event in enumerate(events)
+                ],
+            )
 
     def list_for_scenario(self, scenario_id: str) -> tuple[MissionEvent, ...]:
         with self._engine.begin() as conn:
@@ -362,22 +399,34 @@ class SqlImpactRepository:
         self._engine = engine
 
     def replace_for_scenario(
-        self, scenario_id: str, impacts: tuple[Impact, ...]
+        self,
+        scenario_id: str,
+        impacts: tuple[Impact, ...],
+        *,
+        connection: Connection | None = None,
     ) -> None:
+        if connection is not None:
+            self._do_replace(connection, scenario_id, impacts)
+            return
         with self._engine.begin() as conn:
-            conn.execute(
-                delete(schema.impacts).where(
-                    schema.impacts.c.scenario_id == scenario_id
-                )
+            self._do_replace(conn, scenario_id, impacts)
+
+    def _do_replace(
+        self, conn: Connection, scenario_id: str, impacts: tuple[Impact, ...]
+    ) -> None:
+        conn.execute(
+            delete(schema.impacts).where(
+                schema.impacts.c.scenario_id == scenario_id
             )
-            if impacts:
-                conn.execute(
-                    insert(schema.impacts),
-                    [
-                        {"scenario_id": scenario_id, "seq": seq, **impact.to_dict()}
-                        for seq, impact in enumerate(impacts)
-                    ],
-                )
+        )
+        if impacts:
+            conn.execute(
+                insert(schema.impacts),
+                [
+                    {"scenario_id": scenario_id, "seq": seq, **impact.to_dict()}
+                    for seq, impact in enumerate(impacts)
+                ],
+            )
 
     def list_for_scenario(self, scenario_id: str) -> tuple[Impact, ...]:
         with self._engine.begin() as conn:
@@ -401,22 +450,34 @@ class SqlTraceRepository:
         self._engine = engine
 
     def replace_for_scenario(
-        self, scenario_id: str, traces: tuple[DecisionTrace, ...]
+        self,
+        scenario_id: str,
+        traces: tuple[DecisionTrace, ...],
+        *,
+        connection: Connection | None = None,
     ) -> None:
+        if connection is not None:
+            self._do_replace(connection, scenario_id, traces)
+            return
         with self._engine.begin() as conn:
-            conn.execute(
-                delete(schema.decision_traces).where(
-                    schema.decision_traces.c.scenario_id == scenario_id
-                )
+            self._do_replace(conn, scenario_id, traces)
+
+    def _do_replace(
+        self, conn: Connection, scenario_id: str, traces: tuple[DecisionTrace, ...]
+    ) -> None:
+        conn.execute(
+            delete(schema.decision_traces).where(
+                schema.decision_traces.c.scenario_id == scenario_id
             )
-            if traces:
-                conn.execute(
-                    insert(schema.decision_traces),
-                    [
-                        {"scenario_id": scenario_id, "seq": seq, **trace.to_dict()}
-                        for seq, trace in enumerate(traces)
-                    ],
-                )
+        )
+        if traces:
+            conn.execute(
+                insert(schema.decision_traces),
+                [
+                    {"scenario_id": scenario_id, "seq": seq, **trace.to_dict()}
+                    for seq, trace in enumerate(traces)
+                ],
+            )
 
     def list_for_scenario(self, scenario_id: str) -> tuple[DecisionTrace, ...]:
         with self._engine.begin() as conn:
@@ -439,7 +500,10 @@ class SqlMissionStateRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def put(self, state: MissionState) -> None:
+    def put(self, state: MissionState, *, connection: Connection | None = None) -> None:
+        if connection is not None:
+            self._do_put(connection, state)
+            return
         # Try the insert first and fall back to an update on a primary
         # key conflict, rather than checking existence first: a
         # SELECT-then-decide race would let two concurrent puts both
@@ -454,6 +518,22 @@ class SqlMissionStateRepository:
                     .where(schema.mission_states.c.scenario_id == state.scenario_id)
                     .values(**_without(state.to_dict(), "scenario_id"))
                 )
+
+    def _do_put(self, conn: Connection, state: MissionState) -> None:
+        # Sharing the caller's transaction (MissionSessionStore.save()'s
+        # atomic write): a failed INSERT would otherwise poison the whole
+        # transaction on PostgreSQL, so the insert attempt runs inside a
+        # SAVEPOINT that only rolls back the insert, not the writes
+        # already made to the other tables in this same save.
+        try:
+            with conn.begin_nested():
+                conn.execute(insert(schema.mission_states).values(**state.to_dict()))
+        except IntegrityError:
+            conn.execute(
+                update(schema.mission_states)
+                .where(schema.mission_states.c.scenario_id == state.scenario_id)
+                .values(**_without(state.to_dict(), "scenario_id"))
+            )
 
     def get(self, scenario_id: str) -> MissionState:
         with self._engine.begin() as conn:
@@ -488,4 +568,5 @@ def build_repositories(engine: Engine) -> Repositories:
         impacts=SqlImpactRepository(engine),
         traces=SqlTraceRepository(engine),
         states=SqlMissionStateRepository(engine),
+        engine=engine,
     )

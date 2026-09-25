@@ -18,6 +18,7 @@ from amis.domain import (
     Scenario,
 )
 from amis.session import MissionSession
+from amis.windows import SyntheticWindowProvider
 
 START = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
 END = datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)
@@ -134,7 +135,7 @@ class CanonicalWindowProvider:
     so nothing else has anywhere to go and churn measures the disruption.
     """
 
-    _WINDOW_OFFSETS: dict[str, tuple[tuple[int, int], ...]] = {
+    WINDOW_OFFSETS: dict[str, tuple[tuple[int, int], ...]] = {
         "OBS-A": ((0, 15),),
         "OBS-B": ((20, 35), (75, 90)),
         "OBS-C": ((40, 55),),
@@ -157,9 +158,49 @@ class CanonicalWindowProvider:
             )
             for request in requests
             for number, (start_offset, end_offset) in enumerate(
-                self._WINDOW_OFFSETS[request.id], start=1
+                self.WINDOW_OFFSETS[request.id], start=1
             )
         ]
+
+
+class ProductionWindowProvider:
+    """The production app's default window provider.
+
+    The API has no "demo mode" flag (`POST /scenarios` accepts any
+    scenario), so this dispatches per request rather than per scenario:
+    requests matching the canonical demo's fixed vocabulary
+    (`CanonicalWindowProvider.WINDOW_OFFSETS`, the same ids
+    `GET /demo/scenario` always returns) get the canonical demo's real
+    multi-window story -- including OBS-B's second window, which is what
+    lets a cloud block on the first window move it rather than just
+    dropping it. Any other request gets the general-purpose
+    `SyntheticWindowProvider` single window. This is what
+    `amis.main.build_app()` wires by default; tests and other direct
+    `MissionSession`/`create_app` callers are unaffected unless they opt
+    in explicitly.
+    """
+
+    def __init__(self) -> None:
+        self._canonical = CanonicalWindowProvider()
+        self._synthetic = SyntheticWindowProvider()
+
+    def generate(
+        self,
+        scenario: Scenario,
+        requests: Iterable[ObservationRequest],
+    ) -> list[ObservationWindow]:
+        canonical_requests = [
+            request for request in requests if request.id in CanonicalWindowProvider.WINDOW_OFFSETS
+        ]
+        other_requests = [
+            request for request in requests if request.id not in CanonicalWindowProvider.WINDOW_OFFSETS
+        ]
+        windows: list[ObservationWindow] = []
+        if canonical_requests:
+            windows.extend(self._canonical.generate(scenario, canonical_requests))
+        if other_requests:
+            windows.extend(self._synthetic.generate(scenario, other_requests))
+        return windows
 
 
 def build_canonical_replan_scenario() -> Scenario:

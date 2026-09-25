@@ -2,14 +2,22 @@
 
 Sorts requests priority descending, then deadline ascending, then
 duration ascending, then request id ascending, so ties never resolve
-arbitrarily. For each request it takes the first candidate window that
-passes every check, and otherwise records the request as unscheduled
-with the reason code the checks produced.
+arbitrarily. For each request it takes the first candidate start time,
+in the first candidate window, that passes every check, and otherwise
+records the request as unscheduled with the reason code the checks
+produced. Within a window, more than one start instant is tried (see
+`_candidate_starts_in_window`), so a request is not dropped just
+because one busy instant conflicts while the rest of the window is
+free.
 
 Checks run window containment, deadline, satellite availability,
-projected battery, projected storage, then overlap, in that order, so
+projected resources (battery and storage, checked chronologically
+across the whole committed timeline via `ResourceProjection.check_commit`,
+not just at the candidate's own start), then overlap, in that order, so
 a request's own limits are reported ahead of contention with another
-request when both apply.
+request when both apply. `violation_count` on the returned plan is
+computed from `validate_plan` against the finished plan (SRD 17), not
+from the unscheduled count.
 
 Passing a previous plan turns the same call into a replan. Every action
 whose start time has passed is frozen: it is carried into the new
@@ -23,6 +31,7 @@ variability.
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
@@ -30,10 +39,9 @@ from amis.constraints import (
     ResourceProjection,
     check_deadline,
     check_overlap,
-    check_projected_battery,
-    check_projected_storage,
     check_satellite_availability,
     check_window_containment,
+    validate_plan,
 )
 from amis.domain import (
     ActionStatus,
@@ -114,37 +122,42 @@ class GreedyPlanner:
             placed_action: Optional[ScheduledAction] = None
 
             for window in candidates:
-                candidate_start = max(window.start, mission_state.simulated_time)
-                candidate_end = candidate_start + timedelta(seconds=request.duration_s)
-                battery_wh, storage_used_mb = projection.available_at(candidate_start)
+                window_start = max(window.start, mission_state.simulated_time)
+                for candidate_start in _candidate_starts_in_window(
+                    window_start, window.end, request.duration_s, placed_actions
+                ):
+                    candidate_end = candidate_start + timedelta(seconds=request.duration_s)
 
-                violation = (
-                    check_window_containment(request.id, window, candidate_start, candidate_end)
-                    or check_deadline(request.id, request.deadline, candidate_end)
-                    or check_satellite_availability(request.id, mission_state.available)
-                    or check_projected_battery(request.id, request.energy_cost_wh, battery_wh)
-                    or check_projected_storage(
-                        request.id,
-                        request.storage_cost_mb,
-                        storage_used_mb,
-                        scenario.satellite.storage_capacity_mb,
+                    violation = (
+                        check_window_containment(request.id, window, candidate_start, candidate_end)
+                        or check_deadline(request.id, request.deadline, candidate_end)
+                        or check_satellite_availability(request.id, mission_state.available)
+                        or projection.check_commit(
+                            request.id,
+                            candidate_start,
+                            request.energy_cost_wh,
+                            request.storage_cost_mb,
+                            scenario.satellite.storage_capacity_mb,
+                        )
+                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions)
                     )
-                    or check_overlap(request.id, candidate_start, candidate_end, placed_actions)
-                )
 
-                if violation is None:
-                    placed_action = ScheduledAction(
-                        id=format_id(ACTION_ID_PREFIX, action_number),
-                        request_id=request.id,
-                        satellite_id=scenario.satellite.id,
-                        window_id=window.id,
-                        start=candidate_start,
-                        end=candidate_end,
-                        energy_cost_wh=request.energy_cost_wh,
-                        storage_cost_mb=request.storage_cost_mb,
-                    )
+                    if violation is None:
+                        placed_action = ScheduledAction(
+                            id=format_id(ACTION_ID_PREFIX, action_number),
+                            request_id=request.id,
+                            satellite_id=scenario.satellite.id,
+                            window_id=window.id,
+                            start=candidate_start,
+                            end=candidate_end,
+                            energy_cost_wh=request.energy_cost_wh,
+                            storage_cost_mb=request.storage_cost_mb,
+                        )
+                        break
+                    last_violation = violation
+
+                if placed_action is not None:
                     break
-                last_violation = violation
 
             if placed_action is not None:
                 actions.append(placed_action)
@@ -168,7 +181,7 @@ class GreedyPlanner:
         )
         planning_time_ms = (time.perf_counter() - start_perf) * 1000
 
-        return MissionPlan(
+        plan = MissionPlan(
             id=plan_id,
             scenario_id=scenario.id,
             version=previous_plan.version + 1 if previous_plan else 1,
@@ -177,9 +190,15 @@ class GreedyPlanner:
             actions=tuple(actions),
             unscheduled=tuple(unscheduled),
             mission_utility=mission_utility,
-            violation_count=len(unscheduled),
+            violation_count=0,
             planning_time_ms=planning_time_ms,
         )
+        # SRD 17: "Constraint Violations" counts validate_plan violations in
+        # the resulting plan, not dropped/unscheduled requests (those are
+        # already reported separately in `unscheduled`).
+        all_windows = tuple(window for windows in windows_by_request.values() for window in windows)
+        violation_count = len(validate_plan(scenario, mission_state, all_requests, all_windows, plan))
+        return replace(plan, violation_count=violation_count)
 
 
 def _frozen_actions(
@@ -207,6 +226,35 @@ def _ordered_candidates(
             window.id,
         ),
     )
+
+
+def _candidate_starts_in_window(
+    window_start: datetime,
+    window_end: datetime,
+    duration_s: float,
+    placed_actions: Iterable[ScheduledAction],
+) -> list[datetime]:
+    """Every start instant worth trying inside one window.
+
+    The window's own (now-clamped) start is tried first, since it is the
+    preferred, most-stable slot. Then the instant right after every
+    already-placed action that ends inside the window is tried too, so a
+    request is not dropped just because the single fixed start instant
+    collides while most of the window is free. Candidates that would run
+    past the window are excluded.
+    """
+
+    duration = timedelta(seconds=duration_s)
+    starts = {window_start}
+    for action in placed_actions:
+        if window_start <= action.end <= window_end:
+            starts.add(action.end)
+
+    ordered = sorted(start for start in starts if start + duration <= window_end)
+    if window_start in ordered:
+        ordered.remove(window_start)
+        ordered.insert(0, window_start)
+    return ordered
 
 
 def _unscheduled_reason(

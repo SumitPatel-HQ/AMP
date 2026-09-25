@@ -121,6 +121,14 @@ def test_priority_tie_uses_deadline_and_explains_the_displaced_request():
     assert trace.constraint_name == "overlap"
     assert "a competing request took its window" in trace.message
 
+    # Regression for GAP-10: the emergency request's own insertion used
+    # to be asserted as ALTERNATIVE_WINDOW_AVAILABLE unconditionally --
+    # a fabricated cause, since it never had a previous window to be
+    # freed. It is new to the pool, so it gets the real cause instead.
+    inserted = comparison.entry_for(payload.request.id)
+    assert inserted.change_type is PlanChangeType.INSERTED
+    assert inserted.reason_code is ReasonCode.HIGHER_PRIORITY_TASK_INSERTED
+
 
 def test_metrics_and_comparison_report_the_changed_request_pool():
     session, _, scenario, payload, version_one = _planned_session()
@@ -185,6 +193,62 @@ def test_invalid_emergency_windows_are_rejected_without_partial_changes():
     assert session.get_events() == ()
     assert session.get_windows() == windows_before
     assert session.get_request_pool() == request_pool_before
+
+
+def test_emergency_request_with_a_naive_deadline_is_rejected_without_partial_changes():
+    # Regression for GAP-07: a timezone-naive deadline used to be
+    # accepted (201), then break every later step()/replan() with an
+    # uncaught TypeError comparing naive and aware datetimes.
+    session, _, _, payload, _ = _planned_session()
+    naive_request = replace(payload.request, deadline=payload.request.deadline.replace(tzinfo=None))
+    windows_before = session.get_windows()
+    request_pool_before = session.get_request_pool()
+
+    with pytest.raises(InvalidEventError, match="timezone"):
+        session.inject_emergency_request(naive_request, payload.windows)
+
+    assert session.get_events() == ()
+    assert session.get_windows() == windows_before
+    assert session.get_request_pool() == request_pool_before
+    # The scenario must still be usable: no lingering corrupted state.
+    session.step(1)
+
+
+def test_emergency_request_with_an_inverted_window_is_rejected_without_partial_changes():
+    # Regression for GAP-07: start > end was accepted silently.
+    session, _, _, payload, _ = _planned_session()
+    inverted_window = replace(
+        payload.windows[0], start=payload.windows[0].end, end=payload.windows[0].start
+    )
+    windows_before = session.get_windows()
+    request_pool_before = session.get_request_pool()
+
+    with pytest.raises(InvalidEventError, match="end must be after start"):
+        session.inject_emergency_request(payload.request, (inverted_window,))
+
+    assert session.get_events() == ()
+    assert session.get_windows() == windows_before
+    assert session.get_request_pool() == request_pool_before
+    session.step(1)
+
+
+def test_emergency_request_with_a_naive_window_is_rejected_without_partial_changes():
+    session, _, _, payload, _ = _planned_session()
+    naive_window = replace(
+        payload.windows[0],
+        start=payload.windows[0].start.replace(tzinfo=None),
+        end=payload.windows[0].end.replace(tzinfo=None),
+    )
+    windows_before = session.get_windows()
+    request_pool_before = session.get_request_pool()
+
+    with pytest.raises(InvalidEventError, match="timezone"):
+        session.inject_emergency_request(payload.request, (naive_window,))
+
+    assert session.get_events() == ()
+    assert session.get_windows() == windows_before
+    assert session.get_request_pool() == request_pool_before
+    session.step(1)
 
 
 def test_fixture_has_the_expected_competing_window():

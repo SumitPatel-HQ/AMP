@@ -10,9 +10,13 @@ opens a fresh one against the same file to simulate a process restart.
 
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from dataclasses import replace
+from unittest.mock import patch
+
+from sqlalchemy import create_engine, select
 from sqlalchemy.engine import Engine
 
+from amis.db import schema
 from amis.db.repositories import build_repositories
 from amis.db.schema import metadata
 from amis.demo import (
@@ -224,3 +228,108 @@ def test_battery_drop_and_emergency_task_payloads_survive_a_restart(tmp_path):
     assert emergency_payload.request.id in {
         request.id for request in restored.get_request_pool()
     }
+
+
+def test_two_scenarios_each_recording_their_first_event_do_not_collide(tmp_path):
+    """Regression for GAP-02: mission_events/impacts/decision_traces used
+    to key only on ``id``, which restarts at 001 for every scenario. The
+    second scenario's first event collided on the primary key and the
+    save failed with an IntegrityError. The primary key is now
+    ``(scenario_id, id)``, matching observation_windows/observation_requests.
+    """
+    db_path = tmp_path / "amis.db"
+    engine = _engine(db_path)
+    metadata.create_all(engine)
+    store = _store(engine)
+
+    first_scenario = build_canonical_replan_scenario()
+    second_scenario = replace(build_canonical_replan_scenario(), id="SCN-OTHER")
+
+    first_session = store.create(first_scenario)
+    first_session.generate_windows()
+    first_session.plan()
+    store.save(first_session)
+    first_event = first_session.inject_cloud_block("OBS-B", "WIN-OBS-B-1")
+    store.save(first_session)
+
+    second_session = store.create(second_scenario)
+    second_session.generate_windows()
+    second_session.plan()
+    store.save(second_session)
+    second_event = second_session.inject_cloud_block("OBS-B", "WIN-OBS-B-1")
+    store.save(second_session)
+
+    # Both scenarios independently start their event counter at 001 --
+    # this is the actual collision the audit reproduced.
+    assert first_event.id == "EVT-001"
+    assert second_event.id == "EVT-001"
+
+    restored_first = store.load(first_scenario.id)
+    restored_second = store.load(second_scenario.id)
+    assert [event.id for event in restored_first.get_events()] == ["EVT-001"]
+    assert [event.id for event in restored_second.get_events()] == ["EVT-001"]
+    assert restored_first.get_events()[0].scenario_id == first_scenario.id
+    assert restored_second.get_events()[0].scenario_id == second_scenario.id
+
+
+def test_a_failed_write_partway_through_save_commits_nothing(tmp_path):
+    """Regression for GAP-06: save() used to run six independent
+    transactions, so a failure partway through left the database holding
+    a plan/window change with no matching event or impact row. Save now
+    shares one transaction across every table, so a failure anywhere
+    rolls back everything attempted in that save.
+    """
+    db_path = tmp_path / "amis.db"
+    engine = _engine(db_path)
+    metadata.create_all(engine)
+    store = _store(engine)
+    scenario = build_canonical_replan_scenario()
+
+    session = store.create(scenario)
+    session.generate_windows()
+    session.plan()
+    store.save(session)
+
+    with engine.connect() as conn:
+        windows_before = conn.execute(
+            select(schema.observation_windows.c.valid).where(
+                schema.observation_windows.c.id == "WIN-OBS-B-1"
+            )
+        ).scalar_one()
+        events_before = conn.execute(
+            select(schema.mission_events.c.id).where(
+                schema.mission_events.c.scenario_id == scenario.id
+            )
+        ).all()
+    assert windows_before is True
+    assert events_before == []
+
+    session.step(300)
+    session.inject_cloud_block("OBS-B", "WIN-OBS-B-1")
+    # The window is now invalidated in the session's own in-memory state
+    # (session.get_windows() would show it). The trace write is made to
+    # fail, simulating a crash between the windows table (which would
+    # write first, before traces) and the rest of this save.
+    with patch(
+        "amis.db.repositories.SqlTraceRepository._do_replace",
+        side_effect=RuntimeError("simulated failure"),
+    ):
+        with pytest.raises(RuntimeError):
+            store.save(session)
+
+    with engine.connect() as conn:
+        windows_after = conn.execute(
+            select(schema.observation_windows.c.valid).where(
+                schema.observation_windows.c.id == "WIN-OBS-B-1"
+            )
+        ).scalar_one()
+        events_after = conn.execute(
+            select(schema.mission_events.c.id).where(
+                schema.mission_events.c.scenario_id == scenario.id
+            )
+        ).all()
+
+    # Nothing from the failed save landed: the window is still valid and
+    # no event was persisted, exactly the pre-save state.
+    assert windows_after is True
+    assert events_after == []

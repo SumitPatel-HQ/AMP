@@ -166,6 +166,47 @@ def test_a_request_keeping_its_start_but_changing_window_is_a_move():
     assert entry.old_start == entry.new_start
 
 
+def test_a_newly_arrived_request_still_unscheduled_reports_its_real_reason():
+    # Regression for GAP-10: a request absent from both plans used to be
+    # classified UNCHANGED/REQUEST_UNCHANGED unconditionally, even when
+    # the current plan's own unscheduled list names the real reason (and
+    # even though "unchanged" is a lie for a request the previous plan
+    # never knew about at all).
+    previous = _plan("PLAN-001", 1, (_action("OBS-A", "ACT-001", 0),))
+    current = _plan(
+        "PLAN-002",
+        2,
+        (_action("OBS-A", "ACT-001", 0),),
+        (UnscheduledEntry("OBS-EMERGENCY", ReasonCode.TIME_OVERLAP),),
+    )
+
+    diff = compare_plans(
+        previous, current, previous_request_pool_ids=frozenset({"OBS-A"})
+    )
+
+    entry = diff.entry_for("OBS-EMERGENCY")
+    assert entry.change_type is PlanChangeType.UNCHANGED
+    assert entry.reason_code is ReasonCode.TIME_OVERLAP
+
+
+def test_a_request_unscheduled_in_both_versions_reports_its_current_reason():
+    # Not a newly-arrived case: the unscheduled_reason parameter was
+    # ignored entirely for this branch regardless of arrival, so even a
+    # long-known request's reason for staying unscheduled was masked
+    # with REQUEST_UNCHANGED instead of its real, possibly-changed cause.
+    previous = _plan(
+        "PLAN-001", 1, (), (UnscheduledEntry("OBS-A", ReasonCode.NO_ALTERNATIVE_WINDOW),)
+    )
+    current = _plan(
+        "PLAN-002", 2, (), (UnscheduledEntry("OBS-A", ReasonCode.INSUFFICIENT_BATTERY),)
+    )
+
+    entry = compare_plans(previous, current).entry_for("OBS-A")
+
+    assert entry.change_type is PlanChangeType.UNCHANGED
+    assert entry.reason_code is ReasonCode.INSUFFICIENT_BATTERY
+
+
 def test_diff_serialises_to_a_plain_dict():
     previous = _plan("PLAN-001", 1, (_action("OBS-A", "ACT-001", 0),))
     current = _plan("PLAN-002", 2, (), (UnscheduledEntry("OBS-A", ReasonCode.NO_ALTERNATIVE_WINDOW),))

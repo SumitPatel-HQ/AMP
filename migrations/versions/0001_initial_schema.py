@@ -7,6 +7,11 @@ foreign key: each of those tables is replaced independently, in its
 own transaction, and a constraint there would make an ordinary save
 briefly violate referential integrity.
 
+``mission_events``, ``impacts``, and ``decision_traces`` key ``id``
+together with ``scenario_id``: ``id`` is only unique within one
+scenario (a fresh EVT-001/IMP-001/TRACE-001 counter per scenario, see
+amis/ids.py), so a bare ``id`` primary key collides across scenarios.
+
 Revision ID: 0001
 Revises:
 Create Date: 2026-09-21
@@ -161,31 +166,28 @@ def upgrade() -> None:
 
     op.create_table(
         "mission_events",
-        sa.Column("id", sa.String, primary_key=True),
         sa.Column(
             "scenario_id",
             sa.String,
             sa.ForeignKey("scenarios.id", ondelete="CASCADE"),
-            nullable=False,
+            primary_key=True,
         ),
+        sa.Column("id", sa.String, primary_key=True),
         sa.Column("seq", sa.Integer, nullable=False),
         sa.Column("event_type", sa.String, nullable=False),
         sa.Column("event_time", sa.String, nullable=False),
         sa.Column("payload", sa.JSON, nullable=False),
     )
-    op.create_index(
-        "ix_mission_events_scenario_id", "mission_events", ["scenario_id"]
-    )
 
     op.create_table(
         "impacts",
-        sa.Column("id", sa.String, primary_key=True),
         sa.Column(
             "scenario_id",
             sa.String,
             sa.ForeignKey("scenarios.id", ondelete="CASCADE"),
-            nullable=False,
+            primary_key=True,
         ),
+        sa.Column("id", sa.String, primary_key=True),
         sa.Column("seq", sa.Integer, nullable=False),
         sa.Column("event_id", sa.String, nullable=False),
         sa.Column("evaluated_plan_id", sa.String, nullable=False),
@@ -194,7 +196,6 @@ def upgrade() -> None:
         sa.Column("invalid_unfrozen_action_ids", sa.JSON, nullable=False),
         sa.Column("reason_codes", sa.JSON, nullable=False),
     )
-    op.create_index("ix_impacts_scenario_id", "impacts", ["scenario_id"])
     op.create_index("ix_impacts_event_id", "impacts", ["event_id"])
     op.create_index(
         "ix_impacts_evaluated_plan_id", "impacts", ["evaluated_plan_id"]
@@ -202,13 +203,13 @@ def upgrade() -> None:
 
     op.create_table(
         "decision_traces",
-        sa.Column("id", sa.String, primary_key=True),
         sa.Column(
             "scenario_id",
             sa.String,
             sa.ForeignKey("scenarios.id", ondelete="CASCADE"),
-            nullable=False,
+            primary_key=True,
         ),
+        sa.Column("id", sa.String, primary_key=True),
         sa.Column("seq", sa.Integer, nullable=False),
         sa.Column("plan_id", sa.String, nullable=False),
         sa.Column("event_id", sa.String, nullable=True),
@@ -219,9 +220,6 @@ def upgrade() -> None:
         sa.Column("constraint_name", sa.String, nullable=True),
         sa.Column("message", sa.String, nullable=False),
         sa.Column("metadata", sa.JSON, nullable=False),
-    )
-    op.create_index(
-        "ix_decision_traces_scenario_id", "decision_traces", ["scenario_id"]
     )
     op.create_index("ix_decision_traces_plan_id", "decision_traces", ["plan_id"])
 

@@ -90,6 +90,15 @@ class MissionSession:
 
     def generate_windows(self) -> list[ObservationWindow]:
         scenario = self._require_scenario()
+        if self._plans:
+            # Regenerating from the provider would silently discard any
+            # window mutation an event has already made -- a CLOUD_BLOCK's
+            # invalidation, or an emergency request's own windows -- with
+            # nothing in the event log to explain why the window is valid
+            # again. See GAP-05.
+            raise SimulationStateError(
+                "observation windows cannot be regenerated once a plan exists"
+            )
         self._windows = self._window_provider.generate(scenario, scenario.requests)
         return list(self._windows)
 
@@ -99,6 +108,14 @@ class MissionSession:
 
     def plan(self) -> MissionPlan:
         scenario = self._require_scenario()
+        if self._plans:
+            # plan() always writes version 1 with no parent. A second
+            # call would silently duplicate PLAN-001-shaped history
+            # instead of extending it -- that is what replan() is for.
+            # See GAP-05.
+            raise SimulationStateError(
+                "a mission plan already exists; use replan() to create a new version"
+            )
         if not self._windows:
             raise SimulationStateError(
                 "observation windows must be generated before planning"
@@ -130,6 +147,10 @@ class MissionSession:
         previous_plan = self.get_plan()
         mission_state = self.get_state()
 
+        if mission_state.mission_complete:
+            raise SimulationStateError(
+                "mission is complete; reset the simulation before replanning"
+            )
         if (
             expected_parent_plan_id is not None
             and expected_parent_plan_id != previous_plan.id
@@ -158,6 +179,7 @@ class MissionSession:
             plan,
             diff,
             event_id=self._triggering_event_id(previous_plan),
+            event_ids_by_request=self._event_ids_by_request(previous_plan),
             first_trace_number=next_number(
                 TRACE_ID_PREFIX, [trace.id for trace in self._traces]
             ),
@@ -256,6 +278,11 @@ class MissionSession:
         scenario = self._require_scenario()
         plan = self.get_plan()
         state = self.get_state()
+
+        if state.mission_complete:
+            raise SimulationStateError(
+                "mission is complete; reset the simulation before injecting events"
+            )
 
         try:
             parsed_event_type = EventType(event_type)
@@ -549,6 +576,9 @@ class MissionSession:
             previous_plan,
             plan,
             reasons_by_request=self._impact_reasons_by_request(previous_plan),
+            previous_request_pool_ids=self._request_pool_ids_by_plan_id.get(
+                previous_plan.id
+            ),
         )
 
     def _record_request_pool_for(self, plan: MissionPlan) -> None:
@@ -598,6 +628,39 @@ class MissionSession:
     def _triggering_event_id(self, plan: MissionPlan) -> str | None:
         impact = self._latest_impact_for(plan)
         return impact.event_id if impact else None
+
+    def _event_ids_by_request(self, plan: MissionPlan) -> dict[str, str]:
+        """Which event actually invalidated each request's action.
+
+        More than one event can occur between two plans. Every
+        `inject_event` call re-evaluates impact against the same
+        unchanged plan, so once an action is invalidated it keeps
+        appearing in every later impact's `invalid_unfrozen_action_ids`
+        too. Taking the *first* impact (in event order) that names a
+        request's previous action attributes the change to the event
+        that actually caused it, not to whichever event happened last
+        (GAP-08). A request with no previous action (for example a
+        newly arrived emergency request) has nothing to look up here;
+        `build_traces` falls back to the overall triggering event for
+        those.
+        """
+
+        impacts = tuple(
+            impact for impact in self._impacts if impact.evaluated_plan_id == plan.id
+        )
+        result: dict[str, str] = {}
+        for action in plan.actions:
+            causing_impact = next(
+                (
+                    impact
+                    for impact in impacts
+                    if action.id in impact.invalid_unfrozen_action_ids
+                ),
+                None,
+            )
+            if causing_impact is not None:
+                result[action.request_id] = causing_impact.event_id
+        return result
 
     def _impact_reasons_by_request(self, plan: MissionPlan) -> dict[str, ReasonCode]:
         impact = self._latest_impact_for(plan)
@@ -718,6 +781,18 @@ class MissionSession:
                 "emergency request id already exists",
                 details={"request_id": request.id},
             )
+        if request.deadline.tzinfo is None:
+            # The HTTP schema only checked this for requests embedded in
+            # POST /scenarios; the emergency payload took a bare
+            # ObservationRequestSchema and skipped it entirely, so a
+            # naive deadline reached MissionState unvalidated and made
+            # every later step()/replan() comparison raise (GAP-07). This
+            # is the facade-level backstop for callers that bypass the
+            # HTTP schema entirely.
+            raise InvalidEventError(
+                "emergency request deadline must include a timezone",
+                details={"request_id": request.id},
+            )
         if not windows:
             raise InvalidEventError(
                 "emergency request requires at least one explicit observation window",
@@ -747,5 +822,15 @@ class MissionSession:
                         "satellite_id": window.satellite_id,
                         "window_id": window.id,
                     },
+                )
+            if window.start.tzinfo is None or window.end.tzinfo is None:
+                raise InvalidEventError(
+                    "emergency request window must include a timezone",
+                    details={"window_id": window.id},
+                )
+            if window.end <= window.start:
+                raise InvalidEventError(
+                    "emergency request window end must be after start",
+                    details={"window_id": window.id},
                 )
             payload_window_ids.add(window.id)

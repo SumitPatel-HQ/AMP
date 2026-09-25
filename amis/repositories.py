@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock
-from typing import Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 from amis.domain import (
     DecisionTrace,
@@ -34,7 +34,11 @@ class ScenarioRepository(Protocol):
 
 class ObservationWindowRepository(Protocol):
     def replace_for_scenario(
-        self, scenario_id: str, windows: tuple[ObservationWindow, ...]
+        self,
+        scenario_id: str,
+        windows: tuple[ObservationWindow, ...],
+        *,
+        connection: Any | None = None,
     ) -> None: ...
 
     def list_for_scenario(self, scenario_id: str) -> tuple[ObservationWindow, ...]: ...
@@ -47,6 +51,7 @@ class PlanRepository(Protocol):
         plans: tuple[MissionPlan, ...],
         *,
         expected_current_plan_id: str | None = None,
+        connection: Any | None = None,
     ) -> None: ...
 
     def list_for_scenario(self, scenario_id: str) -> tuple[MissionPlan, ...]: ...
@@ -56,7 +61,11 @@ class PlanRepository(Protocol):
 
 class EventRepository(Protocol):
     def replace_for_scenario(
-        self, scenario_id: str, events: tuple[MissionEvent, ...]
+        self,
+        scenario_id: str,
+        events: tuple[MissionEvent, ...],
+        *,
+        connection: Any | None = None,
     ) -> None: ...
 
     def list_for_scenario(self, scenario_id: str) -> tuple[MissionEvent, ...]: ...
@@ -64,7 +73,11 @@ class EventRepository(Protocol):
 
 class ImpactRepository(Protocol):
     def replace_for_scenario(
-        self, scenario_id: str, impacts: tuple[Impact, ...]
+        self,
+        scenario_id: str,
+        impacts: tuple[Impact, ...],
+        *,
+        connection: Any | None = None,
     ) -> None: ...
 
     def list_for_scenario(self, scenario_id: str) -> tuple[Impact, ...]: ...
@@ -72,14 +85,18 @@ class ImpactRepository(Protocol):
 
 class TraceRepository(Protocol):
     def replace_for_scenario(
-        self, scenario_id: str, traces: tuple[DecisionTrace, ...]
+        self,
+        scenario_id: str,
+        traces: tuple[DecisionTrace, ...],
+        *,
+        connection: Any | None = None,
     ) -> None: ...
 
     def list_for_scenario(self, scenario_id: str) -> tuple[DecisionTrace, ...]: ...
 
 
 class MissionStateRepository(Protocol):
-    def put(self, state: MissionState) -> None: ...
+    def put(self, state: MissionState, *, connection: Any | None = None) -> None: ...
 
     def get(self, scenario_id: str) -> MissionState: ...
 
@@ -119,7 +136,9 @@ class InMemoryPlanRepository:
         plans: tuple[MissionPlan, ...],
         *,
         expected_current_plan_id: str | None = None,
+        connection: Any | None = None,
     ) -> None:
+        del connection  # in-memory writes are already atomic under the lock
         with self._lock:
             current = self._items.get(scenario_id, ())
             current_id = current[-1].id if current else None
@@ -164,8 +183,13 @@ class InMemoryScenarioListRepository(Generic[RecordT]):
         self._lock = RLock()
 
     def replace_for_scenario(
-        self, scenario_id: str, records: tuple[RecordT, ...]
+        self,
+        scenario_id: str,
+        records: tuple[RecordT, ...],
+        *,
+        connection: Any | None = None,
     ) -> None:
+        del connection  # in-memory writes are already atomic under the lock
         with self._lock:
             self._items[scenario_id] = records
 
@@ -179,7 +203,8 @@ class InMemoryMissionStateRepository:
         self._items: dict[str, MissionState] = {}
         self._lock = RLock()
 
-    def put(self, state: MissionState) -> None:
+    def put(self, state: MissionState, *, connection: Any | None = None) -> None:
+        del connection  # in-memory writes are already atomic under the lock
         with self._lock:
             self._items[state.scenario_id] = state
 
@@ -202,6 +227,13 @@ class Repositories:
     impacts: ImpactRepository
     traces: TraceRepository
     states: MissionStateRepository
+    # Set only for SQL-backed repositories (see amis/db/repositories.py's
+    # build_repositories). When present, MissionSessionStore.save() opens
+    # one transaction on it and threads the connection through every
+    # write, so a save is committed or rejected as a unit (GAP-06). The
+    # in-memory repositories need no such thing: their writes are already
+    # atomic under their own locks.
+    engine: Any | None = None
 
     @staticmethod
     def in_memory() -> "Repositories":
@@ -276,24 +308,42 @@ class MissionSessionStore:
         expected_current_plan_id: str | None = None,
     ) -> None:
         scenario_id = session.get_scenario().id
+        if self.repositories.engine is None:
+            self._write(scenario_id, session, expected_current_plan_id, connection=None)
+            return
+        # One transaction for every table this save touches, so a failure
+        # partway through leaves nothing committed rather than an
+        # invalidated window with no event to explain it (GAP-06).
+        with self.repositories.engine.begin() as connection:
+            self._write(scenario_id, session, expected_current_plan_id, connection=connection)
+
+    def _write(
+        self,
+        scenario_id: str,
+        session: MissionSession,
+        expected_current_plan_id: str | None,
+        *,
+        connection: Any | None,
+    ) -> None:
         self.repositories.plans.replace_for_scenario(
             scenario_id,
             session.get_plans(),
             expected_current_plan_id=expected_current_plan_id,
+            connection=connection,
         )
         self.repositories.windows.replace_for_scenario(
-            scenario_id, session.get_windows()
+            scenario_id, session.get_windows(), connection=connection
         )
         self.repositories.events.replace_for_scenario(
-            scenario_id, session.get_events()
+            scenario_id, session.get_events(), connection=connection
         )
         self.repositories.impacts.replace_for_scenario(
-            scenario_id, session.get_impacts()
+            scenario_id, session.get_impacts(), connection=connection
         )
         self.repositories.traces.replace_for_scenario(
-            scenario_id, session.get_traces()
+            scenario_id, session.get_traces(), connection=connection
         )
-        self.repositories.states.put(session.get_state())
+        self.repositories.states.put(session.get_state(), connection=connection)
 
     def _new_session(self, scenario_id: str) -> MissionSession:
         return MissionSession(

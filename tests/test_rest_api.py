@@ -561,6 +561,58 @@ def test_emergency_task_event_adds_its_request_through_the_event_log_over_http()
     asyncio.run(run())
 
 
+def test_naive_or_inverted_emergency_payloads_are_rejected_with_422_not_accepted():
+    """Regression for GAP-07: a timezone-naive deadline or an inverted
+    window (end before start) used to be accepted with 201, and every
+    later step/replan call then 500'd forever with no way to recover.
+    """
+
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario, _ = await _planned_canonical_scenario(client)
+
+            naive_request = {
+                "id": "OBS-EMERGENCY",
+                "target_lat": 34.05,
+                "target_lon": -118.24,
+                "priority": 5,
+                "duration_s": 600.0,
+                "deadline": "2026-09-21T09:00:00",  # no timezone offset
+                "energy_cost_wh": 40.0,
+                "storage_cost_mb": 100.0,
+                "status": "pending",
+            }
+            inverted_window = {
+                "id": "WIN-OBS-EMERGENCY-1",
+                "request_id": "OBS-EMERGENCY",
+                "satellite_id": "SAT-001",
+                "start": "2026-09-21T10:55:00+00:00",
+                "end": "2026-09-21T10:40:00+00:00",  # end before start
+                "valid": True,
+                "invalid_reason": None,
+            }
+            body = {
+                "event_type": "EMERGENCY_TASK",
+                "payload": {"request": naive_request, "windows": [inverted_window]},
+            }
+
+            rejected = await client.post(f"/scenarios/{scenario.id}/events", json=body)
+            assert rejected.status_code == 422
+
+            # Nothing was accepted, so the scenario stays fully usable.
+            events = (await client.get(f"/scenarios/{scenario.id}/events")).json()
+            assert events == []
+
+            stepped = await client.post(
+                f"/scenarios/{scenario.id}/simulation/step", json={"seconds": 1}
+            )
+            assert stepped.status_code == 200
+
+    asyncio.run(run())
+
+
 def test_windows_route_reflects_a_cloud_block_invalidation():
     async def run() -> None:
         app = create_app(window_provider=CanonicalWindowProvider())

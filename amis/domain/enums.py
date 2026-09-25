@@ -44,3 +44,10 @@ class ReasonCode(str, Enum):
     ALTERNATIVE_WINDOW_AVAILABLE = "ALTERNATIVE_WINDOW_AVAILABLE"
     NO_ALTERNATIVE_WINDOW = "NO_ALTERNATIVE_WINDOW"
     REQUEST_UNCHANGED = "REQUEST_UNCHANGED"
+    # In the SRD 6 minimum vocabulary but previously missing here: the
+    # correct cause for a request that entered the pool after the
+    # previous plan (an emergency request) and was scheduled in this
+    # one. Without it, compare_plans had no way to describe an insertion
+    # honestly and fell back to ALTERNATIVE_WINDOW_AVAILABLE, which
+    # asserts a cause (a freed window) that did not happen (GAP-10).
+    HIGHER_PRIORITY_TASK_INSERTED = "HIGHER_PRIORITY_TASK_INSERTED"

@@ -306,6 +306,29 @@ describe("mission dashboard", () => {
     expect(document.querySelector("svg[aria-label*='timeline']")).toBeNull();
   });
 
+  it("disables Generate plan once a plan exists, so it cannot be clicked twice", async () => {
+    // Regression for GAP-05: the button used to stay enabled after a
+    // plan was generated, letting a second click reach the backend
+    // (which used to accept it and silently duplicate plan history).
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+    await screen.findByText(scenario.name);
+    expect(
+      (screen.getByRole("button", { name: "Generate plan" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Generate plan" }));
+    await screen.findByLabelText("Current plan V1");
+
+    expect(
+      (screen.getByRole("button", { name: "Generate plan" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(api.createPlan).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a clean scenario id for each demo session", async () => {
     installSuccessfulApi();
     vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(

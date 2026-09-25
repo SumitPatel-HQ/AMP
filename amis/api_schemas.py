@@ -43,6 +43,18 @@ class ObservationRequestSchema(ApiModel):
     storage_cost_mb: float = Field(ge=0, allow_inf_nan=False)
     status: RequestStatus = RequestStatus.PENDING
 
+    @model_validator(mode="after")
+    def validate_deadline_timezone(self) -> Self:
+        # Checked here, not only when a request is embedded in
+        # ScenarioSchema, so the emergency-event payload (which reuses
+        # this schema directly, never nested in a scenario) cannot bypass
+        # it: a naive deadline previously reached MissionState
+        # unvalidated and made every later step()/replan() comparison
+        # raise a 500 (GAP-07).
+        if self.deadline.tzinfo is None:
+            raise ValueError("observation request deadline must include a timezone")
+        return self
+
 
 class ScenarioSchema(ApiModel):
     id: str = Field(min_length=1)
@@ -61,8 +73,8 @@ class ScenarioSchema(ApiModel):
         request_ids = [request.id for request in self.requests]
         if len(request_ids) != len(set(request_ids)):
             raise ValueError("observation request ids must be unique")
-        if any(request.deadline.tzinfo is None for request in self.requests):
-            raise ValueError("observation request deadlines must include a timezone")
+        # Each request already validates its own deadline's timezone
+        # (ObservationRequestSchema.validate_deadline_timezone).
         return self
 
 
@@ -74,6 +86,18 @@ class ObservationWindowSchema(ApiModel):
     end: datetime
     valid: bool
     invalid_reason: str | None
+
+    @model_validator(mode="after")
+    def validate_window(self) -> Self:
+        # Checked here so both the scenario-create path and the
+        # emergency-event path (whose explicit windows reuse this same
+        # schema) reject a naive-timestamp or inverted window before it
+        # ever reaches MissionState (GAP-07).
+        if self.start.tzinfo is None or self.end.tzinfo is None:
+            raise ValueError("observation window start/end must include a timezone")
+        if self.end <= self.start:
+            raise ValueError("observation window end must be after start")
+        return self
 
 
 class ScheduledActionSchema(ApiModel):

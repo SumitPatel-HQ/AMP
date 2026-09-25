@@ -13,7 +13,7 @@ change, which is the case for a comparison drawn long after the event.
 
 from __future__ import annotations
 
-from typing import Mapping, Optional
+from typing import AbstractSet, Mapping, Optional
 
 from amis.domain import (
     ActionStatus,
@@ -59,7 +59,18 @@ def compare_plans(
     previous: MissionPlan,
     current: MissionPlan,
     reasons_by_request: Optional[Mapping[str, ReasonCode]] = None,
+    previous_request_pool_ids: Optional[AbstractSet[str]] = None,
 ) -> PlanDiff:
+    """``previous_request_pool_ids`` names every request the previous plan's
+    own request pool knew about (whether scheduled, unscheduled, or
+    already completed/expired and so absent from both). A request
+    outside that set arrived after the previous plan was made -- an
+    emergency request -- and needs a real cause rather than the
+    move/insert fallback, which only makes sense for a request the
+    previous plan already knew (see GAP-10). ``None`` disables the
+    distinction, so every request is treated as previously known.
+    """
+
     reasons = dict(reasons_by_request or {})
     previous_actions = {action.request_id: action for action in previous.actions}
     current_actions = {action.request_id: action for action in current.actions}
@@ -81,6 +92,10 @@ def compare_plans(
             current_actions.get(request_id),
             reasons.get(request_id),
             current_unscheduled.get(request_id),
+            known_before=(
+                previous_request_pool_ids is None
+                or request_id in previous_request_pool_ids
+            ),
         )
         for request_id in request_ids
     )
@@ -95,6 +110,7 @@ def _classify(
     after: Optional[ScheduledAction],
     recorded_reason: Optional[ReasonCode],
     unscheduled_reason: Optional[ReasonCode],
+    known_before: bool,
 ) -> PlanDiffEntry:
     old_start = before.start if before else None
     new_start = after.start if after else None
@@ -111,17 +127,30 @@ def _classify(
             reason_code = recorded_reason or ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE
     elif after is not None:
         change_type = PlanChangeType.INSERTED
-        reason_code = recorded_reason or ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE
+        if recorded_reason is not None:
+            reason_code = recorded_reason
+        elif not known_before:
+            # No impact explains this insertion because none can: the
+            # request did not exist when the previous plan's impacts
+            # were recorded. It is new to the pool, not moved into a
+            # window an event freed up.
+            reason_code = ReasonCode.HIGHER_PRIORITY_TASK_INSERTED
+        else:
+            reason_code = ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE
     elif before is not None:
         change_type = PlanChangeType.DROPPED
         reason_code = (
             unscheduled_reason or recorded_reason or ReasonCode.NO_ALTERNATIVE_WINDOW
         )
     else:
-        # Unscheduled in both versions. The request did not change, and the
-        # plan's own unscheduled list still carries why it is not there.
+        # Unscheduled in both versions (or, for a request outside
+        # known_before, unscheduled in its only version). The plan's own
+        # unscheduled list still carries the real reason when there is
+        # one; only fall back to REQUEST_UNCHANGED when the request
+        # truly is not currently unscheduled either (for example, it was
+        # already completed and has left the plan's own bookkeeping).
         change_type = PlanChangeType.UNCHANGED
-        reason_code = ReasonCode.REQUEST_UNCHANGED
+        reason_code = unscheduled_reason or ReasonCode.REQUEST_UNCHANGED
 
     return PlanDiffEntry(
         request_id=request_id,

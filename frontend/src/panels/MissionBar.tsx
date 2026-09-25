@@ -203,7 +203,9 @@ export function MissionBar({
             setEventOpen(false);
             onGeneratePlan();
           }}
-          disabled={loading || scenario === null || missionState?.mission_complete === true}
+          disabled={
+            loading || scenario === null || plan !== null || missionState?.mission_complete === true
+          }
           className={CONTROL_BUTTON}
         >
           Generate plan

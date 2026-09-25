@@ -17,6 +17,13 @@ replace their whole table for a scenario independently, in their own
 transaction. A cross-table foreign key there would make every ordinary
 save briefly violate referential integrity, so those columns are plain,
 indexed strings instead. See docs/adr/0006.
+
+``mission_events``, ``impacts``, and ``decision_traces`` key their ``id``
+column together with ``scenario_id`` (like ``observation_windows`` and
+``observation_requests`` already do), because ``id`` is only unique
+within one scenario: ``EVT-001`` is generated fresh, starting from 1,
+for every scenario (see amis/ids.py). Keying on ``id`` alone would
+collide the moment a second scenario recorded its first event.
 """
 
 from __future__ import annotations
@@ -177,14 +184,13 @@ unscheduled_entries = Table(
 mission_events = Table(
     "mission_events",
     metadata,
-    Column("id", String, primary_key=True),
     Column(
         "scenario_id",
         String,
         ForeignKey("scenarios.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        primary_key=True,
     ),
+    Column("id", String, primary_key=True),
     Column("seq", Integer, nullable=False),
     Column("event_type", String, nullable=False),
     Column("event_time", String, nullable=False),
@@ -194,14 +200,13 @@ mission_events = Table(
 impacts = Table(
     "impacts",
     metadata,
-    Column("id", String, primary_key=True),
     Column(
         "scenario_id",
         String,
         ForeignKey("scenarios.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        primary_key=True,
     ),
+    Column("id", String, primary_key=True),
     Column("seq", Integer, nullable=False),
     Column("event_id", String, nullable=False, index=True),
     Column("evaluated_plan_id", String, nullable=False, index=True),
@@ -214,14 +219,13 @@ impacts = Table(
 decision_traces = Table(
     "decision_traces",
     metadata,
-    Column("id", String, primary_key=True),
     Column(
         "scenario_id",
         String,
         ForeignKey("scenarios.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        primary_key=True,
     ),
+    Column("id", String, primary_key=True),
     Column("seq", Integer, nullable=False),
     Column("plan_id", String, nullable=False, index=True),
     Column("event_id", String, nullable=True),

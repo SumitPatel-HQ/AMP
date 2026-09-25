@@ -253,6 +253,27 @@ def test_generated_ids_are_sequential_per_scenario_and_never_reused():
             )
 
 
+def test_a_trace_attributes_to_the_event_that_actually_caused_the_change_not_the_latest_one():
+    # Regression for GAP-08: two events land before one replan. Every
+    # trace used to be attributed to the *latest* event (here, the
+    # battery drop) regardless of which event actually caused the
+    # change. OBS-B's window was invalidated by the cloud block; the
+    # battery drop's own impact re-evaluation still finds OBS-B's action
+    # invalid (the window is still blocked), so a naive "use the latest
+    # impact's event" reattributes it to the battery drop instead.
+    session = _blocked_session()
+    cloud_block_event_id = session.get_events()[-1].id
+
+    battery_event = session.inject_battery_drop("SAT-001", 400.0)
+    assert battery_event.id != cloud_block_event_id
+
+    version_two = session.replan()
+    traces = session.get_traces(version_two.id)
+    obs_b_trace = next(trace for trace in traces if trace.request_id == "OBS-B")
+
+    assert obs_b_trace.event_id == cloud_block_event_id
+
+
 def test_reset_clears_every_plan_version_and_trace():
     session = _blocked_session()
     session.replan()

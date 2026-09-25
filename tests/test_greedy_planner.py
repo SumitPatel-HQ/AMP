@@ -103,9 +103,16 @@ def test_greedy_planner_sorts_by_priority_then_deadline_then_duration_then_id():
     assert plan.actions[0].request_id == "OBS-HIGH"
     assert plan.unscheduled[0].request_id == "OBS-LOW"
     assert plan.unscheduled[0].reason_code is ReasonCode.INSUFFICIENT_BATTERY
+    # A dropped request is not a constraint violation in the resulting
+    # plan (SRD 17) -- the plan itself is fully valid.
+    assert plan.violation_count == 0
 
 
 def test_greedy_planner_breaks_a_priority_tie_on_earlier_deadline():
+    # Both requests share one wide window. The tie-break decides who is
+    # tried (and lands) first; since the window is wide enough for both,
+    # the second no longer gets dropped (GAP-04) -- it is placed right
+    # after the first one's slot instead.
     requests = (
         _request(id="OBS-EARLY", priority=3, deadline=START + timedelta(hours=1)),
         _request(id="OBS-LATE", priority=3, deadline=END),
@@ -116,9 +123,9 @@ def test_greedy_planner_breaks_a_priority_tie_on_earlier_deadline():
 
     plan = GreedyPlanner().plan(scenario, mission_state, requests, windows)
 
-    assert plan.actions[0].request_id == "OBS-EARLY"
-    assert plan.unscheduled[0].request_id == "OBS-LATE"
-    assert plan.unscheduled[0].reason_code is ReasonCode.TIME_OVERLAP
+    assert plan.unscheduled == ()
+    assert [action.request_id for action in plan.actions] == ["OBS-EARLY", "OBS-LATE"]
+    assert plan.actions[1].start == plan.actions[0].end
 
 
 def test_greedy_planner_breaks_a_deadline_tie_on_shorter_duration():
@@ -132,8 +139,9 @@ def test_greedy_planner_breaks_a_deadline_tie_on_shorter_duration():
 
     plan = GreedyPlanner().plan(scenario, mission_state, requests, windows)
 
-    assert plan.actions[0].request_id == "OBS-SHORT"
-    assert plan.unscheduled[0].request_id == "OBS-LONG"
+    assert plan.unscheduled == ()
+    assert [action.request_id for action in plan.actions] == ["OBS-SHORT", "OBS-LONG"]
+    assert plan.actions[1].start == plan.actions[0].end
 
 
 def test_greedy_planner_breaks_a_duration_tie_on_ascending_request_id():
@@ -147,8 +155,32 @@ def test_greedy_planner_breaks_a_duration_tie_on_ascending_request_id():
 
     plan = GreedyPlanner().plan(scenario, mission_state, requests, windows)
 
+    assert plan.unscheduled == ()
+    assert [action.request_id for action in plan.actions] == ["OBS-A", "OBS-B"]
+    assert plan.actions[1].start == plan.actions[0].end
+
+
+def test_greedy_planner_drops_the_tie_loser_when_the_window_has_no_room_for_both():
+    # Same tie-break as above, but the window is only wide enough for one
+    # request's duration, so the loser is genuinely unschedulable.
+    requests = (
+        _request(id="OBS-B", priority=3, duration_s=300.0),
+        _request(id="OBS-A", priority=3, duration_s=300.0),
+    )
+    scenario = _scenario(_satellite(), requests)
+    narrow_window_end = START + timedelta(seconds=300)
+    windows = [
+        _window("OBS-B", end=narrow_window_end),
+        _window("OBS-A", end=narrow_window_end),
+    ]
+    mission_state = MissionState.initial(scenario)
+
+    plan = GreedyPlanner().plan(scenario, mission_state, requests, windows)
+
+    assert len(plan.actions) == 1
     assert plan.actions[0].request_id == "OBS-A"
     assert plan.unscheduled[0].request_id == "OBS-B"
+    assert plan.unscheduled[0].reason_code is ReasonCode.TIME_OVERLAP
 
 
 def test_five_actions_costing_20_wh_each_are_not_all_scheduled_when_only_25_wh_remains():
@@ -169,6 +201,38 @@ def test_five_actions_costing_20_wh_each_are_not_all_scheduled_when_only_25_wh_r
     assert len(plan.actions) == 1
     assert len(plan.unscheduled) == 4
     assert all(entry.reason_code is ReasonCode.INSUFFICIENT_BATTERY for entry in plan.unscheduled)
+
+
+def test_greedy_planner_never_commits_a_later_higher_priority_action_the_earlier_one_cannot_afford():
+    # Regression for GAP-03: the planner commits in priority order, not
+    # time order, so a later-starting, higher-priority action can pass
+    # its own candidate check before an earlier-starting, lower-priority
+    # one is even considered. The chronological re-check
+    # (ResourceProjection.check_commit) must reject the earlier action
+    # instead of letting both through and producing a plan that
+    # validate_plan() would reject.
+    satellite = _satellite(battery_charge_wh=15.0)
+    requests = (
+        _request(id="OBS-HI", priority=5, energy_cost_wh=10.0, duration_s=60.0, deadline=END),
+        _request(id="OBS-LO", priority=1, energy_cost_wh=10.0, duration_s=60.0, deadline=END),
+    )
+    scenario = _scenario(satellite, requests)
+    windows = [
+        _window("OBS-HI", start=START + timedelta(hours=2), end=START + timedelta(hours=3)),
+        _window("OBS-LO", start=START, end=START + timedelta(hours=1)),
+    ]
+    mission_state = MissionState.initial(scenario)
+
+    plan = GreedyPlanner().plan(scenario, mission_state, requests, windows)
+
+    scheduled_ids = {action.request_id for action in plan.actions}
+    assert scheduled_ids == {"OBS-HI"}
+    assert plan.unscheduled[0].request_id == "OBS-LO"
+    assert plan.unscheduled[0].reason_code is ReasonCode.INSUFFICIENT_BATTERY
+    # The resulting plan is fully valid -- battery is never overdrawn in
+    # chronological order -- so validate_plan finds no violations and
+    # violation_count must agree (GAP-09).
+    assert plan.violation_count == 0
 
 
 def test_nothing_fits_produces_an_empty_plan_with_a_reason_per_request_and_raises_no_error():
