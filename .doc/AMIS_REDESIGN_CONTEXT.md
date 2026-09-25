@@ -678,78 +678,15 @@ Summary: implement the adaptive loop as one sequence `Current Plan → Configure
 
 ### Prompt 5 — Plan Comparison + Decision Trace / Explainability
 
-**Primary source:** AMIS plan-diff and DecisionTrace backend data.  
-**Reference:** Open MCT for inspection/detail interaction patterns.
+Full spec moved to `./AMIS_PROMPT_5_PLAN_COMPARISON_TRACE.md` — that file is authoritative for this stage.
 
-These are combined because they answer one question together: **What changed, and why did AMIS change it?** Implementing them separately would create duplicate selection and layout work.
-
-**Implement:**
-- create a focused Plan V1 <-> Plan V2 comparison surface associated with the timeline rather than an isolated generic card;
-- represent backend diff statuses such as UNCHANGED, MOVED, INSERTED, DROPPED and COMPLETED exactly according to available API/domain data;
-- show old/new placement details where relevant;
-- pair each changed request/action with its actual DecisionTrace/reason data when available;
-- selecting a diff row should highlight the corresponding timeline item and, when applicable, map target/request;
-- selecting a trace should highlight the mission object/change it explains;
-- make reason codes readable with concise labels, but preserve the canonical code and do not invent causal explanations;
-- distinguish planning/replanning traces from expiry traces where relevant;
-- keep unchanged items visually quieter so changed items dominate analysis.
-
-**Do not:**
-- calculate an alternative diff client-side when backend comparison exists;
-- use LLM-generated explanations;
-- imply a trace explains a change if the backend does not link/support it;
-- hide dropped/unscheduled requests just because they have no timeline rectangle.
-
-**Acceptance criteria:** after a replan, a reviewer can select a changed request and immediately determine its previous state, new state, change classification and backend-supported reason.
+Summary: build the Vn ↔ Vn+1 comparison surface next to the Prompt 3 `vis-timeline`, using backend diff statuses and DecisionTrace/reason codes exactly as supplied, with two-way highlight to timeline/map, unchanged items quiet, dropped/unscheduled still visible, Impact vs Diff kept separate per Prompt 4 file. Stop after Prompt 5.
 
 ### Prompt 6 — Mission Evaluation Metrics + Frontend/Backend Contract Audit + Proven Fixes
 
-**Primary source:** AMIS metrics/domain/API.
+Full spec moved to `./AMIS_PROMPT_6_METRICS_CONTRACT_AUDIT.md` — that file is authoritative for this stage.
 
-This prompt intentionally combines metrics with the contract audit because, by this point, every major user workflow exists. The agent can now identify actual API gaps from implementation evidence rather than speculating. Backend changes are allowed here only when the audit proves they are needed.
-
-**Part A - Metrics UX:**
-- present utility, completion, violations, resource utilization, plan churn, explanation coverage and request-pool context compactly;
-- associate metrics with the exact plan/version they describe;
-- make before/after comparison understandable where both plans are available;
-- respect `null` as N/A for empty denominators; never render N/A as 0%;
-- visibly flag when compared metrics use different request pools;
-- avoid decorative charts when a compact value/delta/status communicates the metric better;
-- use Recharts only where a real chart adds information.
-
-**Part B - Contract audit:**
-For each redesigned surface/workflow, produce an explicit matrix:
-
-`UI requirement -> current frontend source -> API endpoint/DTO -> domain object -> persistence/source -> status (supported / awkward / missing)`
-
-Audit at least:
-- mission header/state;
-- requests/windows;
-- map;
-- timeline;
-- events;
-- persisted impact;
-- replanning;
-- plan comparison;
-- decision traces;
-- metrics.
-
-**Part C - Targeted fixes:**
-- fix only gaps demonstrated by the matrix;
-- prefer a small read endpoint/DTO/projection over changing planner/domain behavior;
-- keep MissionSession as facade;
-- preserve scenario immutability/event-log semantics;
-- preserve deterministic domain behavior;
-- update generated OpenAPI TypeScript types after API changes;
-- add/update backend and frontend tests for every contract change.
-
-**Do not:**
-- perform a general backend cleanup;
-- replace the planner/replanner because the UI would prefer a different shape;
-- add speculative APIs for future features;
-- introduce database-shaped DTOs into React.
-
-**Acceptance criteria:** metrics correctly describe specific plans; the audit is written down; every backend change maps to a demonstrated UI requirement; no unexplained architectural rewrite occurs; all relevant backend tests and frontend build/typecheck pass.
+Summary: present version-bound metrics compactly (`null`=N/A), write the UI→frontend→API→domain→persistence audit matrix for all surfaces incl. `vis-timeline`, then fix only matrix-proven gaps with small read DTOs, keeping MissionSession facade, immutability and determinism. Stop after Prompt 6.
 
 ### Prompt 7 — Cross-Surface Integration + UX/Visual Polish + Cleanup
 

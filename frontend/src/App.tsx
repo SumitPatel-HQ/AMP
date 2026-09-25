@@ -1,6 +1,6 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { missionTransition, type MissionTransition } from "./state/missionTransition";
-import { knownPlans, planLabel } from "./state/planContext";
+import { knownPlans } from "./state/planContext";
 import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
@@ -8,10 +8,9 @@ import { MissionBar } from "./panels/MissionBar";
 import { MissionMapPanel } from "./panels/MissionMapPanel";
 import { MissionNavPanel } from "./panels/MissionNavPanel";
 import { MissionTransitionStrip } from "./panels/MissionTransitionStrip";
-import { ReplanOutcomePanel } from "./panels/ReplanOutcomePanel";
+import { PlanComparisonPanel } from "./panels/PlanComparisonPanel";
 import { StatePanel } from "./panels/StatePanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
-import { TracePanel } from "./panels/TracePanel";
 
 type Session = ReturnType<typeof useMissionSession>;
 
@@ -31,11 +30,6 @@ function MissionWorkspace({
 }) {
   const { selection, replanResult } = session;
   const plans = knownPlans(session.plan, replanResult);
-  // The replan the trace and evaluation describe, named once for both panels.
-  const replanContext =
-    replanResult === null
-      ? null
-      : `${planLabel(replanResult.initialPlan.id, plans)} → ${planLabel(replanResult.revisedPlan.id, plans)}`;
   return (
     <main className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(220px,18rem)_minmax(0,1fr)_minmax(240px,19rem)] grid-rows-[minmax(220px,1.1fr)_minmax(190px,1fr)_minmax(150px,0.8fr)] gap-1 p-1">
       <MissionNavPanel
@@ -86,28 +80,20 @@ function MissionWorkspace({
         onSelectEvent={session.selectEvent}
       />
       <div className="col-span-3 grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-1">
-        <div className="flex min-h-0 min-w-0 flex-col gap-1">
-          <ImpactPanel
-            impact={session.impact}
-            events={session.events}
-            plans={plans}
-            earlier={!transition.stages.some((stage) => stage.kind === "impact")}
-            selectedRequestId={selection.requestId}
-            onSelectRequest={session.selectRequest}
-            className="flex-1"
-          />
-          <ReplanOutcomePanel
-            replanResult={replanResult}
-            plans={plans}
-            selectedRequestId={selection.requestId}
-            onSelectRequest={session.selectRequest}
-          />
-        </div>
-        <TracePanel
-          traces={replanResult?.traces ?? []}
-          planContext={replanContext}
+        <ImpactPanel
+          impact={session.impact}
+          events={session.events}
+          plans={plans}
+          earlier={!transition.stages.some((stage) => stage.kind === "impact")}
           selectedRequestId={selection.requestId}
           onSelectRequest={session.selectRequest}
+        />
+        <PlanComparisonPanel
+          replanResult={replanResult}
+          plans={plans}
+          selectedRequestId={selection.requestId}
+          onSelectRequest={session.selectRequest}
+          onSelectWindow={session.selectWindow}
         />
         <MetricsPanel diff={replanResult?.diff ?? null} plans={plans} />
       </div>

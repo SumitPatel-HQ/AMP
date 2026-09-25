@@ -611,28 +611,39 @@ describe("mission dashboard", () => {
     expect(churnRow?.textContent).toContain("67%");
   });
 
-  it("lists each decision trace with its reason code and generated sentence after a replan", async () => {
+  it("compares the two plan versions after a replan, with placement, classification and backend reason", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
     expect(
-      screen.getByText("Replan to see why each request moved, was inserted, or was dropped."),
+      screen.getByText(/Each changed request shows its previous placement/),
     ).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    const entry = within(screen.getByRole("list", { name: "Decision trace" })).getByRole(
+    const entry = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
       "button",
       { name: /OBS-A/ },
     );
+    expect(entry.getAttribute("data-change")).toBe("MOVED");
+    expect(entry.textContent).toContain("2026-09-21 10:10 UTC");
+    expect(entry.textContent).toContain("2026-09-21 11:00 UTC");
+    expect(entry.textContent).toContain("WIN-OBS-A-1");
     expect(entry.textContent).toContain("ALTERNATIVE_WINDOW_AVAILABLE");
     expect(entry.textContent).toContain(traces[0].message);
+
+    const dropped = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
+      "button",
+      { name: /OBS-C/ },
+    );
+    expect(dropped.getAttribute("data-change")).toBe("DROPPED");
+    expect(dropped.textContent).toContain("WINDOW_INVALIDATED");
   });
 
-  it("highlights the matching request on the mission timeline when a trace entry is clicked", async () => {
+  it("highlights the matching request on the mission timeline when a comparison row is clicked", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -641,7 +652,7 @@ describe("mission dashboard", () => {
     await screen.findByLabelText("Current plan V2");
 
     await user.click(
-      within(screen.getByRole("list", { name: "Decision trace" })).getByRole("button", {
+      within(screen.getByRole("list", { name: "Plan comparison" })).getByRole("button", {
         name: /OBS-A/,
       }),
     );
@@ -957,7 +968,7 @@ describe("mission dashboard", () => {
 
     const section = (name: string) => screen.getByRole("region", { name });
     expect(section("Impact").textContent).toContain("EVT-1 on V1");
-    expect(section("Decision trace").textContent).toContain("V1 → V2");
+    expect(section("Plan comparison").textContent).toContain("V1 → V2");
     expect(section("Mission evaluation").textContent).toContain("V1 → V2");
     // Impact actions belong to the plan the event evaluated, not the revised one.
     const impactRow = within(section("Impact")).getByText("OBS-A").closest("li");
@@ -1298,7 +1309,7 @@ describe("mission dashboard", () => {
     expect(within(summary).queryByRole("listitem", { name: "Replanning" })).toBeNull();
   });
 
-  it("keeps the evaluated plan's impact and lists requests the replan newly left unscheduled", async () => {
+  it("keeps the evaluated plan's impact and compares the replan's dropped requests beside it", async () => {
     installSuccessfulApi();
     api.injectEvent.mockResolvedValue({
       id: "EVT-1",
@@ -1330,15 +1341,16 @@ describe("mission dashboard", () => {
 
     const impact = screen.getByRole("region", { name: "Impact" });
     expect(impact.textContent).toContain("What became invalid in V1 because of this event");
-    // The replan's result sits beside Impact, not inside it.
-    expect(within(impact).queryByRole("region", { name: "Replan outcome" })).toBeNull();
-    const outcome = screen.getByRole("region", { name: "Replan outcome" });
-    expect(outcome.textContent).toContain("Replanned → V2 from V1");
-    expect(outcome.textContent).toContain("V1 kept unchanged");
-    const dropped = within(outcome).getAllByRole("listitem");
-    expect(dropped.map((item) => item.textContent)).toEqual([
-      "OBS-C unscheduled · WINDOW_INVALIDATED",
-    ]);
+    // The replan's comparison sits beside Impact, not inside it.
+    expect(within(impact).queryByRole("region", { name: "Plan comparison" })).toBeNull();
+    const comparison = screen.getByRole("region", { name: "Plan comparison" });
+    expect(comparison.textContent).toContain("V1 → V2");
+    const dropped = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
+      "button",
+      { name: /OBS-C/ },
+    );
+    expect(dropped.getAttribute("data-change")).toBe("DROPPED");
+    expect(dropped.textContent).toContain("WINDOW_INVALIDATED");
     // Plan V1 stays available after V2 exists.
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const plans = within(screen.getByRole("list", { name: "Mission plans" })).getAllByRole("button");
