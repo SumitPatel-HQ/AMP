@@ -217,6 +217,8 @@ function buildWindowItems(
           window.id,
           `${formatUtc(window.start)} to ${formatUtc(window.end)}`,
           window.valid ? "Valid observation window" : window.invalid_reason ?? "Invalid window",
+          window.peak_elevation_deg == null ? "" : `peak ${window.peak_elevation_deg.toFixed(1)}°; off-nadir ${window.min_off_nadir_deg?.toFixed(1)}°; Sun ${window.sun_elevation_deg?.toFixed(1) ?? "n/a"}°`,
+          window.source ?? "",
         ].join(" | "),
       };
     });

@@ -43,6 +43,7 @@ class ReasonCode(str, Enum):
     DISPLACED_BY_COMPETING_REQUEST = "DISPLACED_BY_COMPETING_REQUEST"
     ALTERNATIVE_WINDOW_AVAILABLE = "ALTERNATIVE_WINDOW_AVAILABLE"
     NO_ALTERNATIVE_WINDOW = "NO_ALTERNATIVE_WINDOW"
+    NO_OBSERVATION_WINDOW = "NO_OBSERVATION_WINDOW"
     REQUEST_UNCHANGED = "REQUEST_UNCHANGED"
     # In the SRD 6 minimum vocabulary but previously missing here: the
     # correct cause for a request that entered the pool after the

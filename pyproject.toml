@@ -8,6 +8,8 @@ dependencies = [
     "uvicorn>=0.30,<1",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
+    "skyfield==1.55",
+    "sgp4==2.27",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +24,9 @@ postgres = [
 
 [tool.setuptools.packages.find]
 include = ["amis*"]
+
+[tool.setuptools.package-data]
+amis = ["data/elements/*.json", "data/ephemeris/*.json", "data/ephemeris/*.bsp"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

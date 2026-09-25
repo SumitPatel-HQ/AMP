@@ -42,6 +42,7 @@ _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
     ReasonCode.DISPLACED_BY_COMPETING_REQUEST: "a competing request took its window",
     ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE: "an alternative window was available",
     ReasonCode.NO_ALTERNATIVE_WINDOW: "no other window fits it",
+    ReasonCode.NO_OBSERVATION_WINDOW: "no observation window exists for its target during the mission",
     ReasonCode.REQUEST_UNCHANGED: "nothing the event changed affected it",
     ReasonCode.HIGHER_PRIORITY_TASK_INSERTED: "it entered the pool and was scheduled",
 }
@@ -49,6 +50,7 @@ _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
 _CONSTRAINT_BY_REASON_CODE: dict[ReasonCode, Optional[str]] = {
     ReasonCode.WINDOW_INVALIDATED: "window_containment",
     ReasonCode.NO_ALTERNATIVE_WINDOW: "window_containment",
+    ReasonCode.NO_OBSERVATION_WINDOW: "window_containment",
     ReasonCode.INSUFFICIENT_BATTERY: "projected_battery",
     ReasonCode.INSUFFICIENT_STORAGE: "projected_storage",
     ReasonCode.DEADLINE_VIOLATION: "deadline",

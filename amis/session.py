@@ -116,7 +116,9 @@ class MissionSession:
             raise SimulationStateError(
                 "a mission plan already exists; use replan() to create a new version"
             )
-        if not self._windows:
+        if not self._windows and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
+            self._windows = self._window_provider.generate(scenario, scenario.requests)
+        if not self._windows and not (scenario.window_policy is not None and scenario.window_policy.provider == "orbital"):
             raise SimulationStateError(
                 "observation windows must be generated before planning"
             )
@@ -300,6 +302,12 @@ class MissionSession:
             event_payload = self._parse_battery_drop_payload(payload)
             self._validate_battery_drop(event_payload)
         elif parsed_event_type is EventType.EMERGENCY_TASK:
+            if isinstance(payload, dict) and payload.get("windows") is None and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
+                try:
+                    request = ObservationRequest.from_dict(payload["request"])
+                    payload = {**payload, "windows": [window.to_dict() for window in self._window_provider.generate(scenario, (request,))]}
+                except (KeyError, TypeError, ValueError) as error:
+                    raise InvalidEventError("could not generate emergency observation windows") from error
             event_payload = self._parse_emergency_request_payload(payload)
             self._validate_emergency_request(event_payload)
         else:
@@ -793,7 +801,7 @@ class MissionSession:
                 "emergency request deadline must include a timezone",
                 details={"request_id": request.id},
             )
-        if not windows:
+        if not windows and not (scenario.window_policy is not None and scenario.window_policy.provider == "orbital"):
             raise InvalidEventError(
                 "emergency request requires at least one explicit observation window",
                 details={"request_id": request.id},

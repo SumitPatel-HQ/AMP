@@ -11,6 +11,10 @@ import type {
   PlanDiffSchema,
   MetricsSchema,
   DecisionTraceSchema,
+  ScenarioSummarySchema,
+  ScenarioPreviewSchema,
+  OrbitalElementsSchema,
+  GroundTrackPointSchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -28,6 +32,52 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 
 export async function fetchDemoScenario(): Promise<ScenarioSchema> {
   return unwrap(await client.GET("/demo/scenario"));
+}
+
+export async function fetchExamples(): Promise<ScenarioSummarySchema[]> {
+  return unwrap(await client.GET("/examples"));
+}
+
+export async function fetchExample(id: string): Promise<ScenarioSchema> {
+  return unwrap(await client.GET("/examples/{example_id}", { params: { path: { example_id: id } } }));
+}
+
+export async function fetchMissions(): Promise<ScenarioSummarySchema[]> {
+  return unwrap(await client.GET("/scenarios"));
+}
+
+export async function fetchScenario(id: string): Promise<ScenarioSchema> {
+  return unwrap(await client.GET("/scenarios/{scenario_id}", { params: { path: { scenario_id: id } } }));
+}
+
+export async function fetchMissionPlans(id: string): Promise<MissionPlanSchema[]> {
+  return unwrap(await client.GET("/scenarios/{scenario_id}/plans", { params: { path: { scenario_id: id } } }));
+}
+
+export async function fetchOrbitalElements(): Promise<OrbitalElementsSchema[]> {
+  return unwrap(await client.GET("/orbital-elements"));
+}
+
+export async function parseTle(name: string, line1: string, line2: string): Promise<OrbitalElementsSchema> {
+  return unwrap(await client.POST("/orbital-elements/parse-tle", { body: { name, line1, line2 } }));
+}
+
+export async function validateScenario(scenario: ScenarioSchema): Promise<ScenarioPreviewSchema> {
+  return unwrap(await client.POST("/scenarios/validate", { body: scenario }));
+}
+
+export async function fetchGroundTrack(id: string): Promise<GroundTrackPointSchema[]> {
+  return unwrap(await client.GET("/scenarios/{scenario_id}/ground-track", {
+    params: { path: { scenario_id: id }, query: { step_s: 60 } },
+  }));
+}
+
+export async function fetchSatellitePosition(id: string, time: string): Promise<GroundTrackPointSchema> {
+  const points = unwrap(await client.GET("/scenarios/{scenario_id}/ground-track", {
+    params: { path: { scenario_id: id }, query: { start: time, end: time, step_s: 30 } },
+  }));
+  if (points[0] === undefined) throw new Error("position sample was empty");
+  return points[0];
 }
 
 export async function createScenario(scenario: ScenarioSchema): Promise<ScenarioSchema> {

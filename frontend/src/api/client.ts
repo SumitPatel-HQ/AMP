@@ -7,6 +7,10 @@ const API_BASE_URL =
 export const client = createClient<paths>({ baseUrl: API_BASE_URL });
 
 export type ScenarioSchema = components["schemas"]["ScenarioSchema"];
+export type ScenarioSummarySchema = components["schemas"]["ScenarioSummarySchema"];
+export type ScenarioPreviewSchema = components["schemas"]["ScenarioPreviewSchema"];
+export type OrbitalElementsSchema = components["schemas"]["OrbitalElementsSchema"];
+export type GroundTrackPointSchema = components["schemas"]["GroundTrackPointSchema"];
 export type ObservationRequestSchema = components["schemas"]["ObservationRequestSchema"];
 export type ObservationWindowSchema = components["schemas"]["ObservationWindowSchema"];
 export type MissionPlanSchema = components["schemas"]["MissionPlanSchema"];

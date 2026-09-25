@@ -1,8 +1,8 @@
 # AMIS mission dashboard
 
-The dashboard loads the canonical demo scenario, creates its initial mission plan, and shows the plan beside the current mission state. It uses Vite, React, TypeScript, Tailwind CSS, and a `vis-timeline` mission timeline.
+The dashboard creates orbital or synthetic missions, reopens saved missions with plan history, and offers copyable examples. The mission builder previews windows before creation and accepts catalogue elements or a pasted TLE pair. It uses Vite, React, TypeScript, Tailwind CSS, and a `vis-timeline` mission timeline.
 
-The mission map draws on a MapLibre GL vector basemap with a deck.gl overlay for targets, the plan sequence, event rings, and the satellite position inferred from the plan. The basemap loads OpenFreeMap's dark style, falls back to CARTO Dark Matter, and finally to an offline land outline bundled with the app, so the map still draws without network access. MapLibre and deck.gl load lazily when the map mounts. The map needs WebGL.
+The mission map draws on a MapLibre GL vector basemap with a deck.gl overlay for targets, the plan sequence, event rings, and a satellite marker. Orbital missions use the server's ground track and exact position at the simulated time. Synthetic missions retain plan-derived placement. The basemap loads OpenFreeMap's dark style, falls back to CARTO Dark Matter, and finally to an offline land outline bundled with the app. MapLibre and deck.gl load lazily when the map mounts. The map needs WebGL.
 
 ## Run locally
 

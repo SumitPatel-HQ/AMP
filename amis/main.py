@@ -15,18 +15,18 @@ from sqlalchemy import create_engine
 
 from amis.api import create_app
 from amis.config import get_database_url
-from amis.demo import ProductionWindowProvider
+from amis.windows.selection import ScenarioWindowProvider
 
 
 def build_app() -> FastAPI:
     database_url = get_database_url()
     if database_url is None:
-        return create_app(window_provider=ProductionWindowProvider())
+        return create_app(window_provider=ScenarioWindowProvider())
 
     from amis.db import build_repositories
 
     engine = create_engine(database_url)
-    return create_app(build_repositories(engine), window_provider=ProductionWindowProvider())
+    return create_app(build_repositories(engine), window_provider=ScenarioWindowProvider())
 
 
 app = build_app()

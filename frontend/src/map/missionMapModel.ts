@@ -5,6 +5,7 @@ import type {
   ObservationRequestSchema,
   ScenarioSchema,
   ScheduledActionSchema,
+  GroundTrackPointSchema,
 } from "../api/client";
 import { missionRequestPool } from "../state/missionEvent";
 import { eventAnchorRequestId } from "../timeline/missionTimelineModel";
@@ -45,6 +46,7 @@ export interface MissionMapModel {
   satellite: SatellitePlacement | null;
   /** Targets in the order the current plan visits them. */
   planSequence: Coordinate[];
+  groundTrack?: Coordinate[][];
   /** [west, south, east, north] around every target, or null with none. */
   bounds: [number, number, number, number] | null;
 }
@@ -151,6 +153,8 @@ export function buildMissionMapModel(
   events: MissionEventSchema[],
   /** Expired in the backend's request pool; the plan alone never says so. */
   expiredRequestIds: ReadonlySet<string> = new Set(),
+  groundTrack: readonly GroundTrackPointSchema[] = [],
+  satellitePosition: GroundTrackPointSchema | null = null,
 ): MissionMapModel {
   const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
@@ -177,10 +181,26 @@ export function buildMissionMapModel(
     };
   });
 
+  const segments: Coordinate[][] = [];
+  for (const point of groundTrack) {
+    const coordinate: Coordinate = [point.lon, point.lat];
+    const last = segments.at(-1);
+    if (last === undefined || (last.length > 0 && Math.abs(last.at(-1)![0] - point.lon) > 180)) {
+      segments.push([coordinate]);
+    } else {
+      last.push(coordinate);
+    }
+  }
+  const now = missionState === null ? NaN : new Date(missionState.simulated_time).getTime();
+  const nearest = groundTrack.reduce<GroundTrackPointSchema | null>((best, point) =>
+    best === null || Math.abs(new Date(point.time).getTime() - now) < Math.abs(new Date(best.time).getTime() - now)
+      ? point : best, null);
   return {
     targets,
-    satellite: satellitePlacement(scenario, plan, missionState?.simulated_time ?? null, requestPool),
+    satellite: (satellitePosition ?? nearest) === null ? satellitePlacement(scenario, plan, missionState?.simulated_time ?? null, requestPool)
+      : { satelliteId: scenario.satellite.id, coordinate: [(satellitePosition ?? nearest)!.lon, (satellitePosition ?? nearest)!.lat], overRequestId: null },
     planSequence: scheduledActionPoints(requestPool, plan).map((point) => point.coordinate),
+    groundTrack: segments,
     bounds: targetBounds(targets),
   };
 }

@@ -5,11 +5,16 @@ import {
   createPlan,
   createScenario,
   fetchDemoScenario,
+  fetchExample,
   fetchEvents,
+  fetchGroundTrack,
   fetchImpact,
   fetchMetrics,
+  fetchMissionPlans,
   fetchPlan,
   fetchRequests,
+  fetchScenario,
+  fetchSatellitePosition,
   fetchState,
   fetchTraces,
   fetchWindows,
@@ -28,6 +33,7 @@ import type {
   ObservationRequestSchema,
   ObservationWindowSchema,
   ScenarioSchema,
+  GroundTrackPointSchema,
 } from "../api/client";
 import { eventAnchorRequestId, eventAnchorWindowId } from "../timeline/missionTimelineModel";
 import { EMPTY_SELECTION } from "./types";
@@ -46,6 +52,8 @@ export interface MissionSessionState {
   missionState: MissionStateSchema | null;
   events: MissionEventSchema[];
   windows: ObservationWindowSchema[];
+  groundTrack: GroundTrackPointSchema[];
+  satellitePosition: GroundTrackPointSchema | null;
   /** The backend's request pool with live statuses, emergency arrivals included. */
   requestPool: ObservationRequestSchema[];
   /** The current plan's metrics, measured at the current mission state. */
@@ -64,6 +72,9 @@ export interface MissionSessionState {
   stalePlan: boolean;
   error: MissionSessionError | null;
   loadDemoScenario: () => Promise<void>;
+  loadExample: (id: string) => Promise<void>;
+  loadMission: (id: string) => Promise<void>;
+  createMission: (draft: ScenarioSchema) => Promise<boolean>;
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
   retryComparison: () => Promise<void>;
@@ -109,6 +120,8 @@ export function useMissionSession(): MissionSessionState {
   const [missionState, setMissionState] = useState<MissionStateSchema | null>(null);
   const [events, setEvents] = useState<MissionEventSchema[]>([]);
   const [windows, setWindows] = useState<ObservationWindowSchema[]>([]);
+  const [groundTrack, setGroundTrack] = useState<GroundTrackPointSchema[]>([]);
+  const [satellitePosition, setSatellitePosition] = useState<GroundTrackPointSchema | null>(null);
   const [requestPool, setRequestPool] = useState<ObservationRequestSchema[]>([]);
   const [metrics, setMetrics] = useState<MetricsSchema | null>(null);
   const [impact, setImpact] = useState<ImpactSchema | null>(null);
@@ -150,41 +163,83 @@ export function useMissionSession(): MissionSessionState {
     setMetrics(nextMetrics);
   }, []);
 
-  const loadDemoScenario = useCallback(async () => {
+  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {
+    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
+      fetchMissionPlans(loaded.id), fetchWindows(loaded.id), fetchState(loaded.id),
+      fetchEvents(loaded.id), fetchRequests(loaded.id),
+      loaded.satellite.orbit ? fetchGroundTrack(loaded.id) : Promise.resolve([]),
+    ]);
+    const current = nextPlans.at(-1) ?? null;
+    const [nextMetrics, nextImpact] = await Promise.all([
+      current === null ? Promise.resolve(null) : fetchMetrics(current.id),
+      nextEvents.length === 0 ? Promise.resolve(null) : fetchImpactIfAny(loaded.id),
+    ]);
+    const nextPosition = loaded.satellite.orbit
+      ? await fetchSatellitePosition(loaded.id, nextState.simulated_time) : null;
+    let comparison: ReplanResult | null = null;
+    if (current?.parent_plan_id) {
+      const previous = nextPlans.find((item) => item.id === current.parent_plan_id);
+      if (previous) {
+        const [diff, traces] = await Promise.all([comparePlans(previous.id, current.id), fetchTraces(current.id)]);
+        comparison = { initialPlan: previous, revisedPlan: current, diff, traces };
+      }
+    }
+    setScenario(loaded);
+    setPlans(nextPlans);
+    setPlan(current);
+    setWindows(nextWindows);
+    setGroundTrack(nextTrack);
+    setSatellitePosition(nextPosition);
+    setMissionState(nextState);
+    setEvents(nextEvents);
+    setRequestPool(nextPool);
+    setMetrics(nextMetrics);
+    setImpact(nextImpact);
+    setReplanResult(comparison);
+    setPlanConflict(null);
+    setStalePlan(false);
+    setSelection(EMPTY_SELECTION);
+  }, []);
+
+  const createMission = useCallback(async (draft: ScenarioSchema): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
-      const demo = await fetchDemoScenario();
-      const demoSession = {
-        ...demo,
-        id: `${demo.id}-${crypto.randomUUID()}`,
-      };
-      const loaded = await createScenario(demoSession);
-      setScenario(loaded);
-      setMissionState(null);
-      setEvents([]);
-      // Until the backend's pool arrives, the new scenario's own requests are
-      // the pool; the previous scenario's pool and metrics describe nothing.
-      setRequestPool(loaded.requests);
-      setMetrics(null);
-      setPlan(null);
-      setPlans([]);
-      setWindows([]);
-      setImpact(null);
-      setReplanResult(null);
-      setPlanConflict(null);
-      setStalePlan(false);
-      setSelection(EMPTY_SELECTION);
-      await Promise.all([
-        refetchStateAndEvents(loaded.id),
-        refetchPoolAndMetrics(loaded.id, null),
-      ]);
+      const loaded = await createScenario(draft);
+      await openLoaded(loaded);
+      return true;
     } catch (caught) {
       setError(describeError(caught));
+      return false;
     } finally {
       setLoading(false);
     }
-  }, [refetchStateAndEvents, refetchPoolAndMetrics]);
+  }, [openLoaded]);
+
+  const loadMission = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try { await openLoaded(await fetchScenario(id)); }
+    catch (caught) { setError(describeError(caught)); }
+    finally { setLoading(false); }
+  }, [openLoaded]);
+
+  const loadExample = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const example = await fetchExample(id);
+      await openLoaded(await createScenario({ ...example, id: `${example.id}-${crypto.randomUUID()}` }));
+    } catch (caught) { setError(describeError(caught)); }
+    finally { setLoading(false); }
+  }, [openLoaded]);
+
+  const loadDemoScenario = useCallback(async () => {
+    try {
+      const example = await fetchDemoScenario();
+      await createMission({ ...example, id: `${example.id}-${crypto.randomUUID()}` });
+    } catch (caught) { setError(describeError(caught)); }
+  }, [createMission]);
 
   const generatePlan = useCallback(async () => {
     if (scenario === null) {
@@ -396,6 +451,7 @@ export function useMissionSession(): MissionSessionState {
       try {
         const nextState = await stepSimulation(scenario.id, seconds);
         setMissionState(nextState);
+        if (scenario.satellite.orbit) setSatellitePosition(await fetchSatellitePosition(scenario.id, nextState.simulated_time));
         const refreshPlan = async () => {
           if (plan === null) {
             return;
@@ -526,6 +582,8 @@ export function useMissionSession(): MissionSessionState {
     missionState,
     events,
     windows,
+    groundTrack,
+    satellitePosition,
     requestPool,
     metrics,
     impact,
@@ -537,6 +595,9 @@ export function useMissionSession(): MissionSessionState {
     stalePlan,
     error,
     loadDemoScenario,
+    loadExample,
+    loadMission,
+    createMission,
     generatePlan,
     replan,
     retryComparison,

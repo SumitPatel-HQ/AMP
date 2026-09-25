@@ -32,6 +32,15 @@ export function targetRadius(target: MapTarget): number {
 export function buildMissionLayers({ model, selectedRequestId, visibility }: MissionMapScene): Layer[] {
   const layers: Layer[] = [];
 
+  if (model.groundTrack?.length) {
+    layers.push(new PathLayer<{ path: Coordinate[] }>({
+      id: "amis-ground-track",
+      data: model.groundTrack.map((path) => ({ path })),
+      getPath: (item) => item.path as [number, number][],
+      getColor: [249, 115, 22, 130], getWidth: 1.5, widthUnits: "pixels",
+    }));
+  }
+
   if (visibility.sequence && model.planSequence.length > 1) {
     layers.push(
       new PathLayer<{ path: Coordinate[] }>({

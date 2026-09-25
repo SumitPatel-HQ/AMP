@@ -168,7 +168,12 @@ class GreedyPlanner:
                 unscheduled.append(
                     UnscheduledEntry(
                         request_id=request.id,
-                        reason_code=_unscheduled_reason(last_violation, previous_window_id),
+                        reason_code=(
+                            ReasonCode.NO_OBSERVATION_WINDOW
+                            if not candidates and scenario.window_policy is not None
+                            and previous_window_id is None
+                            else _unscheduled_reason(last_violation, previous_window_id)
+                        ),
                     )
                 )
 

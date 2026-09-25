@@ -21,7 +21,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/scenarios": {
+    "/examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Examples */
+        get: operations["list_examples_examples_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/examples/{example_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Example */
+        get: operations["get_example_examples__example_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orbital-elements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Elements */
+        get: operations["list_elements_orbital_elements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orbital-elements/{norad_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Elements */
+        get: operations["get_elements_orbital_elements__norad_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orbital-elements/parse-tle": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,6 +97,41 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /** Parse Tle */
+        post: operations["parse_tle_orbital_elements_parse_tle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Scenario */
+        post: operations["validate_scenario_scenarios_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenarios */
+        get: operations["list_scenarios_scenarios_get"];
         put?: never;
         /** Create Scenario */
         post: operations["create_scenario_scenarios_post"];
@@ -47,6 +150,40 @@ export interface paths {
         };
         /** Get Scenario */
         get: operations["get_scenario_scenarios__scenario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenario_id}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plans */
+        get: operations["list_plans_scenarios__scenario_id__plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenario_id}/ground-track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ground Track */
+        get: operations["get_ground_track_scenarios__scenario_id__ground_track_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -410,7 +547,7 @@ export interface components {
         EmergencyTaskPayloadSchema: {
             request: components["schemas"]["ObservationRequestSchema"];
             /** Windows */
-            windows: components["schemas"]["ObservationWindowSchema"][];
+            windows?: components["schemas"]["ObservationWindowSchema"][] | null;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -430,6 +567,25 @@ export interface components {
         /** ErrorEnvelope */
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /** GroundTrackPointSchema */
+        GroundTrackPointSchema: {
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Altitude Km */
+            altitude_km: number;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** ImpactSchema */
         ImpactSchema: {
@@ -563,6 +719,8 @@ export interface components {
             storage_cost_mb: number;
             /** @default pending */
             status: components["schemas"]["RequestStatus"];
+            /** Target Name */
+            target_name?: string | null;
         };
         /** ObservationWindowSchema */
         ObservationWindowSchema: {
@@ -586,6 +744,47 @@ export interface components {
             valid: boolean;
             /** Invalid Reason */
             invalid_reason: string | null;
+            /** Peak Elevation Deg */
+            peak_elevation_deg?: number | null;
+            /** Peak Time */
+            peak_time?: string | null;
+            /** Min Off Nadir Deg */
+            min_off_nadir_deg?: number | null;
+            /** Sun Elevation Deg */
+            sun_elevation_deg?: number | null;
+            /** Source */
+            source?: string | null;
+        };
+        /** OrbitalElementsSchema */
+        OrbitalElementsSchema: {
+            /** Norad Id */
+            norad_id: number;
+            /** Name */
+            name: string;
+            /** International Designator */
+            international_designator: string;
+            /**
+             * Epoch
+             * Format: date-time
+             */
+            epoch: string;
+            /** Omm */
+            omm: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source: string;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Sha256 */
+            sha256: string;
+            /** Tle Line1 */
+            tle_line1?: string | null;
+            /** Tle Line2 */
+            tle_line2?: string | null;
         };
         /**
          * PlanChangeType
@@ -623,7 +822,7 @@ export interface components {
          * ReasonCode
          * @enum {string}
          */
-        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED";
+        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED";
         /** ReplanRequest */
         ReplanRequest: {
             /** Expected Parent Plan Id */
@@ -651,6 +850,25 @@ export interface components {
              * @default true
              */
             available: boolean;
+            orbit?: components["schemas"]["OrbitalElementsSchema"] | null;
+        };
+        /** ScenarioPreviewSchema */
+        ScenarioPreviewSchema: {
+            /** Errors */
+            errors: string[];
+            /** Warnings */
+            warnings: string[];
+            /** Windows */
+            windows: components["schemas"]["ObservationWindowSchema"][];
+            /** Window Counts */
+            window_counts: {
+                [key: string]: number;
+            };
+            /**
+             * Ground Track
+             * @default []
+             */
+            ground_track: components["schemas"]["GroundTrackPointSchema"][];
         };
         /** ScenarioSchema */
         ScenarioSchema: {
@@ -671,6 +889,26 @@ export interface components {
             satellite: components["schemas"]["SatelliteSchema"];
             /** Requests */
             requests: components["schemas"]["ObservationRequestSchema"][];
+            window_policy?: components["schemas"]["WindowPolicySchema"] | null;
+        };
+        /** ScenarioSummarySchema */
+        ScenarioSummarySchema: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Start Time
+             * Format: date-time
+             */
+            start_time: string;
+            /**
+             * End Time
+             * Format: date-time
+             */
+            end_time: string;
+            /** Provider */
+            provider: string;
         };
         /** ScheduledActionSchema */
         ScheduledActionSchema: {
@@ -703,11 +941,51 @@ export interface components {
             /** Seconds */
             seconds: number;
         };
+        /** TleParseRequest */
+        TleParseRequest: {
+            /** Name */
+            name: string;
+            /** Line1 */
+            line1: string;
+            /** Line2 */
+            line2: string;
+        };
         /** UnscheduledEntrySchema */
         UnscheduledEntrySchema: {
             /** Request Id */
             request_id: string;
             reason_code: components["schemas"]["ReasonCode"];
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
+        };
+        /** WindowPolicySchema */
+        WindowPolicySchema: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "synthetic" | "canonical_demo" | "orbital";
+            /**
+             * Max Off Nadir Deg
+             * @default 30
+             */
+            max_off_nadir_deg: number;
+            /**
+             * Min Sun Elevation Deg
+             * @default 10
+             */
+            min_sun_elevation_deg: number | null;
         };
     };
     responses: never;
@@ -734,6 +1012,196 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioSchema"];
+                };
+            };
+        };
+    };
+    list_examples_examples_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioSummarySchema"][];
+                };
+            };
+        };
+    };
+    get_example_examples__example_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                example_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_elements_orbital_elements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrbitalElementsSchema"][];
+                };
+            };
+        };
+    };
+    get_elements_orbital_elements__norad_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                norad_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrbitalElementsSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_tle_orbital_elements_parse_tle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TleParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrbitalElementsSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_scenario_scenarios_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioPreviewSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_scenarios_scenarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioSummarySchema"][];
                 };
             };
         };
@@ -816,6 +1284,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_plans_scenarios__scenario_id__plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionPlanSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ground_track_scenarios__scenario_id__ground_track_get: {
+        parameters: {
+            query?: {
+                start?: string | null;
+                end?: string | null;
+                step_s?: number;
+            };
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTrackPointSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -173,10 +173,12 @@ const EMERGENCY_FIELDS: { key: keyof EmergencyRequestForm; label: string; type: 
 function EmergencyRequestFields({
   initial,
   satelliteId,
+  orbital = false,
   onChange,
 }: {
   initial: EmergencyRequestForm;
   satelliteId: string;
+  orbital?: boolean;
   onChange: (event: MissionEventRequest | null) => void;
 }) {
   const [form, setForm] = useState(initial);
@@ -184,7 +186,7 @@ function EmergencyRequestFields({
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-        {EMERGENCY_FIELDS.map(({ key, label, type }) => (
+        {EMERGENCY_FIELDS.filter(({ key }) => !orbital || (key !== "windowStart" && key !== "windowEnd")).map(({ key, label, type }) => (
           <Field key={key} label={label}>
             <input
               aria-label={label}
@@ -194,7 +196,7 @@ function EmergencyRequestFields({
               onChange={(event) => {
                 const next = { ...form, [key]: event.target.value };
                 setForm(next);
-                onChange(buildEmergencyRequestEvent(next, satelliteId));
+                onChange(buildEmergencyRequestEvent(next, satelliteId, orbital));
               }}
               className={CONTROL_INPUT}
             />
@@ -202,7 +204,7 @@ function EmergencyRequestFields({
         ))}
       </div>
       <p className="text-[10px] text-neutral-500">
-        {`Enters through the event log with window ${windowId} on ${satelliteId}; the scenario itself stays unchanged.`}
+        {orbital ? "Observation windows are computed from the stored orbit before the event is recorded." : `Enters through the event log with window ${windowId} on ${satelliteId}; the scenario itself stays unchanged.`}
       </p>
     </div>
   );
@@ -241,7 +243,9 @@ export function EventControl({
     [scenario, events],
   );
   const [emergencyDefaults] = useState(() =>
-    emergencyRequestDefaults(missionState.simulated_time, requestIds),
+    scenario.window_policy?.provider === "orbital"
+      ? { ...emergencyRequestDefaults(missionState.simulated_time, requestIds), durationS: "30", deadline: scenario.end_time }
+      : emergencyRequestDefaults(missionState.simulated_time, requestIds),
   );
 
   const chooseType = (next: MissionEventType) => {
@@ -284,6 +288,7 @@ export function EventControl({
         <EmergencyRequestFields
           initial={emergencyDefaults}
           satelliteId={scenario.satellite.id}
+          orbital={scenario.window_policy?.provider === "orbital"}
           onChange={setConfigured}
         />
       )}

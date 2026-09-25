@@ -115,6 +115,9 @@ export function MissionBar({
   replanBlocked = false,
   missionContextStale = false,
   onLoadDemo,
+  onNewMission,
+  onLoadMission,
+  onExamples,
   onGeneratePlan,
   onStep,
   onInjectEvent,
@@ -135,6 +138,9 @@ export function MissionBar({
   replanBlocked?: boolean;
   missionContextStale?: boolean;
   onLoadDemo: () => void;
+  onNewMission: () => void;
+  onLoadMission: () => void;
+  onExamples: () => void;
   onGeneratePlan: () => void;
   onStep: (seconds: number) => void;
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
@@ -186,6 +192,9 @@ export function MissionBar({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <button type="button" className={CONTROL_BUTTON} onClick={onNewMission}>New mission</button>
+        <button type="button" className={CONTROL_BUTTON} onClick={onLoadMission}>Load mission</button>
+        <button type="button" className={CONTROL_BUTTON} onClick={onExamples}>Examples</button>
         <button
           type="button"
           onClick={() => {

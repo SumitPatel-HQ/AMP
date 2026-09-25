@@ -1,0 +1,63 @@
+"""Immutable orbital inputs carried by a mission, never fetched at runtime."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+
+@dataclass(frozen=True)
+class OrbitalElements:
+    norad_id: int
+    name: str
+    international_designator: str
+    epoch: datetime
+    omm: dict[str, Any]
+    source: str
+    retrieved_at: datetime
+    sha256: str
+    tle_line1: str | None = None
+    tle_line2: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "norad_id": self.norad_id, "name": self.name,
+            "international_designator": self.international_designator,
+            "epoch": self.epoch.isoformat(), "omm": self.omm,
+            "source": self.source, "retrieved_at": self.retrieved_at.isoformat(),
+            "sha256": self.sha256,
+        }
+        if self.tle_line1 is not None:
+            result["tle_line1"] = self.tle_line1
+            result["tle_line2"] = self.tle_line2
+        return result
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "OrbitalElements":
+        return OrbitalElements(
+            norad_id=int(data["norad_id"]), name=data["name"],
+            international_designator=data["international_designator"],
+            epoch=datetime.fromisoformat(data["epoch"]), omm=data["omm"],
+            source=data["source"], retrieved_at=datetime.fromisoformat(data["retrieved_at"]),
+            sha256=data["sha256"], tle_line1=data.get("tle_line1"),
+            tle_line2=data.get("tle_line2"),
+        )
+
+
+@dataclass(frozen=True)
+class WindowPolicy:
+    provider: str
+    max_off_nadir_deg: float = 30.0
+    min_sun_elevation_deg: float | None = 10.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "max_off_nadir_deg": self.max_off_nadir_deg,
+            "min_sun_elevation_deg": self.min_sun_elevation_deg,
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "WindowPolicy":
+        return WindowPolicy(**data)

@@ -9,7 +9,7 @@ amis.domain.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import delete, insert, select, update
@@ -27,6 +27,7 @@ from amis.domain import (
     ObservationWindow,
     Satellite,
     Scenario,
+    WindowPolicy,
 )
 from amis.errors import (
     InvalidScenarioError,
@@ -53,7 +54,8 @@ class SqlScenarioRepository:
             with self._engine.begin() as conn:
                 conn.execute(
                     insert(schema.scenarios).values(
-                        **_without(scenario.to_dict(), "satellite", "requests")
+                        **_without(scenario.to_dict(), "satellite", "requests"),
+                        created_at=datetime.now(timezone.utc).isoformat(),
                     )
                 )
                 conn.execute(
@@ -126,7 +128,13 @@ class SqlScenarioRepository:
             end_time=datetime.fromisoformat(scenario_row["end_time"]),
             satellite=satellite,
             requests=requests,
+            window_policy=WindowPolicy.from_dict(scenario_row["window_policy"]) if scenario_row["window_policy"] else None,
         )
+
+    def list_all(self) -> tuple[Scenario, ...]:
+        with self._engine.begin() as conn:
+            ids = conn.execute(select(schema.scenarios.c.id).order_by(schema.scenarios.c.created_at, schema.scenarios.c.id)).scalars().all()
+        return tuple(self.get(scenario_id) for scenario_id in ids)
 
 
 class SqlObservationWindowRepository:

@@ -5,6 +5,7 @@ import type {
   MissionStateSchema,
   ObservationRequestSchema,
   ScenarioSchema,
+  GroundTrackPointSchema,
 } from "../api/client";
 import type { MapHover, MissionMapEngine } from "../map/missionMapEngine";
 import { buildMissionMapModel, type MissionMapModel } from "../map/missionMapModel";
@@ -138,10 +139,10 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
         <p className="font-semibold text-orange-300">{satellite.satelliteId}</p>
         <p className="text-neutral-400">
           {satellite.overRequestId === null
-            ? "at the last target its plan visited"
+            ? model.groundTrack?.length ? "orbit-derived position" : "at the last target its plan visited"
             : `observing ${satellite.overRequestId}`}
         </p>
-        <p className="text-neutral-600">position read from the plan, not an orbit</p>
+        <p className="text-neutral-600">{model.groundTrack?.length ? "computed from the stored orbit" : "position inferred from the plan"}</p>
       </div>
     );
   }
@@ -185,6 +186,8 @@ export function MissionMapPanel({
   missionState,
   events,
   requestPool = NO_REQUESTS,
+  groundTrack = [],
+  satellitePosition = null,
   selectedRequestId,
   onSelectRequest,
 }: {
@@ -194,6 +197,8 @@ export function MissionMapPanel({
   events: MissionEventSchema[];
   /** The backend's request pool; only its expiry is read, the rest comes from the events. */
   requestPool?: readonly ObservationRequestSchema[];
+  groundTrack?: readonly GroundTrackPointSchema[];
+  satellitePosition?: GroundTrackPointSchema | null;
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
@@ -221,8 +226,10 @@ export function MissionMapPanel({
             missionState,
             events,
             expiredRequestIds(requestPool),
+            groundTrack,
+            satellitePosition,
           ),
-    [scenario, plan, missionState, events, requestPool],
+    [scenario, plan, missionState, events, requestPool, groundTrack, satellitePosition],
   );
 
   useEffect(() => {

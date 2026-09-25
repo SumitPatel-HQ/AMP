@@ -173,6 +173,10 @@ function WindowList({
                   </span>
                 )}
               </span>
+              {window.peak_elevation_deg != null && <span className="col-span-2 truncate text-[10px] text-orange-300" title={window.source ?? undefined}>
+                peak {window.peak_elevation_deg.toFixed(1)}° · off-nadir {window.min_off_nadir_deg?.toFixed(1)}°
+                {window.sun_elevation_deg == null ? "" : ` · Sun ${window.sun_elevation_deg.toFixed(1)}°`}
+              </span>}
             </button>
           </li>
         );

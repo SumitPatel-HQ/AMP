@@ -24,6 +24,7 @@ export interface MapHover {
 
 export interface MissionMapHandlers {
   onPickTarget: (requestId: string) => void;
+  onPickCoordinate?: (longitude: number, latitude: number) => void;
   onHover: (hover: MapHover | null) => void;
   onBasemap: (name: string) => void;
 }
@@ -108,6 +109,9 @@ export function createMissionMapEngine(
     onClick: (info: PickingInfo) => {
       if (info.layer?.id === TARGETS_LAYER_ID && info.object !== undefined) {
         handlers.onPickTarget((info.object as MapTarget).requestId);
+      } else if (handlers.onPickCoordinate) {
+        const point = map.unproject([info.x, info.y]);
+        handlers.onPickCoordinate(point.lng, point.lat);
       }
     },
     onHover: (info: PickingInfo) => {

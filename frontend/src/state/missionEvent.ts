@@ -15,7 +15,7 @@ export function eventSummary(event: MissionEventSchema): string {
     case "BATTERY_DROP":
       return `${event.payload.satellite_id} battery → ${event.payload.new_battery_wh.toFixed(1)} Wh`;
     case "EMERGENCY_TASK": {
-      const count = event.payload.windows.length;
+      const count = event.payload.windows?.length ?? 0;
       return `${event.payload.request.id} · P${event.payload.request.priority} · ${count} window${
         count === 1 ? "" : "s"
       }`;
@@ -152,6 +152,7 @@ function numberField(value: string): number | null {
 export function buildEmergencyRequestEvent(
   form: EmergencyRequestForm,
   satelliteId: string,
+  orbital = false,
 ): MissionEventRequest | null {
   const requestId = form.requestId.trim();
   const targetLat = numberField(form.targetLat);
@@ -172,8 +173,8 @@ export function buildEmergencyRequestEvent(
     energyCostWh === null ||
     storageCostMb === null ||
     deadline === null ||
-    windowStart === null ||
-    windowEnd === null
+    (!orbital && windowStart === null) ||
+    (!orbital && windowEnd === null)
   ) {
     return null;
   }
@@ -191,13 +192,13 @@ export function buildEmergencyRequestEvent(
         storage_cost_mb: storageCostMb,
         status: "pending",
       },
-      windows: [
+      windows: orbital ? undefined : [
         {
           id: emergencyWindowId(requestId),
           request_id: requestId,
           satellite_id: satelliteId,
-          start: windowStart,
-          end: windowEnd,
+          start: windowStart!,
+          end: windowEnd!,
           valid: true,
           invalid_reason: null,
         },

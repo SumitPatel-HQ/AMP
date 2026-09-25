@@ -31,6 +31,8 @@ class ScenarioRepository(Protocol):
 
     def get(self, scenario_id: str) -> Scenario: ...
 
+    def list_all(self) -> tuple[Scenario, ...]: ...
+
 
 class ObservationWindowRepository(Protocol):
     def replace_for_scenario(
@@ -123,6 +125,10 @@ class InMemoryScenarioRepository:
                 "scenario does not exist", details={"scenario_id": scenario_id}
             )
         return scenario
+
+    def list_all(self) -> tuple[Scenario, ...]:
+        with self._lock:
+            return tuple(self._items.values())
 
 
 class InMemoryPlanRepository:

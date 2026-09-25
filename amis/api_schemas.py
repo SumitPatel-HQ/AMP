@@ -15,6 +15,50 @@ class ApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class OrbitalElementsSchema(ApiModel):
+    norad_id: int = Field(gt=0)
+    name: str = Field(min_length=1)
+    international_designator: str = Field(min_length=1)
+    epoch: datetime
+    omm: dict[str, Any]
+    source: str = Field(min_length=1)
+    retrieved_at: datetime
+    sha256: str = Field(min_length=64, max_length=64)
+    tle_line1: str | None = None
+    tle_line2: str | None = None
+
+    @model_validator(mode="after")
+    def validate_elements(self) -> Self:
+        from amis.orbital.elements import from_omm, from_tle, omm_hash
+
+        if self.epoch.tzinfo is None or self.retrieved_at.tzinfo is None:
+            raise ValueError("element epoch and retrieval time require a timezone")
+        if self.sha256 != omm_hash(self.omm):
+            raise ValueError("element checksum does not match OMM")
+        try:
+            parsed = from_omm(self.omm, source=self.source, retrieved_at=self.retrieved_at)
+        except (ValueError, KeyError, TypeError) as error:
+            raise ValueError(f"OMM cannot be parsed: {error}") from error
+        if parsed.norad_id != self.norad_id or parsed.name != self.name or parsed.international_designator != self.international_designator or abs((parsed.epoch - self.epoch).total_seconds()) > 0.001:
+            raise ValueError("element identity or epoch does not match OMM")
+        if (self.tle_line1 is None) != (self.tle_line2 is None):
+            raise ValueError("both TLE lines are required together")
+        if self.tle_line1 is not None and self.tle_line2 is not None:
+            try:
+                tle = from_tle(self.tle_line1, self.tle_line2, name=self.name, retrieved_at=self.retrieved_at)
+            except (ValueError, KeyError, TypeError) as error:
+                raise ValueError(f"TLE cannot be parsed: {error}") from error
+            if tle.norad_id != self.norad_id or abs((tle.epoch - self.epoch).total_seconds()) > 0.001 or tle.sha256 != self.sha256:
+                raise ValueError("TLE does not match stored OMM")
+        return self
+
+
+class WindowPolicySchema(ApiModel):
+    provider: Literal["synthetic", "canonical_demo", "orbital"]
+    max_off_nadir_deg: float = Field(default=30, ge=0, le=60, allow_inf_nan=False)
+    min_sun_elevation_deg: float | None = Field(default=10, ge=-10, le=60, allow_inf_nan=False)
+
+
 class SatelliteSchema(ApiModel):
     id: str = Field(min_length=1)
     battery_capacity_wh: float = Field(gt=0, allow_inf_nan=False)
@@ -22,6 +66,7 @@ class SatelliteSchema(ApiModel):
     storage_capacity_mb: float = Field(gt=0, allow_inf_nan=False)
     storage_usage_mb: float = Field(ge=0, allow_inf_nan=False)
     available: bool = True
+    orbit: OrbitalElementsSchema | None = None
 
     @model_validator(mode="after")
     def validate_capacities(self) -> Self:
@@ -42,6 +87,7 @@ class ObservationRequestSchema(ApiModel):
     energy_cost_wh: float = Field(ge=0, allow_inf_nan=False)
     storage_cost_mb: float = Field(ge=0, allow_inf_nan=False)
     status: RequestStatus = RequestStatus.PENDING
+    target_name: str | None = None
 
     @model_validator(mode="after")
     def validate_deadline_timezone(self) -> Self:
@@ -63,6 +109,7 @@ class ScenarioSchema(ApiModel):
     end_time: datetime
     satellite: SatelliteSchema
     requests: list[ObservationRequestSchema]
+    window_policy: WindowPolicySchema | None = None
 
     @model_validator(mode="after")
     def validate_scenario(self) -> Self:
@@ -73,6 +120,8 @@ class ScenarioSchema(ApiModel):
         request_ids = [request.id for request in self.requests]
         if len(request_ids) != len(set(request_ids)):
             raise ValueError("observation request ids must be unique")
+        if self.window_policy is not None and self.window_policy.provider == "orbital" and self.satellite.orbit is None:
+            raise ValueError("orbital missions require satellite.orbit")
         # Each request already validates its own deadline's timezone
         # (ObservationRequestSchema.validate_deadline_timezone).
         return self
@@ -86,6 +135,11 @@ class ObservationWindowSchema(ApiModel):
     end: datetime
     valid: bool
     invalid_reason: str | None
+    peak_elevation_deg: float | None = None
+    peak_time: datetime | None = None
+    min_off_nadir_deg: float | None = None
+    sun_elevation_deg: float | None = None
+    source: str | None = None
 
     @model_validator(mode="after")
     def validate_window(self) -> Self:
@@ -156,7 +210,7 @@ class EmergencyTaskPayloadSchema(ApiModel):
     """The emergency request and the explicit windows it arrives with."""
 
     request: ObservationRequestSchema
-    windows: list[ObservationWindowSchema] = Field(min_length=1)
+    windows: list[ObservationWindowSchema] | None = None
 
 
 class CloudBlockEventRequest(ApiModel):
@@ -296,3 +350,32 @@ class ErrorBody(ApiModel):
 
 class ErrorEnvelope(ApiModel):
     error: ErrorBody
+
+
+class ScenarioSummarySchema(ApiModel):
+    id: str
+    name: str
+    start_time: datetime
+    end_time: datetime
+    provider: str
+
+
+class ScenarioPreviewSchema(ApiModel):
+    errors: list[str]
+    warnings: list[str]
+    windows: list[ObservationWindowSchema]
+    window_counts: dict[str, int]
+    ground_track: list[GroundTrackPointSchema] = []
+
+
+class TleParseRequest(ApiModel):
+    name: str = Field(min_length=1)
+    line1: str
+    line2: str
+
+
+class GroundTrackPointSchema(ApiModel):
+    time: datetime
+    lat: float
+    lon: float
+    altitude_km: float

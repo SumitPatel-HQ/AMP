@@ -11,8 +11,20 @@ A complete, reproducible mission definition. It holds one satellite, a simulatio
 _Avoid_: Mission, config, setup
 
 **Satellite**:
-The single spacecraft in a scenario. It carries a battery capacity and charge, a storage capacity and usage, and an availability flag.
+The single spacecraft in a scenario. It has battery and storage resources, an availability flag, and may carry orbital elements.
 _Avoid_: Spacecraft, asset, vehicle
+
+**OrbitalElements**:
+A dated description of one satellite's orbit, including its catalogue identity, normalized element fields, source, and checksum. A scenario stores its own copy.
+_Avoid_: Live orbit, telemetry, current position
+
+**WindowPolicy**:
+The scenario's choice of window source and, for an orbital source, its pointing and daylight limits.
+_Avoid_: Mode, generator settings
+
+**Example**:
+A reusable scenario template that creates a new scenario when loaded.
+_Avoid_: Original mission, shared demo
 
 **ObservationRequest**:
 Something the user wants observed. It has a target coordinate, a priority from 1 to 5, a duration, a deadline, and resource costs. It never carries a start time.
@@ -27,7 +39,7 @@ The property of an observation request whose deadline has passed in simulated ti
 _Avoid_: Missed, stale, timed out, lapsed
 
 **ObservationWindow**:
-A span of time during which the satellite could observe one request's target. A request may have several. A window carries a validity flag and, when invalid, the reason.
+A span in which a request's target is observable under the scenario's window policy. An orbital window is a visible time window that can hold an observation action; it may carry peak geometry and provenance.
 _Avoid_: Opportunity, slot, pass, visibility
 
 ### Planning

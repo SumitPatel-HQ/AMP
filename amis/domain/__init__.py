@@ -16,6 +16,7 @@ from amis.domain.event import (
 from amis.domain.impact import Impact
 from amis.domain.metrics import MetricsResult
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry
+from amis.domain.orbit import OrbitalElements, WindowPolicy
 from amis.domain.scenario import ObservationRequest, Satellite, Scenario
 from amis.domain.state import MissionState
 from amis.domain.trace import DecisionTrace
@@ -47,4 +48,6 @@ __all__ = [
     "MissionState",
     "Violation",
     "ObservationWindow",
+    "OrbitalElements",
+    "WindowPolicy",
 ]

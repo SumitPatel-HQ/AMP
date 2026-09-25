@@ -1,4 +1,5 @@
 import { useMissionSession } from "./state/useMissionSession";
+import { useState } from "react";
 import { missionTransition, type MissionTransition } from "./state/missionTransition";
 import { eventSummary } from "./state/missionEvent";
 import { planLabel } from "./state/planContext";
@@ -7,6 +8,8 @@ import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
 import { MissionBar } from "./panels/MissionBar";
+import { MissionBuilder } from "./panels/MissionBuilder";
+import { MissionLibrary } from "./panels/MissionLibrary";
 import { MissionMapPanel } from "./panels/MissionMapPanel";
 import { MissionNavPanel } from "./panels/MissionNavPanel";
 import { MissionTransitionStrip } from "./panels/MissionTransitionStrip";
@@ -80,6 +83,8 @@ function MissionWorkspace({
         missionState={session.missionState}
         events={session.events}
         requestPool={session.requestPool}
+        groundTrack={session.groundTrack}
+        satellitePosition={session.satellitePosition}
         selectedRequestId={selection.requestId}
         onSelectRequest={session.selectRequest}
       />
@@ -147,6 +152,7 @@ function MissionWorkspace({
 
 function App() {
   const session = useMissionSession();
+  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | null>(null);
   const transition = missionTransition({
     scenario: session.scenario,
     plan: session.plan,
@@ -176,6 +182,9 @@ function App() {
         replanBlocked={session.stalePlan}
         missionContextStale={session.stalePlan}
         onLoadDemo={session.loadDemoScenario}
+        onNewMission={() => setDialog("builder")}
+        onLoadMission={() => setDialog("load")}
+        onExamples={() => setDialog("examples")}
         onGeneratePlan={session.generatePlan}
         onStep={session.step}
         onInjectEvent={session.injectEvent}
@@ -191,6 +200,8 @@ function App() {
       />
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />
+      {dialog === "builder" && <MissionBuilder onClose={() => setDialog(null)} onCreate={session.createMission} />}
+      {(dialog === "load" || dialog === "examples") && <MissionLibrary mode={dialog} onClose={() => setDialog(null)} onChoose={dialog === "load" ? session.loadMission : session.loadExample} />}
     </div>
   );
 }

@@ -49,6 +49,8 @@ scenarios = Table(
     Column("name", String, nullable=False),
     Column("start_time", String, nullable=False),
     Column("end_time", String, nullable=False),
+    Column("created_at", String, nullable=True),
+    Column("window_policy", JSON, nullable=True),
 )
 
 satellites = Table(
@@ -66,6 +68,7 @@ satellites = Table(
     Column("storage_capacity_mb", Float, nullable=False),
     Column("storage_usage_mb", Float, nullable=False),
     Column("available", Boolean, nullable=False),
+    Column("orbit", JSON, nullable=True),
 )
 
 observation_requests = Table(
@@ -81,6 +84,7 @@ observation_requests = Table(
     Column("seq", Integer, nullable=False),
     Column("target_lat", Float, nullable=False),
     Column("target_lon", Float, nullable=False),
+    Column("target_name", String, nullable=True),
     Column("priority", Integer, nullable=False),
     Column("duration_s", Float, nullable=False),
     Column("deadline", String, nullable=False),
@@ -106,6 +110,11 @@ observation_windows = Table(
     Column("end", String, nullable=False),
     Column("valid", Boolean, nullable=False),
     Column("invalid_reason", String, nullable=True),
+    Column("peak_elevation_deg", Float, nullable=True),
+    Column("peak_time", String, nullable=True),
+    Column("min_off_nadir_deg", Float, nullable=True),
+    Column("sun_elevation_deg", Float, nullable=True),
+    Column("source", String, nullable=True),
 )
 
 mission_states = Table(

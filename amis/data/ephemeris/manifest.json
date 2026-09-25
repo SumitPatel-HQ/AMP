@@ -1,0 +1,6 @@
+{
+  "file": "de421-2026-09.bsp",
+  "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de421.bsp",
+  "source": "JPL DE421 excerpt made with jplephem 2.24 for 2026-09-20 through 2026-10-15",
+  "sha256": "8b632fece5894db3a5e74038a60039a074cbfb124d7e646dce4d9b88b4ebdc9f"
+}
