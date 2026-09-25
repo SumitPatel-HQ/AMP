@@ -54,7 +54,11 @@ export function ImpactPanel({
   plans,
   earlier,
   selectedRequestId,
+  selectedWindowId = null,
+  selectedEventId = null,
   onSelectRequest,
+  onSelectWindow,
+  onSelectEvent,
   className,
 }: {
   impact: ImpactSchema | null;
@@ -67,7 +71,11 @@ export function ImpactPanel({
    */
   earlier: boolean;
   selectedRequestId: string | null;
+  selectedWindowId?: string | null;
+  selectedEventId?: string | null;
   onSelectRequest: (requestId: string | null) => void;
+  onSelectWindow?: (windowId: string | null) => void;
+  onSelectEvent?: (eventId: string | null) => void;
   className?: string;
 }) {
   if (impact === null) {
@@ -104,6 +112,16 @@ export function ImpactPanel({
             </>
           )}
         </p>
+        {onSelectEvent === undefined ? null : (
+          <button
+            type="button"
+            aria-pressed={selectedEventId === impact.event_id}
+            onClick={() => onSelectEvent(selectedEventId === impact.event_id ? null : impact.event_id)}
+            className="text-rose-300 hover:text-rose-100"
+          >
+            Follow event {impact.event_id}
+          </button>
+        )}
         <p className="text-neutral-500">
           {`What became invalid in ${evaluatedLabel} because of this event · `}
           <span className="text-neutral-600" title={impact.evaluated_plan_id}>
@@ -122,17 +140,24 @@ export function ImpactPanel({
         ) : (
           <ul aria-label="Event impact" className="text-xs">
             {rows.map((row) => {
-              const selected = row.requestId !== null && row.requestId === selectedRequestId;
+              const selected = row.windowId !== null
+                ? row.windowId === selectedWindowId
+                : row.requestId !== null && row.requestId === selectedRequestId;
+              const related = !selected && row.requestId !== null && row.requestId === selectedRequestId;
               return (
                 <li key={row.actionId} data-impact={row.kind}>
                   <button
                     type="button"
                     aria-pressed={selected}
                     disabled={row.requestId === null}
-                    onClick={() => onSelectRequest(selected ? null : row.requestId)}
+                    onClick={() => {
+                      if (selected) onSelectRequest(null);
+                      else if (row.windowId !== null && onSelectWindow !== undefined) onSelectWindow(row.windowId);
+                      else onSelectRequest(row.requestId);
+                    }}
                     title={`${row.actionId}${row.windowId === null ? "" : ` · ${row.windowId}`}`}
-                    className={`grid w-full grid-cols-[5.5rem_4.5rem_minmax(0,1fr)] gap-x-2 border-b border-l-2 border-b-white/[0.03] px-2 py-0.5 text-left ${
-                      selected ? "border-l-fuchsia-400 bg-fuchsia-400/10" : "border-l-transparent"
+                    className={`grid w-full grid-cols-[5.5rem_4.5rem_minmax(0,1fr)] gap-x-2 border-b border-l-2 border-b-white/[0.03] px-2 py-0.5 text-left enabled:hover:bg-white/[0.04] ${
+                      selected ? "border-l-fuchsia-400 bg-fuchsia-400/10" : related ? "border-l-fuchsia-900" : "border-l-transparent"
                     } ${row.kind === "invalid" && !selected ? "bg-red-500/[0.06]" : ""}`}
                   >
                     <span

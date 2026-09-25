@@ -375,7 +375,7 @@ describe("mission dashboard", () => {
     expect(api.fetchPlan).toHaveBeenCalledWith(plan.id);
   });
 
-  it("shows mission complete as a readable message and surfaces a rejected step past the end", async () => {
+  it("shows mission complete and disables actions that cannot run past the end", async () => {
     installSuccessfulApi();
     api.stepSimulation.mockResolvedValueOnce({
       ...missionState,
@@ -386,24 +386,16 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
+    await user.click(screen.getByRole("button", { name: "Event" }));
+    expect(screen.getByRole("dialog", { name: "Configure event" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Step" }));
     expect(await screen.findByText("Mission complete.")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Configure event" })).toBeNull();
 
-    api.stepSimulation.mockRejectedValueOnce(
-      new ApiError({
-        error: {
-          code: "SIMULATION_STATE_ERROR",
-          message: "mission is complete; reset the simulation before stepping again",
-          details: {},
-        },
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Step" }));
-
-    expect(await screen.findByText("SIMULATION_STATE_ERROR")).toBeTruthy();
-    expect(
-      screen.getByText(/mission is complete; reset the simulation before stepping again/),
-    ).toBeTruthy();
+    for (const name of ["Step", "Event", "Replan"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect(api.stepSimulation).toHaveBeenCalledTimes(1);
   });
 
   it("injects a cloud block chosen from request and window dropdowns and shows the impact, without replanning", async () => {
@@ -487,11 +479,21 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
+    await waitFor(() => expect((screen.getByRole("button", { name: "Step" }) as HTMLButtonElement).disabled).toBe(false));
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V3");
 
     expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id);
     expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
+    await user.click(screen.getByRole("tab", { name: /Plans/ }));
+    const history = screen.getByRole("list", { name: "Mission plans" });
+    for (const version of ["V1", "V2", "V3"]) {
+      expect(within(history).getByRole("button", { name: new RegExp(version) })).toBeTruthy();
+    }
+    await user.click(within(history).getByRole("button", { name: /V1/ }));
+    const focus = screen.getByRole("status", { name: "Mission focus" });
+    expect(focus.textContent).toContain("Selected V1");
+    expect(focus.textContent).toContain("Timeline shows current V3");
   });
 
   it("lists the current plan's unscheduled request and never draws it on the timeline", async () => {
@@ -584,6 +586,7 @@ describe("mission dashboard", () => {
       ],
     } satisfies MissionPlanSchema);
 
+    await waitFor(() => expect((screen.getByRole("button", { name: "Step" }) as HTMLButtonElement).disabled).toBe(false));
     await user.click(screen.getByRole("button", { name: "Step" }));
 
     expect(await screen.findByText("2026-09-21 11:05:00 UTC")).toBeTruthy();
@@ -687,7 +690,7 @@ describe("mission dashboard", () => {
     ).toBe("true");
   });
 
-  it("clears the selected request when replanning, since it may not exist in the new trace", async () => {
+  it("keeps the selected mission request through replanning", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
     render(<App />);
@@ -700,7 +703,24 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    expect(fakeMap.lastScene().selectedRequestId).toBeNull();
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
+    expect(screen.getByRole("status", { name: "Mission focus" }).textContent).toContain("OBS-A");
+  });
+
+  it("toggles a timeline action with Enter and Space", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await loadDemoAndGeneratePlan(user);
+    const action = () => container.querySelector<HTMLElement>('.vis-item[data-kind="action"][data-window-id="WIN-OBS-A-1"]');
+    await waitFor(() => expect(action()).not.toBeNull());
+
+    action()?.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(action()?.dataset.selected).toBe("true"));
+    action()?.focus();
+    await user.keyboard(" ");
+    await waitFor(() => expect(action()?.dataset.selected).toBe("false"));
   });
 
   it("refreshes the metrics panel's battery and storage figures after a step, since they read live mission state", async () => {
@@ -733,6 +753,37 @@ describe("mission dashboard", () => {
 
     await waitFor(() => expect(readings()).toContain("battery used 50%"));
     expect(readings()).toContain("11:05 UTC");
+  });
+
+  it("keeps replan disabled after a stale conflict whose current plan could not load", async () => {
+    installSuccessfulApi();
+    api.replan.mockRejectedValueOnce(new ApiError({
+      error: { code: "PLAN_VERSION_CONFLICT", message: "stale plan", details: { current_plan_id: "SCN-002:PLAN-9" } },
+    }));
+    api.fetchPlan.mockRejectedValueOnce(new Error("plan unavailable"));
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByRole("status", { name: "Stale plan" });
+    await user.click(screen.getByRole("button", { name: "Dismiss stale plan notice" }));
+    expect((screen.getByRole("button", { name: "Replan" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(api.replan).toHaveBeenCalledTimes(1);
+  });
+
+  it("can retry the comparison after the revised plan was saved", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    api.comparePlans.mockRejectedValueOnce(new Error("comparison unavailable"));
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await screen.findByLabelText("Current plan V2");
+
+    await user.click(await screen.findByRole("button", { name: "Retry comparison" }));
+    expect(await screen.findByRole("list", { name: "Plan comparison" })).toBeTruthy();
   });
 
   it("marks a request the backend expired, which the immutable scenario never reports", async () => {
@@ -1198,6 +1249,8 @@ describe("mission dashboard", () => {
     const user = userEvent.setup();
     render(<App />);
     await loadDemoAndGeneratePlan(user);
+    await user.click(within(screen.getByRole("list", { name: "Observation requests" })).getByRole("button", { name: /^OBS-A/ }));
+    expect(fakeMap.lastScene().selectedRequestId).toBe("OBS-A");
     api.fetchEvents.mockResolvedValue([event]);
     api.fetchState.mockResolvedValue({ ...missionState, battery_wh: 60, active_event_ids: ["EVT-1"] });
 
@@ -1225,6 +1278,8 @@ describe("mission dashboard", () => {
     const summary = screen.getByRole("region", { name: "Mission transition" });
     expect(summary.textContent).toContain("SAT-001 battery → 60.0 Wh");
     expect(summary.textContent).toContain("Awaiting replan");
+    expect(fakeMap.lastScene().selectedRequestId).toBeNull();
+    expect(screen.getByRole("status", { name: "Mission focus" }).textContent).not.toContain("OBS-A");
   });
 
   it("injects an emergency request through the event log and lists it without touching the scenario", async () => {

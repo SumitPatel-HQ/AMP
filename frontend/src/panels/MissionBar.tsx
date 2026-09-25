@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   MissionEventRequest,
   MissionEventSchema,
@@ -112,6 +112,7 @@ export function MissionBar({
   events,
   loading,
   replanning,
+  replanBlocked = false,
   onLoadDemo,
   onGeneratePlan,
   onStep,
@@ -130,6 +131,7 @@ export function MissionBar({
   loading: boolean;
   /** A replan request is in flight. */
   replanning: boolean;
+  replanBlocked?: boolean;
   onLoadDemo: () => void;
   onGeneratePlan: () => void;
   onStep: (seconds: number) => void;
@@ -138,9 +140,11 @@ export function MissionBar({
 }) {
   const [seconds, setSeconds] = useState(300);
   const [eventOpen, setEventOpen] = useState(false);
+  const eventButtonRef = useRef<HTMLButtonElement>(null);
+  const eventVisible = eventOpen && missionState?.mission_complete !== true && plan !== null;
 
   return (
-    <header className="relative z-20 flex h-9 shrink-0 items-center gap-3 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-3">
+    <header className="relative z-20 flex min-h-9 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-3 py-1">
       <div className="flex min-w-0 items-center gap-3">
         <span className="rounded-sm border border-neutral-600 px-1.5 text-xs font-bold tracking-[0.2em] text-neutral-100">
           AMIS
@@ -180,13 +184,24 @@ export function MissionBar({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <button type="button" onClick={onLoadDemo} disabled={loading} className={CONTROL_BUTTON}>
+        <button
+          type="button"
+          onClick={() => {
+            setEventOpen(false);
+            onLoadDemo();
+          }}
+          disabled={loading}
+          className={CONTROL_BUTTON}
+        >
           Load demo scenario
         </button>
         <button
           type="button"
-          onClick={onGeneratePlan}
-          disabled={loading || scenario === null}
+          onClick={() => {
+            setEventOpen(false);
+            onGeneratePlan();
+          }}
+          disabled={loading || scenario === null || missionState?.mission_complete === true}
           className={CONTROL_BUTTON}
         >
           Generate plan
@@ -201,14 +216,14 @@ export function MissionBar({
           min={1}
           step={1}
           value={seconds}
-          disabled={missionState === null}
+          disabled={missionState === null || missionState.mission_complete}
           onChange={(event) => setSeconds(Number(event.target.value))}
           className={`${CONTROL_INPUT} w-16`}
         />
         <button
           type="button"
           onClick={() => onStep(seconds)}
-          disabled={loading || missionState === null || !(seconds > 0)}
+          disabled={loading || missionState === null || missionState.mission_complete || !(seconds > 0)}
           className={CONTROL_BUTTON}
         >
           Step
@@ -218,23 +233,25 @@ export function MissionBar({
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               setEventOpen(false);
+              eventButtonRef.current?.focus();
             }
           }}
         >
           <button
+            ref={eventButtonRef}
             type="button"
-            aria-expanded={eventOpen}
+            aria-expanded={eventVisible}
             aria-controls="event-control"
             onClick={() => setEventOpen((open) => !open)}
             // The backend evaluates every event against the current plan, so
             // there is nothing to inject into before one exists.
-            disabled={plan === null || missionState === null}
+            disabled={loading || plan === null || missionState === null || missionState.mission_complete}
             title={plan === null ? "Generate a plan first: events are evaluated against it" : undefined}
-            className={eventOpen ? EVENT_BUTTON_OPEN : EVENT_BUTTON}
+            className={eventVisible ? EVENT_BUTTON_OPEN : EVENT_BUTTON}
           >
             Event
           </button>
-          {eventOpen && scenario !== null && plan !== null && missionState !== null ? (
+          {eventVisible && scenario !== null && missionState !== null ? (
             <div
               id="event-control"
               className="absolute right-0 top-8 w-max border border-[var(--amis-border)] bg-[var(--amis-surface)] p-2.5 shadow-lg shadow-black/60"
@@ -255,7 +272,7 @@ export function MissionBar({
         <button
           type="button"
           onClick={onReplan}
-          disabled={loading || plan === null}
+          disabled={loading || plan === null || missionState?.mission_complete === true || replanBlocked}
           aria-busy={replanning}
           title={
             plan === null

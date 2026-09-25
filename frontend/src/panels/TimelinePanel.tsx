@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type {
   ImpactSchema,
   MissionEventSchema,
@@ -98,7 +99,7 @@ export function TimelinePanel({
   onSelectEvent: (eventId: string | null) => void;
   className?: string;
 }) {
-  const changeByRequestId = currentPlanChanges(plan, replanResult);
+  const changeByRequestId = useMemo(() => currentPlanChanges(plan, replanResult), [plan, replanResult]);
   return (
     <PanelFrame
       title="Mission timeline"
@@ -113,7 +114,7 @@ export function TimelinePanel({
             : "Generate plan to lay the mission's scheduled actions on the timeline."}
         </p>
       ) : (
-        <div className="flex max-w-[1100px] flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-2">
           <PlanTimeline
             key={plan.id}
             label="Mission plan"

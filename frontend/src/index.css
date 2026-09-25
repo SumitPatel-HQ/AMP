@@ -41,6 +41,34 @@ body,
   scrollbar-color: #33363d transparent;
 }
 
+.amis-workspace {
+  grid-template-columns: minmax(210px, 17rem) minmax(0, 1fr) minmax(220px, 18rem);
+  grid-template-rows: minmax(220px, 1.25fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
+}
+
+@media (max-width: 1280px) {
+  .amis-workspace {
+    grid-template-columns: minmax(185px, 14rem) minmax(0, 1fr) minmax(190px, 15rem);
+    grid-template-rows: minmax(200px, 1.2fr) minmax(190px, 1fr) minmax(145px, 0.8fr);
+  }
+
+  .amis-object-tabs .amis-tab-count {
+    display: none;
+  }
+}
+
+@media (max-width: 1050px) {
+  .amis-object-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+:where(button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid #e879f9;
+  outline-offset: -2px;
+}
+
 /* vis-timeline is a renderer only. AMIS owns its mission semantics and theme. */
 .amis-vis-timeline {
   --timeline-grid: #25272c;

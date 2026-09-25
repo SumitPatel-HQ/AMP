@@ -242,4 +242,12 @@ describe("plan comparison panel", () => {
     await user.click(screen.getByRole("button", { name: /OBS-A/ }));
     expect(onSelectRequest).toHaveBeenLastCalledWith(null);
   });
+
+  it("follows the event named by a decision trace", async () => {
+    const onSelectEvent = vi.fn();
+    renderComparison({ onSelectEvent });
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Follow event EVT-1" }));
+    expect(onSelectEvent).toHaveBeenCalledWith("EVT-1");
+  });
 });

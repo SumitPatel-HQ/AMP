@@ -1,6 +1,8 @@
 import { useMissionSession } from "./state/useMissionSession";
 import { missionTransition, type MissionTransition } from "./state/missionTransition";
-import { knownPlans } from "./state/planContext";
+import { eventSummary } from "./state/missionEvent";
+import { planLabel } from "./state/planContext";
+import { clockTime } from "./panels/format";
 import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
@@ -13,6 +15,30 @@ import { StatePanel } from "./panels/StatePanel";
 import { TimelinePanel } from "./panels/TimelinePanel";
 
 type Session = ReturnType<typeof useMissionSession>;
+
+function MissionFocus({ session }: { session: Session }) {
+  const { selection } = session;
+  if (Object.values(selection).every((value) => value === null)) return null;
+  const request = session.requestPool.find((item) => item.id === selection.requestId);
+  const window = session.windows.find((item) => item.id === selection.windowId);
+  const event = session.events.find((item) => item.id === selection.eventId);
+  const parts = [
+    selection.requestId === null ? null : request === undefined ? selection.requestId : `${request.id} · P${request.priority} · deadline ${clockTime(request.deadline)} UTC`,
+    selection.windowId === null ? null : window === undefined ? selection.windowId : `${window.id} · ${clockTime(window.start)}–${clockTime(window.end)} UTC${window.valid ? "" : " · invalid"}`,
+    selection.eventId === null ? null : event === undefined ? selection.eventId : `${event.id} · ${eventSummary(event)}`,
+    selection.planId === null ? null : `Selected ${planLabel(selection.planId, session.plans)}`,
+  ].filter((part) => part !== null);
+  return (
+    <div role="status" aria-label="Mission focus" className="flex min-h-7 shrink-0 items-center gap-2 border-b border-[var(--amis-border)] bg-fuchsia-950/20 px-3 text-[11px]">
+      <span className="shrink-0 font-semibold uppercase tracking-wide text-fuchsia-300">Focus</span>
+      <span className="min-w-0 flex-1 truncate text-neutral-200" title={parts.join(" · ")}>{parts.join(" · ")}</span>
+      {selection.planId !== null && selection.planId !== session.plan?.id ? (
+        <span className="hidden shrink-0 text-neutral-500 lg:inline">Timeline shows current V{session.plan?.version}</span>
+      ) : null}
+      <button type="button" onClick={session.clearSelection} className="shrink-0 text-neutral-400 hover:text-neutral-100">Clear focus</button>
+    </div>
+  );
+}
 
 /**
  * The mission workspace, one viewport tall. Mission objects to the left, the
@@ -29,12 +55,13 @@ function MissionWorkspace({
   transition: MissionTransition;
 }) {
   const { selection, replanResult } = session;
-  const plans = knownPlans(session.plan, replanResult);
+  const plans = session.plans;
   return (
-    <main className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(220px,18rem)_minmax(0,1fr)_minmax(240px,19rem)] grid-rows-[minmax(220px,1.1fr)_minmax(190px,1fr)_minmax(150px,0.8fr)] gap-1 p-1">
+    <main className="amis-workspace grid min-h-0 min-w-0 flex-1 gap-1 p-1">
       <MissionNavPanel
         scenario={session.scenario}
         plan={session.plan}
+        plans={plans}
         replanResult={replanResult}
         impact={session.impact}
         missionState={session.missionState}
@@ -88,20 +115,30 @@ function MissionWorkspace({
           plans={plans}
           earlier={!transition.stages.some((stage) => stage.kind === "impact")}
           selectedRequestId={selection.requestId}
+          selectedWindowId={selection.windowId}
+          selectedEventId={selection.eventId}
           onSelectRequest={session.selectRequest}
+          onSelectWindow={session.selectWindow}
+          onSelectEvent={session.selectEvent}
         />
         <PlanComparisonPanel
           replanResult={replanResult}
+          currentPlan={session.plan}
+          loading={session.loading}
+          onRetryComparison={session.retryComparison}
           plans={plans}
           selectedRequestId={selection.requestId}
+          selectedEventId={selection.eventId}
           onSelectRequest={session.selectRequest}
           onSelectWindow={session.selectWindow}
+          onSelectEvent={session.selectEvent}
         />
         <MetricsPanel
           currentPlanId={session.plan?.id ?? null}
           metrics={session.metrics}
           diff={replanResult?.diff ?? null}
           plans={plans}
+          selectedPlanId={selection.planId}
         />
       </div>
     </main>
@@ -125,7 +162,7 @@ function App() {
   const previousVersion = previousStage?.kind === "plan" ? previousStage.version : null;
 
   return (
-    <div className="flex h-dvh min-h-[680px] min-w-[1200px] flex-col overflow-hidden">
+    <div className="flex h-dvh min-h-[640px] min-w-[900px] flex-col overflow-hidden">
       <MissionBar
         scenario={session.scenario}
         plan={session.plan}
@@ -136,6 +173,7 @@ function App() {
         events={session.events}
         loading={session.loading}
         replanning={session.operation === "replan"}
+        replanBlocked={session.stalePlan}
         onLoadDemo={session.loadDemoScenario}
         onGeneratePlan={session.generatePlan}
         onStep={session.step}
@@ -143,6 +181,7 @@ function App() {
         onReplan={session.replan}
       />
       <MissionTransitionStrip transition={transition} hasScenario={session.scenario !== null} />
+      <MissionFocus session={session} />
       <PlanConflictBanner
         conflict={session.planConflict}
         plan={session.plan}

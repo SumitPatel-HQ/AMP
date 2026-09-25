@@ -10,7 +10,7 @@ import type {
   ScenarioSchema,
 } from "../api/client";
 import { eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
-import { knownPlans, planLabel } from "../state/planContext";
+import { planLabel } from "../state/planContext";
 import { expiredRequestIds, requestStatus, type RequestState } from "../state/requestStatus";
 import type { MissionSelection, ReplanResult } from "../state/types";
 import { clockTime } from "./format";
@@ -228,16 +228,15 @@ function EventList({
 
 function PlanList({
   plan,
-  replanResult,
+  plans,
   selectedPlanId,
   onSelectPlan,
 }: {
   plan: MissionPlanSchema | null;
-  replanResult: ReplanResult | null;
+  plans: readonly MissionPlanSchema[];
   selectedPlanId: string | null;
   onSelectPlan: (planId: string | null) => void;
 }) {
-  const plans = knownPlans(plan, replanResult);
   if (plans.length === 0) {
     return <Empty>No plan generated.</Empty>;
   }
@@ -281,6 +280,7 @@ function PlanList({
 export function MissionNavPanel({
   scenario,
   plan,
+  plans,
   replanResult,
   impact,
   missionState,
@@ -295,6 +295,7 @@ export function MissionNavPanel({
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
+  plans: readonly MissionPlanSchema[];
   replanResult: ReplanResult | null;
   impact: ImpactSchema | null;
   missionState: MissionStateSchema | null;
@@ -314,12 +315,12 @@ export function MissionNavPanel({
     requests: (scenario?.requests.length ?? 0) + introduced.length,
     windows: windows.length,
     events: events.length,
-    plans: knownPlans(plan, replanResult).length,
+    plans: plans.length,
   };
 
   return (
     <PanelFrame title="Mission" bodyClassName="flex flex-col">
-      <div role="tablist" aria-label="Mission objects" className="flex shrink-0 border-b border-[var(--amis-border)]">
+      <div role="tablist" aria-label="Mission objects" className="amis-object-tabs flex shrink-0 border-b border-[var(--amis-border)]">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -333,7 +334,7 @@ export function MissionNavPanel({
                 : "border-transparent text-neutral-500 hover:text-neutral-300"
             }`}
           >
-            {label} <span className="text-neutral-600">{counts[id]}</span>
+            {label} <span className="amis-tab-count text-neutral-600">{counts[id]}</span>
           </button>
         ))}
       </div>
@@ -369,7 +370,7 @@ export function MissionNavPanel({
         ) : (
           <PlanList
             plan={plan}
-            replanResult={replanResult}
+            plans={plans}
             selectedPlanId={selection.planId}
             onSelectPlan={onSelectPlan}
           />

@@ -132,24 +132,41 @@ function ComparisonRowButton({
  */
 export function PlanComparisonPanel({
   replanResult,
+  currentPlan = null,
+  loading = false,
+  onRetryComparison,
   plans,
   selectedRequestId,
+  selectedEventId = null,
   onSelectRequest,
   onSelectWindow,
+  onSelectEvent,
 }: {
   replanResult: ReplanResult | null;
+  currentPlan?: MissionPlanSchema | null;
+  loading?: boolean;
+  onRetryComparison?: () => void;
   plans: readonly MissionPlanSchema[];
   selectedRequestId: string | null;
+  selectedEventId?: string | null;
   onSelectRequest: (requestId: string | null) => void;
   onSelectWindow: (windowId: string | null) => void;
+  onSelectEvent?: (eventId: string | null) => void;
 }) {
   if (replanResult === null) {
+    const comparisonMissing = currentPlan?.parent_plan_id !== null && currentPlan?.parent_plan_id !== undefined;
     return (
       <PanelFrame title="Plan comparison">
         <p className="text-xs text-neutral-500">
-          Replan to compare plan versions. Each changed request shows its previous
-          placement, new placement, change classification and the backend reason.
+          {comparisonMissing
+            ? `${loading ? "Loading" : "Comparison unavailable for"} V${currentPlan.version} and its parent plan.`
+            : "Replan to compare plan versions. Each changed request shows its previous placement, new placement, change classification and the backend reason."}
         </p>
+        {comparisonMissing && !loading && onRetryComparison !== undefined ? (
+          <button type="button" onClick={onRetryComparison} className="mt-2 border border-sky-700 px-2 py-1 text-xs text-sky-200 hover:bg-sky-950/50">
+            Retry comparison
+          </button>
+        ) : null}
       </PanelFrame>
     );
   }
@@ -175,6 +192,18 @@ export function PlanComparisonPanel({
     }
   };
 
+  const traceEvent = (row: PlanComparisonRow) =>
+    row.traceEventId === null || onSelectEvent === undefined ? null : (
+      <button
+        type="button"
+        aria-pressed={selectedEventId === row.traceEventId}
+        onClick={() => onSelectEvent(selectedEventId === row.traceEventId ? null : row.traceEventId)}
+        className="ml-2 text-[10px] text-rose-300 hover:text-rose-100"
+      >
+        Follow event {row.traceEventId}
+      </button>
+    );
+
   return (
     <PanelFrame title="Plan comparison" meta={`${context} · ${comparisonMeta(summary)}`}>
       <p className="px-2 pb-1 text-[10px] text-neutral-600">
@@ -194,6 +223,7 @@ export function PlanComparisonPanel({
                 quiet={false}
                 onPick={onPick}
               />
+              {traceEvent(row)}
             </li>
           ))}
         </ul>
@@ -212,6 +242,7 @@ export function PlanComparisonPanel({
                   quiet
                   onPick={onPick}
                 />
+                {traceEvent(row)}
               </li>
             ))}
           </ul>
@@ -231,6 +262,7 @@ export function PlanComparisonPanel({
                   quiet
                   onPick={onPick}
                 />
+                {traceEvent(row)}
               </li>
             ))}
           </ul>

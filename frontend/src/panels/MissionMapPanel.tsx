@@ -268,7 +268,7 @@ export function MissionMapPanel({
   }, [engine, model, selectedRequestId, visibility]);
 
   const meta = [
-    scenario === null ? null : `${scenario.requests.length} targets`,
+    model === null ? null : `${model.targets.length} targets`,
     basemap,
   ]
     .filter((part) => part !== null)

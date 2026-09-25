@@ -11,6 +11,7 @@ import type {
   ScenarioSchema,
   UnscheduledEntrySchema,
 } from "../api/client";
+import { missionRequestPool } from "../state/missionEvent";
 import {
   buildMissionTimelineModel,
   findWindowAtTime,
@@ -39,21 +40,27 @@ export interface PlanTimelineProps {
   onSelectEvent: (eventId: string | null) => void;
 }
 
-function priorityOf(scenario: ScenarioSchema, requestId: string): string {
-  const request = scenario.requests.find((candidate) => candidate.id === requestId);
+function priorityOf(scenario: ScenarioSchema, events: MissionEventSchema[], requestId: string): string {
+  const request = missionRequestPool(scenario, events).find((candidate) => candidate.id === requestId);
   return request === undefined ? "unknown" : String(request.priority);
 }
 
 function UnscheduledList({
   label,
   scenario,
+  events,
   entries,
   changeByRequestId,
+  selectedRequestId,
+  onSelectRequest,
 }: {
   label: string;
   scenario: ScenarioSchema;
+  events: MissionEventSchema[];
   entries: UnscheduledEntrySchema[];
   changeByRequestId: Record<string, PlanChangeType>;
+  selectedRequestId: string | null;
+  onSelectRequest: (requestId: string | null) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -71,14 +78,21 @@ function UnscheduledList({
                 data-change={change}
                 className="text-amber-300"
               >
-                <span className="font-mono">{entry.request_id}</span>
-                {" · priority "}
-                {priorityOf(scenario, entry.request_id)}
-                {" · "}
-                <span className="font-mono text-amber-400">{entry.reason_code}</span>
-                {change === undefined ? null : (
-                  <span className="font-mono text-pink-400">{` · ${change}`}</span>
-                )}
+                <button
+                  type="button"
+                  aria-pressed={selectedRequestId === entry.request_id}
+                  onClick={() => onSelectRequest(selectedRequestId === entry.request_id ? null : entry.request_id)}
+                  className="border-l-2 border-transparent px-1 text-left hover:bg-white/[0.04] aria-pressed:border-fuchsia-400 aria-pressed:bg-fuchsia-400/10"
+                >
+                  <span className="font-mono">{entry.request_id}</span>
+                  {" · priority "}
+                  {priorityOf(scenario, events, entry.request_id)}
+                  {" · "}
+                  <span className="font-mono text-amber-400">{entry.reason_code}</span>
+                  {change === undefined ? null : (
+                    <span className="font-mono text-pink-400">{` · ${change}`}</span>
+                  )}
+                </button>
               </li>
             );
           })}
@@ -245,8 +259,8 @@ export function PlanTimeline({
     }
     const timeline = new Timeline(
       containerRef.current,
-      model.items,
-      model.groups,
+      [],
+      [],
       timelineOptions(
         model.groups.length,
         model.bounds.start,
@@ -259,10 +273,11 @@ export function PlanTimeline({
 
     const selectElement = (element: HTMLElement) => {
       const kind = element.dataset.kind;
+      const nextId = element.dataset.selected === "true" ? null : undefined;
       if (kind === "event") {
-        onSelectEvent(element.dataset.eventId ?? null);
+        onSelectEvent(nextId === null ? null : element.dataset.eventId ?? null);
       } else if (kind === "action" || kind === "window") {
-        onSelectWindow(element.dataset.windowId ?? null);
+        onSelectWindow(nextId === null ? null : element.dataset.windowId ?? null);
       }
     };
 
@@ -326,6 +341,7 @@ export function PlanTimeline({
     }
     timeline.setData({ groups: model.groups, items: model.items });
     timeline.redraw();
+    if (containerRef.current !== null) decorateTimelineItems(containerRef.current);
     timeline.setSelection(selectedItemIds(model.items));
     if (model.bounds.current === null) {
       if (hasMissionNowRef.current) {
@@ -361,8 +377,11 @@ export function PlanTimeline({
       <UnscheduledList
         label={label}
         scenario={scenario}
+        events={events}
         entries={plan.unscheduled}
         changeByRequestId={changeByRequestId}
+        selectedRequestId={selectedRequestId}
+        onSelectRequest={onSelectRequest}
       />
     </div>
   );
