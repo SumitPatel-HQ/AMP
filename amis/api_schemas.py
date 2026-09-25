@@ -221,6 +221,7 @@ class MetricsSchema(ApiModel):
     storage_utilisation: float
     request_pool_size: int
     request_pool_ids: list[str]
+    measured_at: datetime
     plan_churn: float | None
     explanation_coverage: float | None
 

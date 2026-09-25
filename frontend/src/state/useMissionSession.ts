@@ -7,7 +7,9 @@ import {
   fetchDemoScenario,
   fetchEvents,
   fetchImpact,
+  fetchMetrics,
   fetchPlan,
+  fetchRequests,
   fetchState,
   fetchTraces,
   fetchWindows,
@@ -18,10 +20,12 @@ import {
 } from "../api/amis";
 import type {
   ImpactSchema,
+  MetricsSchema,
   MissionEventRequest,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
+  ObservationRequestSchema,
   ObservationWindowSchema,
   ScenarioSchema,
 } from "../api/client";
@@ -41,6 +45,10 @@ export interface MissionSessionState {
   missionState: MissionStateSchema | null;
   events: MissionEventSchema[];
   windows: ObservationWindowSchema[];
+  /** The backend's request pool with live statuses, emergency arrivals included. */
+  requestPool: ObservationRequestSchema[];
+  /** The current plan's metrics, measured at the current mission state. */
+  metrics: MetricsSchema | null;
   impact: ImpactSchema | null;
   /** The last replan, or null while no replan has run on this plan. */
   replanResult: ReplanResult | null;
@@ -94,6 +102,8 @@ export function useMissionSession(): MissionSessionState {
   const [missionState, setMissionState] = useState<MissionStateSchema | null>(null);
   const [events, setEvents] = useState<MissionEventSchema[]>([]);
   const [windows, setWindows] = useState<ObservationWindowSchema[]>([]);
+  const [requestPool, setRequestPool] = useState<ObservationRequestSchema[]>([]);
+  const [metrics, setMetrics] = useState<MetricsSchema | null>(null);
   const [impact, setImpact] = useState<ImpactSchema | null>(null);
   const [replanResult, setReplanResult] = useState<ReplanResult | null>(null);
   const [selection, setSelection] = useState<MissionSelection>(EMPTY_SELECTION);
@@ -109,6 +119,20 @@ export function useMissionSession(): MissionSessionState {
     ]);
     setMissionState(nextState);
     setEvents(nextEvents);
+  }, []);
+
+  /**
+   * What the backend evaluates against the mission state: request statuses
+   * (expiry included) and the current plan's metrics. Every mutation moves
+   * that state, so both are refetched after each one rather than mirrored.
+   */
+  const refetchPoolAndMetrics = useCallback(async (scenarioId: string, planId: string | null) => {
+    const [nextPool, nextMetrics] = await Promise.all([
+      fetchRequests(scenarioId),
+      planId === null ? Promise.resolve(null) : fetchMetrics(planId),
+    ]);
+    setRequestPool(nextPool);
+    setMetrics(nextMetrics);
   }, []);
 
   const loadDemoScenario = useCallback(async () => {
@@ -128,13 +152,16 @@ export function useMissionSession(): MissionSessionState {
       setReplanResult(null);
       setPlanConflict(null);
       setSelection(EMPTY_SELECTION);
-      await refetchStateAndEvents(loaded.id);
+      await Promise.all([
+        refetchStateAndEvents(loaded.id),
+        refetchPoolAndMetrics(loaded.id, null),
+      ]);
     } catch (caught) {
       setError(describeError(caught));
     } finally {
       setLoading(false);
     }
-  }, [refetchStateAndEvents]);
+  }, [refetchStateAndEvents, refetchPoolAndMetrics]);
 
   const generatePlan = useCallback(async () => {
     if (scenario === null) {
@@ -153,13 +180,16 @@ export function useMissionSession(): MissionSessionState {
       // Regenerated windows and a fresh plan replace what a selected window or
       // plan pointed at; the request survives because the scenario does.
       setSelection((current) => ({ ...current, windowId: null, planId: null }));
-      await refetchStateAndEvents(scenario.id);
+      await Promise.all([
+        refetchStateAndEvents(scenario.id),
+        refetchPoolAndMetrics(scenario.id, nextPlan.id),
+      ]);
     } catch (caught) {
       setError(describeError(caught));
     } finally {
       setLoading(false);
     }
-  }, [scenario, refetchStateAndEvents]);
+  }, [scenario, refetchStateAndEvents, refetchPoolAndMetrics]);
 
   /**
    * A refused replan leaves the session pointing at a plan the backend has
@@ -178,6 +208,7 @@ export function useMissionSession(): MissionSessionState {
           fetchWindows(scenarioId),
           fetchImpactIfAny(scenarioId),
           refetchStateAndEvents(scenarioId),
+          refetchPoolAndMetrics(scenarioId, currentPlanId),
         ]);
         if (currentPlan !== null) {
           setPlan(currentPlan);
@@ -188,7 +219,27 @@ export function useMissionSession(): MissionSessionState {
         setError(describeError(caught));
       }
     },
-    [refetchStateAndEvents],
+    [refetchStateAndEvents, refetchPoolAndMetrics],
+  );
+
+  /**
+   * The comparison's metrics read the live mission state as well, so while
+   * the replan it compares still produced the current plan it is refetched
+   * alongside that state.
+   */
+  const refreshComparison = useCallback(
+    async (currentPlan: MissionPlanSchema) => {
+      if (replanResult === null || replanResult.revisedPlan.id !== currentPlan.id) {
+        return;
+      }
+      const diff = await comparePlans(replanResult.initialPlan.id, currentPlan.id);
+      setReplanResult((current) =>
+        current === null || current.revisedPlan.id !== currentPlan.id
+          ? current
+          : { ...current, revisedPlan: currentPlan, diff },
+      );
+    },
+    [replanResult],
   );
 
   const replan = useCallback(async () => {
@@ -223,7 +274,10 @@ export function useMissionSession(): MissionSessionState {
         comparePlans(initialPlan.id, revisedPlan.id),
         fetchTraces(revisedPlan.id),
       ]);
-      await refetchStateAndEvents(scenario.id);
+      await Promise.all([
+        refetchStateAndEvents(scenario.id),
+        refetchPoolAndMetrics(scenario.id, revisedPlan.id),
+      ]);
       setReplanResult({
         initialPlan,
         revisedPlan,
@@ -242,7 +296,7 @@ export function useMissionSession(): MissionSessionState {
       setOperation(null);
       setLoading(false);
     }
-  }, [scenario, plan, refetchStateAndEvents, refreshAfterConflict]);
+  }, [scenario, plan, refetchStateAndEvents, refetchPoolAndMetrics, refreshAfterConflict]);
 
   const step = useCallback(
     async (seconds: number) => {
@@ -257,25 +311,16 @@ export function useMissionSession(): MissionSessionState {
         if (plan !== null) {
           const refreshedPlan = await fetchPlan(plan.id);
           setPlan(refreshedPlan);
-          if (replanResult !== null && replanResult.revisedPlan.id === refreshedPlan.id) {
-            // Battery and storage utilisation read the live mission state, not
-            // the plan, so the metrics panel goes stale after a step unless
-            // its comparison is refetched along with the revised timeline.
-            const diff = await comparePlans(replanResult.initialPlan.id, refreshedPlan.id);
-            setReplanResult((current) =>
-              current === null || current.revisedPlan.id !== refreshedPlan.id
-                ? current
-                : { ...current, revisedPlan: refreshedPlan, diff },
-            );
-          }
+          await refreshComparison(refreshedPlan);
         }
+        await refetchPoolAndMetrics(scenario.id, plan?.id ?? null);
       } catch (caught) {
         setError(describeError(caught));
       } finally {
         setLoading(false);
       }
     },
-    [scenario, plan, replanResult],
+    [scenario, plan, refreshComparison, refetchPoolAndMetrics],
   );
 
   const injectEvent = useCallback(
@@ -302,6 +347,12 @@ export function useMissionSession(): MissionSessionState {
         setEvents(nextEvents);
         setWindows(nextWindows);
         setImpact(nextImpact);
+        // A battery drop or an emergency arrival moves what the metrics and
+        // request statuses read, so they follow the event too.
+        await Promise.all([
+          refetchPoolAndMetrics(scenario.id, plan?.id ?? null),
+          plan === null ? Promise.resolve() : refreshComparison(plan),
+        ]);
         // Follow the injected event, and what it names, across every panel.
         const requestId = eventAnchorRequestId(injected);
         setSelection((current) => ({
@@ -319,7 +370,7 @@ export function useMissionSession(): MissionSessionState {
         setLoading(false);
       }
     },
-    [scenario],
+    [scenario, plan, refetchPoolAndMetrics, refreshComparison],
   );
 
   // A selected window belongs to one request, so choosing a request drops it.
@@ -380,6 +431,8 @@ export function useMissionSession(): MissionSessionState {
     missionState,
     events,
     windows,
+    requestPool,
+    metrics,
     impact,
     replanResult,
     selection,

@@ -1,6 +1,7 @@
 import { client, ApiError, isErrorEnvelope } from "./client";
 import type {
   ScenarioSchema,
+  ObservationRequestSchema,
   ObservationWindowSchema,
   MissionPlanSchema,
   MissionStateSchema,
@@ -8,6 +9,7 @@ import type {
   MissionEventSchema,
   ImpactSchema,
   PlanDiffSchema,
+  MetricsSchema,
   DecisionTraceSchema,
 } from "./client";
 
@@ -53,6 +55,18 @@ export async function createPlan(scenarioId: string): Promise<MissionPlanSchema>
 export async function fetchState(scenarioId: string): Promise<MissionStateSchema> {
   return unwrap(
     await client.GET("/scenarios/{scenario_id}/state", {
+      params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+/**
+ * The request pool with live statuses: the scenario's requests plus those the
+ * event log introduced. The scenario is immutable, so expiry shows only here.
+ */
+export async function fetchRequests(scenarioId: string): Promise<ObservationRequestSchema[]> {
+  return unwrap(
+    await client.GET("/scenarios/{scenario_id}/requests", {
       params: { path: { scenario_id: scenarioId } },
     }),
   );
@@ -134,6 +148,14 @@ export async function comparePlans(
   return unwrap(
     await client.GET("/plans/{old_plan_id}/compare/{new_plan_id}", {
       params: { path: { old_plan_id: oldPlanId, new_plan_id: newPlanId } },
+    }),
+  );
+}
+
+export async function fetchMetrics(planId: string): Promise<MetricsSchema> {
+  return unwrap(
+    await client.GET("/plans/{plan_id}/metrics", {
+      params: { path: { plan_id: planId } },
     }),
   );
 }

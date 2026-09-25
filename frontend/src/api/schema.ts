@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenario_id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Requests */
+        get: operations["get_requests_scenarios__scenario_id__requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scenarios/{scenario_id}/windows/generate": {
         parameters: {
             query?: never;
@@ -453,6 +470,11 @@ export interface components {
             request_pool_size: number;
             /** Request Pool Ids */
             request_pool_ids: string[];
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
             /** Plan Churn */
             plan_churn: number | null;
             /** Explanation Coverage */
@@ -776,6 +798,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioSchema"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_requests_scenarios__scenario_id__requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationRequestSchema"][];
                 };
             };
             /** @description Resource not found */

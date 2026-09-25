@@ -139,3 +139,15 @@ def test_a_non_adjacent_comparison_keeps_the_reason_the_impact_recorded():
     moved = session.compare_versions(1, 3).entry_for("OBS-B")
 
     assert moved.reason_code is ReasonCode.WINDOW_INVALIDATED
+
+
+def test_both_sides_of_a_comparison_are_measured_at_the_same_instant():
+    session = _blocked_session()
+    version_two = session.replan()
+    session.step(600)
+
+    comparison = session.compare_versions(1, version_two.version)
+
+    now = session.get_state().simulated_time
+    assert comparison.metrics_before.measured_at == now
+    assert comparison.metrics_after.measured_at == now

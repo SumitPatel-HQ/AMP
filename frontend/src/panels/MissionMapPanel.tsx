@@ -3,10 +3,12 @@ import type {
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
+  ObservationRequestSchema,
   ScenarioSchema,
 } from "../api/client";
 import type { MapHover, MissionMapEngine } from "../map/missionMapEngine";
 import { buildMissionMapModel, type MissionMapModel } from "../map/missionMapModel";
+import { expiredRequestIds } from "../state/requestStatus";
 import {
   cssColor,
   DEFAULT_VISIBILITY,
@@ -175,11 +177,14 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
  * The central spatial workspace: a dark vector basemap with the mission's
  * targets, plan sequence and inferred satellite position drawn over it.
  */
+const NO_REQUESTS: readonly ObservationRequestSchema[] = [];
+
 export function MissionMapPanel({
   scenario,
   plan,
   missionState,
   events,
+  requestPool = NO_REQUESTS,
   selectedRequestId,
   onSelectRequest,
 }: {
@@ -187,6 +192,8 @@ export function MissionMapPanel({
   plan: MissionPlanSchema | null;
   missionState: MissionStateSchema | null;
   events: MissionEventSchema[];
+  /** The backend's request pool; only its expiry is read, the rest comes from the events. */
+  requestPool?: readonly ObservationRequestSchema[];
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
@@ -205,8 +212,17 @@ export function MissionMapPanel({
   }, [selectedRequestId, onSelectRequest]);
 
   const model = useMemo(
-    () => (scenario === null ? null : buildMissionMapModel(scenario, plan, missionState, events)),
-    [scenario, plan, missionState, events],
+    () =>
+      scenario === null
+        ? null
+        : buildMissionMapModel(
+            scenario,
+            plan,
+            missionState,
+            events,
+            expiredRequestIds(requestPool),
+          ),
+    [scenario, plan, missionState, events, requestPool],
   );
 
   useEffect(() => {

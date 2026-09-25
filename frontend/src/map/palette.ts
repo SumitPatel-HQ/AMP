@@ -7,6 +7,7 @@ export const STATUS_COLORS: Record<TargetPlanStatus, Rgb> = {
   scheduled: [56, 189, 248],
   completed: [52, 211, 153],
   unscheduled: [251, 191, 36],
+  expired: [100, 116, 139],
   unplanned: [148, 163, 184],
 };
 
@@ -14,6 +15,7 @@ export const STATUS_LABELS: Record<TargetPlanStatus, string> = {
   scheduled: "Scheduled",
   completed: "Completed",
   unscheduled: "Unscheduled",
+  expired: "Expired",
   unplanned: "Not planned",
 };
 

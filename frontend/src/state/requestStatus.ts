@@ -1,5 +1,6 @@
 import type {
   ImpactSchema,
+  ObservationRequestSchema,
   MissionPlanSchema,
   PlanChangeType,
   PlanDiffSchema,
@@ -10,6 +11,7 @@ export type RequestState =
   | "started"
   | "planned"
   | "invalid"
+  | "expired"
   | "unscheduled"
   | "not-planned";
 
@@ -32,12 +34,15 @@ export function requestStatus(
   {
     plan,
     completedRequestIds,
+    expiredRequestIds,
     impact,
     diff,
   }: {
     plan: MissionPlanSchema | null;
     /** Live from mission state, so completion shows even where the plan lags. */
     completedRequestIds: ReadonlySet<string>;
+    /** Expired by the backend's request pool: the deadline passed unserved. */
+    expiredRequestIds: ReadonlySet<string>;
     impact: ImpactSchema | null;
     diff: PlanDiffSchema | null;
   },
@@ -58,6 +63,11 @@ export function requestStatus(
   if (completedRequestIds.has(requestId) || action?.status === "completed") {
     return status("completed");
   }
+  if (expiredRequestIds.has(requestId)) {
+    // Expiry is permanent, but why the plan left the request out still helps.
+    const unscheduled = plan?.unscheduled.find((candidate) => candidate.request_id === requestId);
+    return status("expired", unscheduled?.reason_code ?? null);
+  }
   if (plan === null) {
     return status("not-planned");
   }
@@ -76,4 +86,13 @@ export function requestStatus(
   return unscheduled === undefined
     ? status("not-planned")
     : status("unscheduled", unscheduled.reason_code);
+}
+
+/** The requests the backend's request pool reports expired. */
+export function expiredRequestIds(
+  requestPool: readonly ObservationRequestSchema[],
+): ReadonlySet<string> {
+  return new Set(
+    requestPool.filter((request) => request.status === "expired").map((request) => request.id),
+  );
 }

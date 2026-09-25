@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Optional
 
 
@@ -17,6 +18,10 @@ class MetricsResult:
     storage_utilisation: float
     request_pool_size: int
     request_pool_ids: frozenset[str]
+    # The simulated instant of the mission state the metrics read. Completion
+    # and utilisation follow that state, not the plan, so the same plan scores
+    # differently as the clock runs.
+    measured_at: datetime
     plan_churn: Optional[float] = None
     explanation_coverage: Optional[float] = None
 
@@ -31,6 +36,7 @@ class MetricsResult:
             "storage_utilisation": self.storage_utilisation,
             "request_pool_size": self.request_pool_size,
             "request_pool_ids": sorted(self.request_pool_ids),
+            "measured_at": self.measured_at.isoformat(),
             "plan_churn": self.plan_churn,
             "explanation_coverage": self.explanation_coverage,
         }

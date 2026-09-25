@@ -33,7 +33,12 @@ const plan = {
   planning_time_ms: 1,
 } satisfies MissionPlanSchema;
 
-const none = { completedRequestIds: new Set<string>(), impact: null, diff: null };
+const none = {
+  completedRequestIds: new Set<string>(),
+  expiredRequestIds: new Set<string>(),
+  impact: null,
+  diff: null,
+};
 
 describe("requestStatus", () => {
   it("is not planned while no plan exists", () => {
@@ -65,6 +70,24 @@ describe("requestStatus", () => {
       reasonCode: "TIME_OVERLAP",
       change: null,
     });
+  });
+
+  it("marks a request the backend expired, keeping the planner's reason", () => {
+    const expiredRequestIds = new Set(["OBS-D"]);
+    expect(requestStatus("OBS-D", { ...none, plan, expiredRequestIds })).toEqual({
+      state: "expired",
+      reasonCode: "TIME_OVERLAP",
+      change: null,
+    });
+    expect(requestStatus("OBS-D", { ...none, plan: null, expiredRequestIds }).state).toBe(
+      "expired",
+    );
+  });
+
+  it("never reads a completed request as expired", () => {
+    expect(
+      requestStatus("OBS-A", { ...none, plan, expiredRequestIds: new Set(["OBS-A"]) }).state,
+    ).toBe("completed");
   });
 
   it("marks an action the current plan's impact invalidated", () => {

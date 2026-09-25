@@ -65,6 +65,7 @@ def compute_metrics(
         storage_utilisation=storage_utilisation,
         request_pool_size=pool_size,
         request_pool_ids=frozenset(request.id for request in pool),
+        measured_at=mission_state.simulated_time,
         plan_churn=compute_plan_churn(previous_plan, plan, diff),
         explanation_coverage=compute_explanation_coverage(diff, traces),
     )

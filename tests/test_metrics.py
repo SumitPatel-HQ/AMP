@@ -285,3 +285,24 @@ def test_metrics_result_serialises_to_a_plain_dict_with_no_ui_dependency():
     assert data["plan_churn"] is None
     assert data["explanation_coverage"] is None
     assert isinstance(data, dict)
+
+
+def test_metrics_name_the_simulated_instant_they_were_measured_at():
+    # Utilisation and completion read the live mission state rather than the
+    # plan, so the same plan scores differently as the clock runs. The instant
+    # travels with the metrics so a reader can tell which reading it holds.
+    scenario = _scenario(())
+    later = START + timedelta(hours=3)
+    mission_state = MissionState(
+        scenario_id=scenario.id,
+        simulated_time=later,
+        satellite_id="SAT-001",
+        battery_wh=60.0,
+        storage_usage_mb=50.0,
+        available=True,
+    )
+
+    metrics = compute_metrics(scenario, mission_state, (), _plan(()))
+
+    assert metrics.measured_at == later
+    assert metrics.to_dict()["measured_at"] == later.isoformat()

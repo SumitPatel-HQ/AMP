@@ -52,6 +52,19 @@ describe("mission map model", () => {
     expect(completed.targets[0].status).toBe("completed");
   });
 
+  it("reads expiry from the backend's request pool, with live completion still winning", () => {
+    const model = buildMissionMapModel(
+      scenario,
+      { ...plan, actions: [plan.actions[0]], unscheduled: [{ request_id: "OBS-B", reason_code: "TIME_OVERLAP" }] },
+      { ...missionState, completed_request_ids: ["OBS-A"] },
+      [],
+      new Set(["OBS-A", "OBS-B"]),
+    );
+
+    expect(model.targets.map((target) => target.status)).toEqual(["completed", "expired"]);
+    expect(model.targets[1].unscheduledReason).toBe("TIME_OVERLAP");
+  });
+
   it("links a target to the events whose payload names it", () => {
     const model = buildMissionMapModel(scenario, plan, missionState, [
       {

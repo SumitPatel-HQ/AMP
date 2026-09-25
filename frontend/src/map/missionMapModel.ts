@@ -16,7 +16,7 @@ export type Coordinate = readonly [number, number];
  * Where a request stands, read off the current plan and the live mission
  * state. Completion wins because the clock has already settled it.
  */
-export type TargetPlanStatus = "completed" | "scheduled" | "unscheduled" | "unplanned";
+export type TargetPlanStatus = "completed" | "expired" | "scheduled" | "unscheduled" | "unplanned";
 
 /** One observation target as the map draws it. */
 export interface MapTarget {
@@ -120,8 +120,10 @@ function targetStatus(
   action: ScheduledActionSchema | null,
   unscheduledReason: string | null,
   completed: boolean,
+  expired: boolean,
 ): TargetPlanStatus {
   if (completed || action?.status === "completed") return "completed";
+  if (expired) return "expired";
   if (action !== null) return "scheduled";
   if (unscheduledReason !== null) return "unscheduled";
   return "unplanned";
@@ -147,6 +149,8 @@ export function buildMissionMapModel(
   plan: MissionPlanSchema | null,
   missionState: MissionStateSchema | null,
   events: MissionEventSchema[],
+  /** Expired in the backend's request pool; the plan alone never says so. */
+  expiredRequestIds: ReadonlySet<string> = new Set(),
 ): MissionMapModel {
   const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
@@ -159,7 +163,12 @@ export function buildMissionMapModel(
       coordinate: targetCoordinate(request),
       priority: request.priority,
       deadline: request.deadline,
-      status: targetStatus(action, unscheduledReason, completedIds.has(request.id)),
+      status: targetStatus(
+        action,
+        unscheduledReason,
+        completedIds.has(request.id),
+        expiredRequestIds.has(request.id),
+      ),
       action,
       unscheduledReason,
       eventIds: events

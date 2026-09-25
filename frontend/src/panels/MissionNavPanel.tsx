@@ -4,13 +4,14 @@ import type {
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
+  ObservationRequestSchema,
   ObservationWindowSchema,
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
 import { eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
 import { knownPlans, planLabel } from "../state/planContext";
-import { requestStatus, type RequestState } from "../state/requestStatus";
+import { expiredRequestIds, requestStatus, type RequestState } from "../state/requestStatus";
 import type { MissionSelection, ReplanResult } from "../state/types";
 import { clockTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
@@ -42,6 +43,7 @@ const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: stri
   started: { dot: "bg-amber-400", text: "text-amber-300", label: "started" },
   planned: { dot: "bg-sky-400", text: "text-sky-300", label: "planned" },
   invalid: { dot: "bg-red-500", text: "text-red-400", label: "invalid" },
+  expired: { dot: "bg-neutral-600", text: "text-neutral-500", label: "expired" },
   unscheduled: { dot: "bg-neutral-500", text: "text-neutral-400", label: "unscheduled" },
   "not-planned": { dot: "bg-neutral-700", text: "text-neutral-600", label: "not planned" },
 };
@@ -53,6 +55,7 @@ function RequestList({
   impact,
   diff,
   completedRequestIds,
+  expiredRequestIds,
   selectedRequestId,
   onSelectRequest,
 }: {
@@ -64,6 +67,7 @@ function RequestList({
   /** The last replan's diff; it marks changes only while its plan is current. */
   diff: PlanDiffSchema | null;
   completedRequestIds: ReadonlySet<string>;
+  expiredRequestIds: ReadonlySet<string>;
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
@@ -75,7 +79,13 @@ function RequestList({
     <ul aria-label="Observation requests">
       {rows.map(({ request, eventId }) => {
         const selected = request.id === selectedRequestId;
-        const status = requestStatus(request.id, { plan, completedRequestIds, impact, diff });
+        const status = requestStatus(request.id, {
+          plan,
+          completedRequestIds,
+          expiredRequestIds,
+          impact,
+          diff,
+        });
         const style = STATE_STYLE[status.state];
         const detail = [
           eventId === null ? null : `emergency · ${eventId}`,
@@ -276,6 +286,7 @@ export function MissionNavPanel({
   missionState,
   windows,
   events,
+  requestPool,
   selection,
   onSelectRequest,
   onSelectWindow,
@@ -289,6 +300,8 @@ export function MissionNavPanel({
   missionState: MissionStateSchema | null;
   windows: ObservationWindowSchema[];
   events: MissionEventSchema[];
+  /** The backend's request pool; its statuses carry expiry, which nothing else reports. */
+  requestPool: ObservationRequestSchema[];
   selection: MissionSelection;
   onSelectRequest: (requestId: string | null) => void;
   onSelectWindow: (windowId: string | null) => void;
@@ -335,6 +348,7 @@ export function MissionNavPanel({
             impact={impact}
             diff={replanResult?.diff ?? null}
             completedRequestIds={new Set(missionState?.completed_request_ids ?? [])}
+            expiredRequestIds={expiredRequestIds(requestPool)}
             selectedRequestId={selection.requestId}
             onSelectRequest={onSelectRequest}
           />

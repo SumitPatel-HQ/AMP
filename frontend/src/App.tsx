@@ -40,6 +40,7 @@ function MissionWorkspace({
         missionState={session.missionState}
         windows={session.windows}
         events={session.events}
+        requestPool={session.requestPool}
         selection={selection}
         onSelectRequest={session.selectRequest}
         onSelectWindow={session.selectWindow}
@@ -51,6 +52,7 @@ function MissionWorkspace({
         plan={session.plan}
         missionState={session.missionState}
         events={session.events}
+        requestPool={session.requestPool}
         selectedRequestId={selection.requestId}
         onSelectRequest={session.selectRequest}
       />
@@ -61,7 +63,7 @@ function MissionWorkspace({
         replanned={replanResult !== null && replanResult.revisedPlan.id === session.plan?.id}
         satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
         storageCapacityMb={session.scenario?.satellite.storage_capacity_mb ?? null}
-        requestCount={session.scenario?.requests.length ?? null}
+        requestCount={session.scenario === null ? null : session.requestPool.length}
       />
       <TimelinePanel
         className="col-span-3"
@@ -95,7 +97,12 @@ function MissionWorkspace({
           onSelectRequest={session.selectRequest}
           onSelectWindow={session.selectWindow}
         />
-        <MetricsPanel diff={replanResult?.diff ?? null} plans={plans} />
+        <MetricsPanel
+          currentPlanId={session.plan?.id ?? null}
+          metrics={session.metrics}
+          diff={replanResult?.diff ?? null}
+          plans={plans}
+        />
       </div>
     </main>
   );

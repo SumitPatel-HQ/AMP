@@ -21,7 +21,9 @@ const api = vi.hoisted(() => ({
   fetchDemoScenario: vi.fn(),
   fetchEvents: vi.fn(),
   fetchImpact: vi.fn(),
+  fetchMetrics: vi.fn(),
   fetchPlan: vi.fn(),
+  fetchRequests: vi.fn(),
   fetchState: vi.fn(),
   fetchTraces: vi.fn(),
   generateWindows: vi.fn(),
@@ -194,6 +196,7 @@ const planDiff = {
     storage_utilisation: 0,
     request_pool_size: 3,
     request_pool_ids: ["OBS-A", "OBS-B", "OBS-C"],
+    measured_at: "2026-09-21T10:00:00Z",
     plan_churn: null,
     explanation_coverage: null,
   },
@@ -207,6 +210,7 @@ const planDiff = {
     storage_utilisation: 0,
     request_pool_size: 3,
     request_pool_ids: ["OBS-A", "OBS-B", "OBS-C"],
+    measured_at: "2026-09-21T10:00:00Z",
     plan_churn: 2 / 3,
     explanation_coverage: 1,
   },
@@ -250,6 +254,12 @@ function installSuccessfulApi(): void {
   api.replan.mockResolvedValue(revisedPlan);
   api.comparePlans.mockResolvedValue(planDiff);
   api.fetchTraces.mockResolvedValue(traces);
+  api.fetchRequests.mockResolvedValue(scenario.requests);
+  api.fetchMetrics.mockImplementation(async (planId: string) =>
+    planId === revisedPlan.id
+      ? planDiff.metrics_after
+      : { ...planDiff.metrics_before, plan_id: planId },
+  );
 }
 
 async function loadDemoAndGeneratePlan(user: ReturnType<typeof userEvent.setup>) {
@@ -601,11 +611,23 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
-    expect(screen.getByText("Replan to compare plan metrics.")).toBeTruthy();
+    // Before any replan the current plan is evaluated on its own.
+    const evaluation = () => screen.getByRole("region", { name: "Mission evaluation" });
+    expect(api.fetchMetrics).toHaveBeenCalledWith(plan.id);
+    expect(within(evaluation()).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+      "Metric",
+      "V1",
+    ]);
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    expect(within(evaluation()).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+      "Metric",
+      "V1",
+      "V2",
+      "Δ",
+    ]);
     const churnRow = screen.getByText("Plan churn").closest("tr");
     expect(churnRow?.textContent).toContain("N/A");
     expect(churnRow?.textContent).toContain("67%");
@@ -689,11 +711,16 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
-    expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("0%");
+    const readings = () => screen.getByLabelText("Mission state readings").textContent;
+    expect(readings()).toContain("battery used 0%");
 
     api.comparePlans.mockResolvedValueOnce({
       ...planDiff,
-      metrics_after: { ...planDiff.metrics_after!, battery_utilisation: 0.5 },
+      metrics_after: {
+        ...planDiff.metrics_after!,
+        battery_utilisation: 0.5,
+        measured_at: "2026-09-21T11:05:00Z",
+      },
     } satisfies PlanDiffSchema);
     api.stepSimulation.mockResolvedValue({
       ...missionState,
@@ -704,8 +731,32 @@ describe("mission dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Step" }));
 
+    await waitFor(() => expect(readings()).toContain("battery used 50%"));
+    expect(readings()).toContain("11:05 UTC");
+  });
+
+  it("marks a request the backend expired, which the immutable scenario never reports", async () => {
+    installSuccessfulApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    api.stepSimulation.mockResolvedValue({
+      ...missionState,
+      simulated_time: "2026-09-21T14:00:00Z",
+    } satisfies MissionStateSchema);
+    api.fetchRequests.mockResolvedValue(
+      scenario.requests.map((request) =>
+        request.id === "OBS-B" ? { ...request, status: "expired" as const } : request,
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Step" }));
+
+    const requestList = screen.getByRole("list", { name: "Observation requests" });
     await waitFor(() =>
-      expect(screen.getByText("Battery used").closest("tr")?.textContent).toContain("50%"),
+      expect(
+        within(requestList).getByRole("button", { name: /^OBS-B/ }).getAttribute("data-plan-status"),
+      ).toBe("expired"),
     );
   });
 

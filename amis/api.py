@@ -19,6 +19,7 @@ from amis.api_schemas import (
     MissionEventSchema,
     MissionPlanSchema,
     MissionStateSchema,
+    ObservationRequestSchema,
     ObservationWindowSchema,
     PlanDiffSchema,
     ReplanRequest,
@@ -161,6 +162,19 @@ def create_app(
     )
     def get_scenario(scenario_id: ScenarioId) -> dict[str, Any]:
         return store.load(scenario_id).get_scenario().to_dict()
+
+    @app.get(
+        "/scenarios/{scenario_id}/requests",
+        response_model=list[ObservationRequestSchema],
+        responses=_documented_errors(404, 422),
+    )
+    def get_requests(scenario_id: ScenarioId) -> list[dict[str, Any]]:
+        # The request pool with live statuses: the scenario stays immutable, so
+        # emergency arrivals and expiry are only visible here.
+        return [
+            request.to_dict()
+            for request in store.load(scenario_id).get_request_pool()
+        ]
 
     @app.post(
         "/scenarios/{scenario_id}/windows/generate",

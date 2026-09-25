@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
   createScenario: vi.fn(),
   fetchDemoScenario: vi.fn(),
   fetchEvents: vi.fn(),
+  fetchMetrics: vi.fn(),
+  fetchRequests: vi.fn(),
   fetchState: vi.fn(),
   generateWindows: vi.fn(),
 }));
@@ -139,6 +141,21 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
   api.fetchEvents.mockResolvedValue([]);
   api.generateWindows.mockResolvedValue([]);
   api.createPlan.mockResolvedValue(plan);
+  api.fetchRequests.mockResolvedValue(scenario.requests);
+  api.fetchMetrics.mockResolvedValue({
+    plan_id: plan.id,
+    mission_utility: plan.mission_utility,
+    completion_rate: 0,
+    violation_count: plan.violation_count,
+    planning_time_ms: plan.planning_time_ms,
+    battery_utilisation: 0,
+    storage_utilisation: 0,
+    request_pool_size: scenario.requests.length,
+    request_pool_ids: scenario.requests.map((request) => request.id),
+    measured_at: missionState.simulated_time,
+    plan_churn: null,
+    explanation_coverage: null,
+  });
   const rendered = render(<App />);
 
   await user.click(screen.getByRole("button", { name: "Load demo scenario" }));

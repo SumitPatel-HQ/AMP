@@ -612,3 +612,95 @@ def test_unsupported_event_types_are_rejected_with_the_invalid_event_code():
             assert rejected.json()["error"]["code"] == "INVALID_EVENT"
 
     asyncio.run(run())
+
+
+def test_requests_route_lists_the_request_pool_with_live_statuses():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario = build_canonical_replan_scenario()
+            await client.post("/scenarios", json=scenario.to_dict())
+
+            unplanned = await client.get(f"/scenarios/{scenario.id}/requests")
+            assert unplanned.status_code == 200
+            assert [item["id"] for item in unplanned.json()] == [
+                request.id for request in scenario.requests
+            ]
+            assert {item["status"] for item in unplanned.json()} == {"pending"}
+
+            await client.post(f"/scenarios/{scenario.id}/windows/generate")
+            await client.post(f"/scenarios/{scenario.id}/plan")
+            await client.post(
+                f"/scenarios/{scenario.id}/events",
+                json={
+                    "event_type": "EMERGENCY_TASK",
+                    "payload": {
+                        "request": {
+                            "id": "OBS-EMERGENCY",
+                            "target_lat": 34.05,
+                            "target_lon": -118.24,
+                            "priority": 5,
+                            "duration_s": 600.0,
+                            "deadline": "2026-09-21T10:50:00+00:00",
+                            "energy_cost_wh": 40.0,
+                            "storage_cost_mb": 100.0,
+                            "status": "pending",
+                        },
+                        "windows": [
+                            {
+                                "id": "WIN-OBS-EMERGENCY-1",
+                                "request_id": "OBS-EMERGENCY",
+                                "satellite_id": "SAT-001",
+                                "start": "2026-09-21T10:40:00+00:00",
+                                "end": "2026-09-21T10:55:00+00:00",
+                                "valid": True,
+                                "invalid_reason": None,
+                            }
+                        ],
+                    },
+                },
+            )
+            # No replan answers the emergency, so its deadline passes unserved.
+            await client.post(
+                f"/scenarios/{scenario.id}/simulation/step", json={"seconds": 3600}
+            )
+
+            listed = await client.get(f"/scenarios/{scenario.id}/requests")
+            assert listed.status_code == 200
+            statuses = {item["id"]: item["status"] for item in listed.json()}
+            state = (await client.get(f"/scenarios/{scenario.id}/state")).json()
+            # The scenario never lists the emergency request; the pool does.
+            assert list(statuses) == [
+                *(request.id for request in scenario.requests),
+                "OBS-EMERGENCY",
+            ]
+            assert statuses["OBS-EMERGENCY"] == "expired"
+            assert state["completed_request_ids"]
+            for request_id in state["completed_request_ids"]:
+                assert statuses[request_id] == "completed"
+
+            missing = await client.get("/scenarios/DOES-NOT-EXIST/requests")
+            assert missing.status_code == 404
+
+    asyncio.run(run())
+
+
+def test_metrics_route_names_the_simulated_instant_it_measured():
+    async def run() -> None:
+        app = create_app(window_provider=CanonicalWindowProvider())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            scenario, plan = await _planned_canonical_scenario(client)
+
+            first = (await client.get(f"/plans/{plan['id']}/metrics")).json()
+            assert first["measured_at"] == "2026-09-21T10:00:00Z"
+
+            await client.post(
+                f"/scenarios/{scenario.id}/simulation/step", json={"seconds": 300}
+            )
+            later = (await client.get(f"/plans/{plan['id']}/metrics")).json()
+            assert later["plan_id"] == first["plan_id"]
+            assert later["measured_at"] == "2026-09-21T10:05:00Z"
+
+    asyncio.run(run())
