@@ -137,7 +137,7 @@ export function TimelinePanel({
             onSelectWindow={onSelectWindow}
             onSelectEvent={onSelectEvent}
           />
-          <StorageProfileChart scenario={scenario} plan={plan} />
+          <StorageProfileChart scenario={scenario} plan={plan} missionState={missionState} />
         </div>
       )}
     </PanelFrame>

@@ -1,4 +1,6 @@
+import { contactTracks, stationFootprints, type MapContactTrack, type MapStationFootprint } from "./contactTracks";
 import type {
+  ContactWindowSchema,
   GroundStationSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -57,6 +59,10 @@ export interface MissionMapModel {
   groundTrack?: Coordinate[][];
   /** The mission's ground stations (ADR-0011), drawn as downlink sites. */
   stations?: MapStation[];
+  /** Each station's visibility footprint at its elevation mask. */
+  stationFootprints?: MapStationFootprint[];
+  /** Ground track flown during each contact window. */
+  contactTracks?: MapContactTrack[];
   /** [west, south, east, north] around every target, or null with none. */
   bounds: [number, number, number, number] | null;
 }
@@ -166,6 +172,7 @@ export function buildMissionMapModel(
   groundTrack: readonly GroundTrackPointSchema[] = [],
   satellitePosition: GroundTrackPointSchema | null = null,
   groundStations: readonly GroundStationSchema[] = [],
+  contacts: readonly ContactWindowSchema[] = [],
 ): MissionMapModel {
   const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
@@ -217,6 +224,8 @@ export function buildMissionMapModel(
       name: station.name,
       coordinate: [station.lon, station.lat] as Coordinate,
     })),
+    stationFootprints: stationFootprints(groundStations, groundTrack, contacts, missionState?.simulated_time ?? null),
+    contactTracks: contactTracks(groundTrack, contacts, plan),
     bounds: targetBounds(targets),
   };
 }

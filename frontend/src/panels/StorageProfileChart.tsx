@@ -1,13 +1,21 @@
 import { useMemo } from "react";
-import type { MissionPlanSchema, ScenarioSchema } from "../api/client";
+import type { MissionPlanSchema, MissionStateSchema, ScenarioSchema } from "../api/client";
 import { storageProfile } from "../state/storageProfile";
 
 const WIDTH = 600;
 const HEIGHT = 56;
 
 /** Storage rising on imaging and falling on downlink across the mission (ADR-0011). */
-export function StorageProfileChart({ scenario, plan }: { scenario: ScenarioSchema; plan: MissionPlanSchema }) {
-  const points = useMemo(() => storageProfile(scenario, plan), [scenario, plan]);
+export function StorageProfileChart({
+  scenario,
+  plan,
+  missionState,
+}: {
+  scenario: ScenarioSchema;
+  plan: MissionPlanSchema;
+  missionState: MissionStateSchema | null;
+}) {
+  const points = useMemo(() => storageProfile(scenario, plan, missionState), [scenario, plan, missionState]);
   const capacity = scenario.satellite.storage_capacity_mb;
   const start = Date.parse(scenario.start_time);
   const span = Math.max(1, Date.parse(scenario.end_time) - start);

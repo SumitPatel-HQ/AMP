@@ -73,6 +73,7 @@ function plan(id: string, unscheduled: MissionPlanSchema["unscheduled"]): Missio
     mission_utility: 0,
     violation_count: 0,
     planning_time_ms: 0,
+    planner_name: "greedy",
   };
 }
 
@@ -129,6 +130,7 @@ describe("newlyUnscheduled", () => {
           energy_cost_wh: 40,
           storage_cost_mb: 100,
           status: "planned" as const,
+          kind: "imaging" as const,
         },
       ],
     };

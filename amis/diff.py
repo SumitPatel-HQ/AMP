@@ -23,6 +23,7 @@ from amis.domain import (
     PlanDiffEntry,
     ReasonCode,
     ScheduledAction,
+    imaging_actions,
 )
 
 CHANGED_CHANGE_TYPES = (
@@ -54,8 +55,8 @@ def rebuilt_actions(
     # imaging-only (ADR-0011).
     return tuple(
         action
-        for action in previous.actions
-        if action.id not in carried_over_ids and not action.is_downlink
+        for action in imaging_actions(previous.actions)
+        if action.id not in carried_over_ids
     )
 
 
@@ -78,12 +79,8 @@ def compare_plans(
     reasons = dict(reasons_by_request or {})
     # Request-scoped: downlink actions carry no request and never appear
     # as diff entries (ADR-0011).
-    previous_actions = {
-        action.request_id: action for action in previous.actions if not action.is_downlink
-    }
-    current_actions = {
-        action.request_id: action for action in current.actions if not action.is_downlink
-    }
+    previous_actions = {action.request_id: action for action in imaging_actions(previous.actions)}
+    current_actions = {action.request_id: action for action in imaging_actions(current.actions)}
     current_unscheduled = {
         entry.request_id: entry.reason_code for entry in current.unscheduled
     }

@@ -17,4 +17,4 @@ def test_action_ending_after_deadline_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.DEADLINE_VIOLATION
-    assert violation.request_id == "OBS-A"
+    assert violation.subject_key == "OBS-A"

@@ -20,13 +20,13 @@ def check_satellite_availability(
     outage_intervals: Iterable[tuple[datetime, datetime]] = (),
 ) -> Optional[Violation]:
     if not available:
-        return Violation(reason_code=ReasonCode.SATELLITE_UNAVAILABLE, request_id=request_id)
+        return Violation(reason_code=ReasonCode.SATELLITE_UNAVAILABLE, subject_key=request_id)
     if action_start is not None and action_end is not None:
         for outage_start, outage_end in outage_intervals:
             if action_start < outage_end and outage_start < action_end:
                 return Violation(
                     reason_code=ReasonCode.SATELLITE_UNAVAILABLE,
-                    request_id=request_id,
+                    subject_key=request_id,
                 )
 
     return None

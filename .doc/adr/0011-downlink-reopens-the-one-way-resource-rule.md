@@ -78,13 +78,14 @@ explicit rule.
   Downlinks are reservations re-derived on every plan, not operator-visible decisions,
   so they never produce `MOVED`/`DROPPED` entries or traces.
 - Churn counts only imaging actions in both numerator and denominator.
-- Impact and validation use a subject key: the request id for imaging, the action id
-  for downlink. A downlink whose contact a `COMMUNICATION_OUTAGE` invalidated is
+- Impact and validation use `Violation.subject_key`: the request id for imaging, the
+  action id for downlink. A downlink whose contact a `COMMUNICATION_OUTAGE` invalidated is
   reported as an invalid unfrozen action with reason `WINDOW_INVALIDATED`, and the
   replan simply reserves the remaining contacts.
-- Metrics utility and completion read imaging actions only. `downlink_action_count`
-  and `downlink_volume_mb` (total rate x duration of the plan's downlinks) report the
-  downlink side; pruning guarantees every counted downlink frees storage.
+- Metrics utility and completion read imaging actions only (`imaging_actions`).
+  `downlink_action_count` counts the plan's downlinks. `downlink_volume_mb` is the
+  storage they actually free under the floored walk from the scenario's initial
+  storage, not nominal rate x duration.
 
 ### Communication outages
 

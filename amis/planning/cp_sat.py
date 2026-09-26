@@ -13,7 +13,7 @@ import ortools
 
 from amis.constraints import (ResourceProjection, check_deadline, check_overlap,
     check_satellite_availability, check_window_containment, validate_plan)
-from amis.domain import (ActionStatus, ContactWindow, MissionPlan, MissionState, ObservationRequest,
+from amis.domain import (ActionStatus, ContactWindow, imaging_actions, MissionPlan, MissionState, ObservationRequest,
     ObservationWindow, ReasonCode, RequestStatus, Scenario, ScheduledAction, UnscheduledEntry)
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
 from amis.planning.downlink import finalize_downlinks, reserve_downlinks
@@ -44,16 +44,16 @@ class CpSatPlanner:
         baseline = GreedyPlanner().plan(scenario, mission_state, requests, windows,
                                        previous_plan, plan_id, first_action_number, outages, contacts)
         frozen = _frozen_actions(previous_plan, mission_state)
-        frozen_ids = {a.request_id for a in frozen if not a.is_downlink}
+        frozen_ids = {a.request_id for a in imaging_actions(frozen)}
         eligible = [r for r in requests if r.id not in frozen_ids
                     and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)]
-        previous = {a.request_id: a for a in previous_plan.actions if not a.is_downlink} if previous_plan else {}
+        previous = {a.request_id: a for a in imaging_actions(previous_plan.actions)} if previous_plan else {}
         model = cp_model.CpModel()
         origin = scenario.start_time
         seconds = lambda instant: (instant - origin).total_seconds()
         intervals = [model.new_fixed_size_interval_var(
             math.floor(seconds(a.start)), math.ceil(seconds(a.end)) - math.floor(seconds(a.start)) + gap_s,
-            f"frozen_{a.id}") for a in frozen if not a.is_downlink]
+            f"frozen_{a.id}") for a in imaging_actions(frozen)]
         choices = []
         penalties = []
         penalty_ranges = []
@@ -99,7 +99,7 @@ class CpSatPlanner:
         # Downlink releases are ignored here: the linear sum is a conservative
         # bound on the timeline walk, and the greedy-baseline fallback keeps
         # downlink gains (ADR-0011).
-        committed = [a for a in frozen if a.status is ActionStatus.PLANNED and not a.is_downlink]
+        committed = [a for a in imaging_actions(frozen) if a.status is ActionStatus.PLANNED]
         # Exact decimal ratios avoid rounding a resource budget into overcommitment.
         for attr, available in (("energy_cost_wh", mission_state.battery_wh),
                                 ("storage_cost_mb", scenario.satellite.storage_capacity_mb - mission_state.storage_usage_mb)):
@@ -182,7 +182,7 @@ class CpSatPlanner:
         for action in actions:
             if action.status is ActionStatus.PLANNED:
                 projection.commit(action)
-        selected_ids = {a.request_id for a in actions if not a.is_downlink}
+        selected_ids = {a.request_id for a in imaging_actions(actions)}
         entries = []
         for request in requests:
             if request.id in selected_ids:

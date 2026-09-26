@@ -76,6 +76,23 @@ def test_downlink_release_floors_storage_at_zero():
     assert projection.freed_by_downlinks() == {"ACT-1": 30.0}
 
 
+def test_downlink_volume_metric_reports_floored_release_not_nominal_capacity():
+    from amis.metrics import compute_downlink_volume
+
+    scenario = orbital_example()
+    t0 = scenario.start_time
+    imaging = ScheduledAction(
+        "ACT-1", "REQ", "SAT", "WIN-1", t0, t0 + timedelta(minutes=1), 1.0, 30.0,
+    )
+    downlink = ScheduledAction(
+        "ACT-2", None, "SAT", "CON-X-1", t0 + timedelta(minutes=5), t0 + timedelta(minutes=10),
+        0.0, -500.0, kind=ActionKind.DOWNLINK, station_id="X",
+    )
+    plan = replace(_session(scenario).plan(), actions=(imaging, downlink))
+    initial = scenario.satellite.storage_usage_mb
+    assert compute_downlink_volume(scenario, plan) == pytest.approx(min(500.0, initial + 30.0))
+
+
 @pytest.mark.parametrize("planner", ["greedy", "cp_sat"])
 def test_downlink_keeps_a_storage_bound_mission_feasible(planner):
     without = _session(_tight_scenario(stations=()), planner).plan()
@@ -125,7 +142,8 @@ def test_communication_outage_invalidates_its_contact_and_replan_moves_on():
     assert all(entry.request_id is not None for entry in diff.entries)
     metrics = session.get_metrics()
     assert metrics.downlink_action_count == sum(a.is_downlink for a in replanned.actions)
-    assert metrics.downlink_volume_mb > 0
+    nominal = sum(-a.storage_cost_mb for a in replanned.actions if a.is_downlink)
+    assert 0 < metrics.downlink_volume_mb < nominal
     assert all(trace.request_id is not None for trace in session.get_traces())
 
 

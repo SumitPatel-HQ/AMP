@@ -45,4 +45,4 @@ def test_overlapping_action_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.TIME_OVERLAP
-    assert violation.request_id == "OBS-B"
+    assert violation.subject_key == "OBS-B"

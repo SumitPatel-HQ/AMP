@@ -155,6 +155,8 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
     measured_at: missionState.simulated_time,
     plan_churn: null,
     explanation_coverage: null,
+    downlink_action_count: 0,
+    downlink_volume_mb: 0,
   });
   const rendered = render(<App />);
 

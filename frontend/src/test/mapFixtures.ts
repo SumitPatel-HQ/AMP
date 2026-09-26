@@ -57,6 +57,7 @@ export const plan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
     {
       id: "ACT-OBS-B-1",
@@ -68,12 +69,14 @@ export const plan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
   ],
   unscheduled: [],
   mission_utility: 8,
   violation_count: 0,
   planning_time_ms: 1,
+  planner_name: "greedy",
 } satisfies MissionPlanSchema;
 
 export const missionState = {

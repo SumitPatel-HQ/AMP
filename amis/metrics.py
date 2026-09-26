@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
+from amis.constraints.resources import ResourceProjection
 from amis.diff import CHANGED_CHANGE_TYPES, rebuilt_actions
 from amis.domain import (
     DecisionTrace,
@@ -24,6 +25,7 @@ from amis.domain import (
     PlanDiff,
     RequestStatus,
     Scenario,
+    imaging_actions,
 )
 
 
@@ -39,9 +41,7 @@ def compute_metrics(
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
 
-    imaging_actions = [action for action in plan.actions if not action.is_downlink]
-    downlinks = [action for action in plan.actions if action.is_downlink]
-    utility_request_ids = {action.request_id for action in imaging_actions} | set(
+    utility_request_ids = {action.request_id for action in imaging_actions(plan.actions)} | set(
         mission_state.completed_request_ids
     )
     mission_utility = sum(priority_by_id[request_id] for request_id in utility_request_ids)
@@ -70,9 +70,22 @@ def compute_metrics(
         measured_at=mission_state.simulated_time,
         plan_churn=compute_plan_churn(previous_plan, plan, diff),
         explanation_coverage=compute_explanation_coverage(diff, traces),
-        downlink_action_count=len(downlinks),
-        downlink_volume_mb=sum(-action.storage_cost_mb for action in downlinks),
+        downlink_action_count=sum(1 for action in plan.actions if action.is_downlink),
+        downlink_volume_mb=compute_downlink_volume(scenario, plan),
     )
+
+
+def compute_downlink_volume(scenario: Scenario, plan: MissionPlan) -> float:
+    """Storage the plan's downlinks actually free, floored at zero (ADR-0011).
+
+    The plan carries every executed action forward, so walking it from the
+    scenario's initial storage replays the mission's full storage story.
+    Nominal rate x duration overstates a downlink that ends with less stored.
+    """
+    projection = ResourceProjection(0.0, scenario.satellite.storage_usage_mb)
+    for action in plan.actions:
+        projection.commit(action)
+    return sum(projection.freed_by_downlinks().values())
 
 
 def compute_plan_churn(

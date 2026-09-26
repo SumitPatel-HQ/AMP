@@ -33,7 +33,7 @@ def check_overlap(
         if start < other.end + gap and other.start < end + gap:
             return Violation(
                 reason_code=ReasonCode.TIME_OVERLAP,
-                request_id=request_id,
+                subject_key=request_id,
                 details={
                     "conflicting_action_id": other.id,
                     "conflicting_request_id": other.request_id,

@@ -16,6 +16,8 @@ const metricsBefore = {
   measured_at: "2026-09-21T11:05:00Z",
   plan_churn: null,
   explanation_coverage: null,
+  downlink_action_count: 0,
+  downlink_volume_mb: 0,
 } satisfies MetricsSchema;
 
 const metricsAfter = {
@@ -25,6 +27,8 @@ const metricsAfter = {
   completion_rate: 0.6,
   plan_churn: 0.25,
   explanation_coverage: 1.0,
+  downlink_action_count: 0,
+  downlink_volume_mb: 0,
 } satisfies MetricsSchema;
 
 const diff = {
@@ -48,6 +52,7 @@ function plan(id: string, version: number): MissionPlanSchema {
     mission_utility: 0,
     violation_count: 0,
     planning_time_ms: 0,
+    planner_name: "greedy",
   };
 }
 

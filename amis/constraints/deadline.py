@@ -19,7 +19,7 @@ def check_deadline(
     if end > deadline:
         return Violation(
             reason_code=ReasonCode.DEADLINE_VIOLATION,
-            request_id=request_id,
+            subject_key=request_id,
             details={"deadline": deadline.isoformat(), "end": end.isoformat()},
         )
 

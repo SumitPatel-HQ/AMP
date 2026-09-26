@@ -17,7 +17,7 @@ def test_action_exceeding_available_battery_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.INSUFFICIENT_BATTERY
-    assert violation.request_id == "OBS-A"
+    assert violation.subject_key == "OBS-A"
 
 
 def test_action_within_available_storage_passes():
@@ -35,7 +35,7 @@ def test_action_exceeding_available_storage_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.INSUFFICIENT_STORAGE
-    assert violation.request_id == "OBS-A"
+    assert violation.subject_key == "OBS-A"
 
 
 def _action(id: str, start: datetime, energy_cost_wh: float, storage_cost_mb: float) -> ScheduledAction:

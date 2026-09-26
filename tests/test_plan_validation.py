@@ -121,7 +121,7 @@ def test_validate_plan_returns_every_violation_in_one_call():
 
     assert len(violations) == 1
     assert violations[0].reason_code is ReasonCode.INSUFFICIENT_BATTERY
-    assert violations[0].request_id == "OBS-B"
+    assert violations[0].subject_key == "OBS-B"
 
 
 def test_validate_plan_skips_a_started_action_whose_cost_is_already_in_mission_state():

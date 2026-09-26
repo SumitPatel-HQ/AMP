@@ -1,5 +1,6 @@
 import type { Layer } from "@deck.gl/core";
 import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import type { MapContactTrack, MapStationFootprint } from "./contactTracks";
 import type { Coordinate, MapStation, MapTarget, MissionMapModel, SatellitePlacement } from "./missionMapModel";
 import {
   EVENT_COLOR,
@@ -38,6 +39,36 @@ export function buildMissionLayers({ model, selectedRequestId, visibility }: Mis
       data: model.groundTrack.map((path) => ({ path })),
       getPath: (item) => item.path as [number, number][],
       getColor: [249, 115, 22, 130], getWidth: 1.5, widthUnits: "pixels",
+    }));
+  }
+
+  if (model.stationFootprints?.length) {
+    layers.push(new ScatterplotLayer<MapStationFootprint>({
+      id: "amis-station-footprints",
+      data: model.stationFootprints.filter((footprint) => footprint.radiusM > 0),
+      getPosition: (footprint) => [...footprint.coordinate],
+      getRadius: (footprint) => footprint.radiusM,
+      radiusUnits: "meters",
+      stroked: true,
+      filled: true,
+      getFillColor: (footprint) => (footprint.inContact ? [56, 189, 248, 45] : [56, 189, 248, 12]),
+      getLineColor: (footprint) => (footprint.inContact ? [125, 211, 252, 220] : [56, 189, 248, 90]),
+      getLineWidth: 1,
+      lineWidthUnits: "pixels",
+      updateTriggers: { getFillColor: model.stationFootprints, getLineColor: model.stationFootprints },
+    }));
+  }
+
+  if (model.contactTracks?.length) {
+    layers.push(new PathLayer<{ path: Coordinate[]; track: MapContactTrack }>({
+      id: "amis-contact-tracks",
+      data: model.contactTracks.flatMap((track) => track.paths.map((path) => ({ path, track }))),
+      getPath: (item) => item.path as [number, number][],
+      getColor: (item) =>
+        !item.track.valid ? [239, 68, 68, 200] : item.track.downlink ? [14, 165, 233, 255] : [125, 211, 252, 150],
+      getWidth: (item) => (item.track.downlink ? 4 : 2.5),
+      widthUnits: "pixels",
+      capRounded: true,
     }));
   }
 

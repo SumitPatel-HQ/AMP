@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from amis.domain.enums import ActionKind, ActionStatus, ReasonCode
 
@@ -68,6 +68,11 @@ class ScheduledAction:
             kind=ActionKind(data.get("kind") or ActionKind.IMAGING.value),
             station_id=data.get("station_id"),
         )
+
+
+def imaging_actions(actions: Iterable[ScheduledAction]) -> list[ScheduledAction]:
+    """The request-keyed actions: every consumer keyed by request id reads these (ADR-0011)."""
+    return [action for action in actions if not action.is_downlink]
 
 
 @dataclass(frozen=True)

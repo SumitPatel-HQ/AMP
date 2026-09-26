@@ -86,12 +86,14 @@ const plan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "started",
+      kind: "imaging",
     },
   ],
   unscheduled: [{ request_id: "OBS-B", reason_code: "WINDOW_INVALIDATED" }],
   mission_utility: 5,
   violation_count: 1,
   planning_time_ms: 2,
+  planner_name: "greedy",
 } satisfies MissionPlanSchema;
 
 const state = {

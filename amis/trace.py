@@ -21,6 +21,7 @@ from amis.domain import (
     PlanDiff,
     ReasonCode,
     ScheduledAction,
+    imaging_actions,
 )
 from amis.ids import TRACE_ID_PREFIX, format_id
 
@@ -77,12 +78,8 @@ def build_traces(
     """
 
     # Downlinks carry no request and produce no traces (ADR-0011).
-    previous_actions = {
-        action.request_id: action for action in previous.actions if not action.is_downlink
-    }
-    current_actions = {
-        action.request_id: action for action in current.actions if not action.is_downlink
-    }
+    previous_actions = {action.request_id: action for action in imaging_actions(previous.actions)}
+    current_actions = {action.request_id: action for action in imaging_actions(current.actions)}
 
     traces: list[DecisionTrace] = []
     for offset, entry in enumerate(

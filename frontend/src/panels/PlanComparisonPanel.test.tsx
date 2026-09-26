@@ -22,6 +22,7 @@ const initialPlan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
     {
       id: "ACT-OBS-C-1",
@@ -33,12 +34,14 @@ const initialPlan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
   ],
   unscheduled: [{ request_id: "OBS-B", reason_code: "DEADLINE_VIOLATION" }],
   mission_utility: 8,
   violation_count: 1,
   planning_time_ms: 1,
+  planner_name: "greedy",
 } satisfies MissionPlanSchema;
 
 const revisedPlan = {

@@ -20,4 +20,4 @@ def test_unavailable_satellite_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.SATELLITE_UNAVAILABLE
-    assert violation.request_id == "OBS-A"
+    assert violation.subject_key == "OBS-A"

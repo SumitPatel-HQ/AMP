@@ -13,6 +13,7 @@ function action(id: string, requestId: string, status: "planned" | "started" | "
     energy_cost_wh: 40,
     storage_cost_mb: 100,
     status,
+    kind: "imaging",
   } as const;
 }
 
@@ -31,6 +32,7 @@ const plan = {
   mission_utility: 9,
   violation_count: 1,
   planning_time_ms: 1,
+  planner_name: "greedy",
 } satisfies MissionPlanSchema;
 
 const none = {

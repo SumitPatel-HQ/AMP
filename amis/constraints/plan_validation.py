@@ -72,7 +72,7 @@ def validate_plan(
             ):
                 violations.append(Violation(
                     reason_code=ReasonCode.WINDOW_INVALIDATED,
-                    request_id=action.subject_key,
+                    subject_key=action.subject_key,
                     details={"contact_id": action.window_id, "station_id": action.station_id},
                 ))
 

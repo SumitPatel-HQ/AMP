@@ -85,6 +85,7 @@ function MissionWorkspace({
         requestPool={session.requestPool}
         groundTrack={session.groundTrack}
         groundStations={session.groundStations}
+        contacts={session.contacts}
         satellitePosition={session.satellitePosition}
         selectedRequestId={selection.requestId}
         onSelectRequest={session.selectRequest}

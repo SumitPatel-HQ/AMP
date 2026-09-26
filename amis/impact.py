@@ -37,7 +37,7 @@ def analyze_impact(
     )
     reasons_by_request: dict[str, list[ReasonCode]] = defaultdict(list)
     for violation in violations:
-        reasons = reasons_by_request[violation.request_id]
+        reasons = reasons_by_request[violation.subject_key]
         if violation.reason_code not in reasons:
             reasons.append(violation.reason_code)
 

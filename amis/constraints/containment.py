@@ -23,14 +23,14 @@ def check_window_containment(
     if not window.valid:
         return Violation(
             reason_code=ReasonCode.WINDOW_INVALIDATED,
-            request_id=request_id,
+            subject_key=request_id,
             details={"window_id": window.id, "invalid_reason": window.invalid_reason},
         )
 
     if start < window.start or end > window.end:
         return Violation(
             reason_code=ReasonCode.WINDOW_INVALIDATED,
-            request_id=request_id,
+            subject_key=request_id,
             details={
                 "window_id": window.id,
                 "window_start": window.start.isoformat(),

@@ -28,7 +28,7 @@ def check_projected_battery(
     if energy_cost_wh > battery_wh:
         return Violation(
             reason_code=ReasonCode.INSUFFICIENT_BATTERY,
-            request_id=request_id,
+            subject_key=request_id,
             details={"required_wh": energy_cost_wh, "available_wh": battery_wh},
         )
 
@@ -44,7 +44,7 @@ def check_projected_storage(
     if storage_used_mb + storage_cost_mb > storage_capacity_mb:
         return Violation(
             reason_code=ReasonCode.INSUFFICIENT_STORAGE,
-            request_id=request_id,
+            subject_key=request_id,
             details={
                 "required_mb": storage_cost_mb,
                 "used_mb": storage_used_mb,
@@ -136,13 +136,13 @@ class ResourceProjection:
             if item_energy_wh > battery_wh:
                 return Violation(
                     reason_code=ReasonCode.INSUFFICIENT_BATTERY,
-                    request_id=request_id,
+                    subject_key=request_id,
                     details={"required_wh": item_energy_wh, "available_wh": battery_wh},
                 )
             if storage_used_mb + item_storage_mb > storage_capacity_mb:
                 return Violation(
                     reason_code=ReasonCode.INSUFFICIENT_STORAGE,
-                    request_id=request_id,
+                    subject_key=request_id,
                     details={
                         "required_mb": item_storage_mb,
                         "used_mb": storage_used_mb,

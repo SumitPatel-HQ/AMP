@@ -118,6 +118,7 @@ const plan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
     {
       id: "ACT-OBS-C-1",
@@ -129,12 +130,14 @@ const plan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
   ],
   unscheduled: [{ request_id: "OBS-B", reason_code: "DEADLINE_VIOLATION" }],
   mission_utility: 8,
   violation_count: 1,
   planning_time_ms: 1,
+  planner_name: "greedy",
 } satisfies MissionPlanSchema;
 
 const revisedPlan = {
@@ -154,6 +157,7 @@ const revisedPlan = {
       energy_cost_wh: 40,
       storage_cost_mb: 100,
       status: "planned",
+      kind: "imaging",
     },
   ],
   unscheduled: [{ request_id: "OBS-C", reason_code: "WINDOW_INVALIDATED" }],
@@ -199,6 +203,8 @@ const planDiff = {
     measured_at: "2026-09-21T10:00:00Z",
     plan_churn: null,
     explanation_coverage: null,
+    downlink_action_count: 0,
+    downlink_volume_mb: 0,
   },
   metrics_after: {
     plan_id: revisedPlan.id,
@@ -213,6 +219,8 @@ const planDiff = {
     measured_at: "2026-09-21T10:00:00Z",
     plan_churn: 2 / 3,
     explanation_coverage: 1,
+    downlink_action_count: 0,
+    downlink_volume_mb: 0,
   },
   request_pool_mismatch: false,
 } satisfies PlanDiffSchema;

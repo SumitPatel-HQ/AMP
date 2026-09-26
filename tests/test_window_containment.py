@@ -39,7 +39,7 @@ def test_action_ending_after_window_fails():
 
     assert violation is not None
     assert violation.reason_code is ReasonCode.WINDOW_INVALIDATED
-    assert violation.request_id == "OBS-A"
+    assert violation.subject_key == "OBS-A"
 
 
 def test_invalid_window_fails_even_when_action_fits_the_span():
