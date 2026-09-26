@@ -84,6 +84,7 @@ function MissionWorkspace({
         events={session.events}
         requestPool={session.requestPool}
         groundTrack={session.groundTrack}
+        groundStations={session.groundStations}
         satellitePosition={session.satellitePosition}
         selectedRequestId={selection.requestId}
         onSelectRequest={session.selectRequest}
@@ -104,6 +105,7 @@ function MissionWorkspace({
         replanResult={replanResult}
         missionState={session.missionState}
         windows={session.windows}
+        contacts={session.contacts}
         events={session.events}
         impact={session.impact}
         selectedRequestId={selection.requestId}

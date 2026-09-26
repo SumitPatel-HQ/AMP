@@ -90,7 +90,37 @@ class SatelliteOutagePayload:
         )
 
 
-EventPayload = Union[CloudBlockPayload, BatteryDropPayload, EmergencyRequestPayload, SatelliteOutagePayload]
+@dataclass(frozen=True)
+class CommunicationOutagePayload:
+    """Station outage over an interval: contacts overlapping it are lost (ADR-0011)."""
+
+    station_id: str
+    outage_start: datetime
+    outage_end: datetime
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "station_id": self.station_id,
+            "outage_start": self.outage_start.isoformat(),
+            "outage_end": self.outage_end.isoformat(),
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "CommunicationOutagePayload":
+        return CommunicationOutagePayload(
+            station_id=data["station_id"],
+            outage_start=datetime.fromisoformat(data["outage_start"]),
+            outage_end=datetime.fromisoformat(data["outage_end"]),
+        )
+
+
+EventPayload = Union[
+    CloudBlockPayload,
+    BatteryDropPayload,
+    EmergencyRequestPayload,
+    SatelliteOutagePayload,
+    CommunicationOutagePayload,
+]
 
 
 @dataclass(frozen=True)
@@ -121,6 +151,8 @@ class MissionEvent:
             payload = EmergencyRequestPayload.from_dict(data["payload"])
         elif event_type is EventType.SATELLITE_UNAVAILABLE:
             payload = SatelliteOutagePayload.from_dict(data["payload"])
+        elif event_type is EventType.COMMUNICATION_OUTAGE:
+            payload = CommunicationOutagePayload.from_dict(data["payload"])
         else:
             raise ValueError(f"unsupported mission event type: {event_type.value}")
         return MissionEvent(

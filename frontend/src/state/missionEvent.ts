@@ -22,6 +22,8 @@ export function eventSummary(event: MissionEventSchema): string {
     }
     case "SATELLITE_UNAVAILABLE":
       return `${event.payload.satellite_id} payload outage`;
+    case "COMMUNICATION_OUTAGE":
+      return `${event.payload.station_id} comm outage`;
   }
 }
 

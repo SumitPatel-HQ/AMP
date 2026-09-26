@@ -23,6 +23,7 @@ const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
   { type: "BATTERY_DROP", label: "Battery drop" },
   { type: "EMERGENCY_TASK", label: "Emergency request" },
   { type: "SATELLITE_UNAVAILABLE", label: "Payload outage" },
+  { type: "COMMUNICATION_OUTAGE", label: "Comm outage" },
 ];
 
 const INJECT_LABEL: Record<MissionEventType, string> = {
@@ -30,6 +31,7 @@ const INJECT_LABEL: Record<MissionEventType, string> = {
   BATTERY_DROP: "Inject battery drop",
   EMERGENCY_TASK: "Inject emergency request",
   SATELLITE_UNAVAILABLE: "Inject payload outage",
+  COMMUNICATION_OUTAGE: "Inject comm outage",
 };
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -158,18 +160,25 @@ function BatteryDropFields({
   );
 }
 
-/** A payload outage over an interval: the instrument cannot observe inside it. */
+/**
+ * An outage over an interval. Without station ids it is a payload outage:
+ * the instrument cannot observe inside it. With station ids it is a
+ * communication outage: that station's overlapping contacts are lost.
+ */
 function SatelliteOutageFields({
   satelliteId,
   simulatedTime,
   missionEnd,
+  stationIds,
   onChange,
 }: {
   satelliteId: string;
   simulatedTime: string;
   missionEnd: string;
+  stationIds?: string[];
   onChange: (event: MissionEventRequest | null) => void;
 }) {
+  const [stationId, setStationId] = useState(stationIds?.[0] ?? "");
   const toInput = (iso: string) => iso.slice(0, 16);
   const fromInput = (value: string): string | null => {
     const iso = `${value}:00Z`;
@@ -178,23 +187,50 @@ function SatelliteOutageFields({
   const [start, setStart] = useState(toInput(simulatedTime));
   const [end, setEnd] = useState(toInput(missionEnd));
 
-  const update = (nextStart: string, nextEnd: string) => {
+  const update = (nextStart: string, nextEnd: string, nextStation = stationId) => {
     setStart(nextStart);
     setEnd(nextEnd);
+    setStationId(nextStation);
     const outageStart = fromInput(nextStart);
     const outageEnd = fromInput(nextEnd);
-    onChange(
-      outageStart === null || outageEnd === null
-        ? null
-        : {
-            event_type: "SATELLITE_UNAVAILABLE",
-            payload: { satellite_id: satelliteId, outage_start: outageStart, outage_end: outageEnd },
-          },
-    );
+    if (outageStart === null || outageEnd === null) {
+      onChange(null);
+    } else if (stationIds) {
+      onChange(
+        nextStation === ""
+          ? null
+          : {
+              event_type: "COMMUNICATION_OUTAGE",
+              payload: { station_id: nextStation, outage_start: outageStart, outage_end: outageEnd },
+            },
+      );
+    } else {
+      onChange({
+        event_type: "SATELLITE_UNAVAILABLE",
+        payload: { satellite_id: satelliteId, outage_start: outageStart, outage_end: outageEnd },
+      });
+    }
   };
 
   return (
     <div className="flex flex-wrap items-end gap-2">
+      {stationIds ? (
+        <Field label="Station">
+          <select
+            aria-label="Station"
+            value={stationId}
+            onChange={(event) => update(start, end, event.target.value)}
+            className={CONTROL_INPUT}
+          >
+            {stationIds.length === 0 ? <option value="">No mission stations</option> : null}
+            {stationIds.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
       <Field label="Outage start (UTC)">
         <input
           aria-label="Outage start (UTC)"
@@ -214,7 +250,9 @@ function SatelliteOutageFields({
         />
       </Field>
       <p className="text-[10px] text-neutral-500">
-        {`Actions overlapping the span on ${satelliteId} fail validation; frozen actions stay exempt.`}
+        {stationIds
+          ? "Contacts at the station overlapping the span are lost; their downlinks fail validation."
+          : `Actions overlapping the span on ${satelliteId} fail validation; frozen actions stay exempt.`}
       </p>
     </div>
   );
@@ -353,6 +391,15 @@ export function EventControl({
           satelliteId={missionState.satellite_id}
           simulatedTime={missionState.simulated_time}
           missionEnd={scenario.end_time}
+          onChange={setConfigured}
+        />
+      ) : type === "COMMUNICATION_OUTAGE" ? (
+        <SatelliteOutageFields
+          key="comm"
+          satelliteId={missionState.satellite_id}
+          simulatedTime={missionState.simulated_time}
+          missionEnd={scenario.end_time}
+          stationIds={scenario.window_policy?.ground_station_ids ?? []}
           onChange={setConfigured}
         />
       ) : (

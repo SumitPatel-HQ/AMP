@@ -50,8 +50,12 @@ def rebuilt_actions(
     """
 
     carried_over_ids = {action.id for action in current.actions}
+    # Downlinks are re-derived reservations, not decisions: churn is
+    # imaging-only (ADR-0011).
     return tuple(
-        action for action in previous.actions if action.id not in carried_over_ids
+        action
+        for action in previous.actions
+        if action.id not in carried_over_ids and not action.is_downlink
     )
 
 
@@ -72,8 +76,14 @@ def compare_plans(
     """
 
     reasons = dict(reasons_by_request or {})
-    previous_actions = {action.request_id: action for action in previous.actions}
-    current_actions = {action.request_id: action for action in current.actions}
+    # Request-scoped: downlink actions carry no request and never appear
+    # as diff entries (ADR-0011).
+    previous_actions = {
+        action.request_id: action for action in previous.actions if not action.is_downlink
+    }
+    current_actions = {
+        action.request_id: action for action in current.actions if not action.is_downlink
+    }
     current_unscheduled = {
         entry.request_id: entry.reason_code for entry in current.unscheduled
     }

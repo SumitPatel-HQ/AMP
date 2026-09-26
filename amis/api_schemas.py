@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal, Self, Union
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
-from amis.domain import ActionStatus, EventType, PlanChangeType, ReasonCode, RequestStatus
+from amis.domain import ActionKind, ActionStatus, EventType, PlanChangeType, ReasonCode, RequestStatus
 from amis.errors import ErrorCode
 
 
@@ -59,6 +59,42 @@ class WindowPolicySchema(ApiModel):
     min_sun_elevation_deg: float | None = Field(default=10, ge=-10, le=60, allow_inf_nan=False)
     settling_time_s: float = Field(default=0, ge=0, allow_inf_nan=False)
     culmination_placement: bool = False
+    ground_station_ids: list[str] = Field(default_factory=list)
+    downlink_rate_mb_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_ground_stations(self) -> Self:
+        if self.ground_station_ids:
+            from amis.orbital.stations import stations_by_ids
+
+            if self.provider != "orbital":
+                raise ValueError("ground stations require the orbital window provider")
+            if len(set(self.ground_station_ids)) != len(self.ground_station_ids):
+                raise ValueError("ground station ids must be unique")
+            stations_by_ids(self.ground_station_ids)
+        return self
+
+
+class GroundStationSchema(ApiModel):
+    id: str
+    name: str
+    lat: float
+    lon: float
+    altitude_m: float
+    min_elevation_deg: float
+
+
+class ContactWindowSchema(ApiModel):
+    id: str
+    station_id: str
+    satellite_id: str
+    start: datetime
+    end: datetime
+    peak_elevation_deg: float
+    peak_time: datetime
+    valid: bool
+    invalid_reason: str | None = None
+    source: str | None = None
 
 
 class SatelliteSchema(ApiModel):
@@ -158,7 +194,7 @@ class ObservationWindowSchema(ApiModel):
 
 class ScheduledActionSchema(ApiModel):
     id: str
-    request_id: str
+    request_id: str | None
     satellite_id: str
     window_id: str
     start: datetime
@@ -166,6 +202,8 @@ class ScheduledActionSchema(ApiModel):
     energy_cost_wh: float
     storage_cost_mb: float
     status: ActionStatus
+    kind: ActionKind = ActionKind.IMAGING
+    station_id: str | None = None
 
 
 class UnscheduledEntrySchema(ApiModel):
@@ -224,6 +262,20 @@ class SatelliteOutagePayloadSchema(ApiModel):
         return self
 
 
+class CommunicationOutagePayloadSchema(ApiModel):
+    station_id: str = Field(min_length=1)
+    outage_start: datetime
+    outage_end: datetime
+
+    @model_validator(mode="after")
+    def validate_outage_interval(self) -> Self:
+        if self.outage_start.tzinfo is None or self.outage_end.tzinfo is None:
+            raise ValueError("communication outage interval must include a timezone")
+        if self.outage_end <= self.outage_start:
+            raise ValueError("communication outage end must be after outage start")
+        return self
+
+
 class EmergencyTaskPayloadSchema(ApiModel):
     """The emergency request and the explicit windows it arrives with."""
 
@@ -246,6 +298,11 @@ class SatelliteOutageEventRequest(ApiModel):
     payload: SatelliteOutagePayloadSchema
 
 
+class CommunicationOutageEventRequest(ApiModel):
+    event_type: Literal[EventType.COMMUNICATION_OUTAGE]
+    payload: CommunicationOutagePayloadSchema
+
+
 class EmergencyTaskEventRequest(ApiModel):
     event_type: Literal[EventType.EMERGENCY_TASK]
     payload: EmergencyTaskPayloadSchema
@@ -259,6 +316,7 @@ class MissionEventRequest(
                 BatteryDropEventRequest,
                 EmergencyTaskEventRequest,
                 SatelliteOutageEventRequest,
+                CommunicationOutageEventRequest,
             ],
             Field(discriminator="event_type"),
         ]
@@ -288,6 +346,11 @@ class SatelliteOutageMissionEventSchema(MissionEventFields):
     payload: SatelliteOutagePayloadSchema
 
 
+class CommunicationOutageMissionEventSchema(MissionEventFields):
+    event_type: Literal[EventType.COMMUNICATION_OUTAGE]
+    payload: CommunicationOutagePayloadSchema
+
+
 class EmergencyTaskMissionEventSchema(MissionEventFields):
     event_type: Literal[EventType.EMERGENCY_TASK]
     payload: EmergencyTaskPayloadSchema
@@ -301,6 +364,7 @@ class MissionEventSchema(
                 BatteryDropMissionEventSchema,
                 EmergencyTaskMissionEventSchema,
                 SatelliteOutageMissionEventSchema,
+                CommunicationOutageMissionEventSchema,
             ],
             Field(discriminator="event_type"),
         ]
@@ -332,6 +396,8 @@ class MetricsSchema(ApiModel):
     measured_at: datetime
     plan_churn: float | None
     explanation_coverage: float | None
+    downlink_action_count: int = 0
+    downlink_volume_mb: float = 0
 
 
 class PlanDiffEntrySchema(ApiModel):

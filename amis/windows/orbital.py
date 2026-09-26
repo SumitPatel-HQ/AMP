@@ -24,6 +24,33 @@ def _floor_second(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(microsecond=0)
 
 
+def pass_intervals(satellite, observer, t0, t1, threshold: float, start: datetime, end: datetime):
+    """Rise-to-set intervals above ``threshold`` with their culmination samples.
+
+    Shared by target windows and ground-station contacts so both come from
+    the same event-search call (spec decision 25).
+    """
+    times, events = satellite.find_events(observer, t0, t1, altitude_degrees=threshold)
+    initial_elevation = (satellite - observer).at(t0).altaz()[0].degrees
+    opened: datetime | None = start if initial_elevation >= threshold else None
+    peaks: list[tuple[datetime, float]] = []
+    intervals: list[tuple[datetime, datetime, list[tuple[datetime, float]]]] = []
+    for time, event in zip(times, events):
+        instant = time.utc_datetime()
+        if event == 0:
+            opened = instant
+            peaks = []
+        elif event == 1 and opened is not None:
+            elevation = (satellite - observer).at(time).altaz()[0].degrees
+            peaks.append((instant, float(elevation)))
+        elif event == 2 and opened is not None:
+            intervals.append((opened, instant, peaks))
+            opened, peaks = None, []
+    if opened is not None:
+        intervals.append((opened, end, peaks))
+    return intervals
+
+
 class OrbitalWindowProvider:
     def generate(self, scenario: Scenario, requests: Iterable[ObservationRequest]) -> list[ObservationWindow]:
         from skyfield import __version__ as skyfield_version
@@ -59,24 +86,7 @@ class OrbitalWindowProvider:
         windows: list[ObservationWindow] = []
         for request in requests:
             target = wgs84.latlon(request.target_lat, request.target_lon)
-            times, events = satellite.find_events(target, t0, t1, altitude_degrees=threshold)
-            initial_elevation = (satellite - target).at(t0).altaz()[0].degrees
-            opened: datetime | None = start if initial_elevation >= threshold else None
-            peaks: list[tuple[datetime, float]] = []
-            intervals: list[tuple[datetime, datetime, list[tuple[datetime, float]]]] = []
-            for time, event in zip(times, events):
-                instant = time.utc_datetime()
-                if event == 0:
-                    opened = instant
-                    peaks = []
-                elif event == 1 and opened is not None:
-                    elevation = (satellite - target).at(time).altaz()[0].degrees
-                    peaks.append((instant, float(elevation)))
-                elif event == 2 and opened is not None:
-                    intervals.append((opened, instant, peaks))
-                    opened, peaks = None, []
-            if opened is not None:
-                intervals.append((opened, end, peaks))
+            intervals = pass_intervals(satellite, target, t0, t1, threshold, start, end)
             number = 1
             for raw_start, raw_end, local_peaks in intervals:
                 edge_start, edge_end = _ceil_second(max(raw_start, start)), _floor_second(min(raw_end, end))

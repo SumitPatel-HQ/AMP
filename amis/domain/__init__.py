@@ -1,5 +1,7 @@
+from amis.domain.contact import ContactWindow, GroundStation
 from amis.domain.diff import PlanDiff, PlanDiffEntry
 from amis.domain.enums import (
+    ActionKind,
     ActionStatus,
     EventType,
     PlanChangeType,
@@ -9,6 +11,7 @@ from amis.domain.enums import (
 from amis.domain.event import (
     BatteryDropPayload,
     CloudBlockPayload,
+    CommunicationOutagePayload,
     EmergencyRequestPayload,
     EventPayload,
     MissionEvent,
@@ -25,6 +28,10 @@ from amis.domain.violation import Violation
 from amis.domain.window import ObservationWindow
 
 __all__ = [
+    "ActionKind",
+    "CommunicationOutagePayload",
+    "ContactWindow",
+    "GroundStation",
     "ActionStatus",
     "EventType",
     "PlanChangeType",

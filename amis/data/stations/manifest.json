@@ -1,0 +1,6 @@
+{
+  "file": "stations.json",
+  "sha256": "cc73b2d779d3480a34fcb87befee18c9e97aa2b920f4050f8737006b7b1912f1",
+  "hash_of": "canonical JSON of the stations list (sorted keys, compact separators)",
+  "source": "Public operator site listings (approximate coordinates)"
+}

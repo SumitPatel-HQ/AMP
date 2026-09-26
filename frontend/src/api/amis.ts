@@ -15,6 +15,8 @@ import type {
   ScenarioPreviewSchema,
   OrbitalElementsSchema,
   GroundTrackPointSchema,
+  GroundStationSchema,
+  ContactWindowSchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -64,6 +66,17 @@ export async function parseTle(name: string, line1: string, line2: string): Prom
 
 export async function validateScenario(scenario: ScenarioSchema): Promise<ScenarioPreviewSchema> {
   return unwrap(await client.POST("/scenarios/validate", { body: scenario }));
+}
+
+export async function fetchGroundStations(): Promise<GroundStationSchema[]> {
+  return unwrap(await client.GET("/ground-stations"));
+}
+
+/** Contact windows at the mission's stations, communication outages applied. */
+export async function fetchContacts(id: string): Promise<ContactWindowSchema[]> {
+  return unwrap(await client.GET("/scenarios/{scenario_id}/contacts", {
+    params: { path: { scenario_id: id } },
+  }));
 }
 
 export async function fetchGroundTrack(id: string): Promise<GroundTrackPointSchema[]> {

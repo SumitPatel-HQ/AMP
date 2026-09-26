@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type {
+  ContactWindowSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -9,6 +10,7 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
+import { StorageProfileChart } from "./StorageProfileChart";
 import type { ReplanResult } from "../state/types";
 import { PanelFrame } from "./PanelFrame";
 import { PlanTimeline } from "./PlanTimeline";
@@ -74,6 +76,7 @@ export function TimelinePanel({
   replanResult,
   missionState,
   windows,
+  contacts,
   events,
   impact,
   selectedRequestId,
@@ -89,6 +92,7 @@ export function TimelinePanel({
   replanResult: ReplanResult | null;
   missionState: MissionStateSchema | null;
   windows: ObservationWindowSchema[];
+  contacts?: ContactWindowSchema[];
   events: MissionEventSchema[];
   impact: ImpactSchema | null;
   selectedRequestId: string | null;
@@ -125,6 +129,7 @@ export function TimelinePanel({
             events={events}
             impact={impact}
             changeByRequestId={changeByRequestId}
+            contacts={contacts}
             selectedRequestId={selectedRequestId}
             selectedWindowId={selectedWindowId}
             selectedEventId={selectedEventId}
@@ -132,6 +137,7 @@ export function TimelinePanel({
             onSelectWindow={onSelectWindow}
             onSelectEvent={onSelectEvent}
           />
+          <StorageProfileChart scenario={scenario} plan={plan} />
         </div>
       )}
     </PanelFrame>

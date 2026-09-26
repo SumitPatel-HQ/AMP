@@ -39,7 +39,9 @@ def compute_metrics(
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
 
-    utility_request_ids = {action.request_id for action in plan.actions} | set(
+    imaging_actions = [action for action in plan.actions if not action.is_downlink]
+    downlinks = [action for action in plan.actions if action.is_downlink]
+    utility_request_ids = {action.request_id for action in imaging_actions} | set(
         mission_state.completed_request_ids
     )
     mission_utility = sum(priority_by_id[request_id] for request_id in utility_request_ids)
@@ -68,6 +70,8 @@ def compute_metrics(
         measured_at=mission_state.simulated_time,
         plan_churn=compute_plan_churn(previous_plan, plan, diff),
         explanation_coverage=compute_explanation_coverage(diff, traces),
+        downlink_action_count=len(downlinks),
+        downlink_volume_mb=sum(-action.storage_cost_mb for action in downlinks),
     )
 
 

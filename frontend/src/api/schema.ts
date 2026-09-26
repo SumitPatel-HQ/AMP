@@ -55,6 +55,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ground-stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ground Stations */
+        get: operations["list_ground_stations_ground_stations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenario_id}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contacts
+         * @description Contact windows at the mission's stations, communication outages applied.
+         */
+        get: operations["get_contacts_scenarios__scenario_id__contacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orbital-elements": {
         parameters: {
             query?: never;
@@ -419,6 +456,11 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActionKind
+         * @enum {string}
+         */
+        ActionKind: "imaging" | "downlink";
+        /**
          * ActionStatus
          * @enum {string}
          */
@@ -490,6 +532,80 @@ export interface components {
             request_id: string;
             /** Window Id */
             window_id: string;
+        };
+        /** CommunicationOutageEventRequest */
+        CommunicationOutageEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "COMMUNICATION_OUTAGE";
+            payload: components["schemas"]["CommunicationOutagePayloadSchema"];
+        };
+        /** CommunicationOutageMissionEventSchema */
+        CommunicationOutageMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "COMMUNICATION_OUTAGE";
+            payload: components["schemas"]["CommunicationOutagePayloadSchema"];
+        };
+        /** CommunicationOutagePayloadSchema */
+        CommunicationOutagePayloadSchema: {
+            /** Station Id */
+            station_id: string;
+            /**
+             * Outage Start
+             * Format: date-time
+             */
+            outage_start: string;
+            /**
+             * Outage End
+             * Format: date-time
+             */
+            outage_end: string;
+        };
+        /** ContactWindowSchema */
+        ContactWindowSchema: {
+            /** Id */
+            id: string;
+            /** Station Id */
+            station_id: string;
+            /** Satellite Id */
+            satellite_id: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Peak Elevation Deg */
+            peak_elevation_deg: number;
+            /**
+             * Peak Time
+             * Format: date-time
+             */
+            peak_time: string;
+            /** Valid */
+            valid: boolean;
+            /** Invalid Reason */
+            invalid_reason?: string | null;
+            /** Source */
+            source?: string | null;
         };
         /** DecisionTraceSchema */
         DecisionTraceSchema: {
@@ -568,6 +684,21 @@ export interface components {
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** GroundStationSchema */
+        GroundStationSchema: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Altitude M */
+            altitude_m: number;
+            /** Min Elevation Deg */
+            min_elevation_deg: number;
+        };
         /** GroundTrackPointSchema */
         GroundTrackPointSchema: {
             /**
@@ -635,19 +766,38 @@ export interface components {
             plan_churn: number | null;
             /** Explanation Coverage */
             explanation_coverage: number | null;
+            /**
+             * Downlink Action Count
+             * @default 0
+             */
+            downlink_action_count: number;
+            /**
+             * Downlink Volume Mb
+             * @default 0
+             */
+            downlink_volume_mb: number;
         };
         /**
          * MissionEventRequest
          * @description Every event the route accepts, chosen by ``event_type``.
          */
-        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"] | components["schemas"]["SatelliteOutageEventRequest"];
+        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"] | components["schemas"]["SatelliteOutageEventRequest"] | components["schemas"]["CommunicationOutageEventRequest"];
         /**
-          * MissionEventSchema
-          * @description Every event the log can hold, chosen by ``event_type``.
-          */
-        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"] | components["schemas"]["SatelliteOutageMissionEventSchema"];
+         * MissionEventSchema
+         * @description Every event the log can hold, chosen by ``event_type``.
+         */
+        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"] | components["schemas"]["SatelliteOutageMissionEventSchema"] | components["schemas"]["CommunicationOutageMissionEventSchema"];
         /** MissionPlanSchema */
         MissionPlanSchema: {
+            /**
+             * Planner Name
+             * @default greedy
+             */
+            planner_name: string;
+            /** Solver Details */
+            solver_details?: {
+                [key: string]: unknown;
+            } | null;
             /** Id */
             id: string;
             /** Scenario Id */
@@ -825,6 +975,8 @@ export interface components {
         ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED";
         /** ReplanRequest */
         ReplanRequest: {
+            /** Planner */
+            planner?: ("greedy" | "cp_sat") | null;
             /** Expected Parent Plan Id */
             expected_parent_plan_id: string;
         };
@@ -833,6 +985,48 @@ export interface components {
          * @enum {string}
          */
         RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired";
+        /** SatelliteOutageEventRequest */
+        SatelliteOutageEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "SATELLITE_UNAVAILABLE";
+            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
+        };
+        /** SatelliteOutageMissionEventSchema */
+        SatelliteOutageMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "SATELLITE_UNAVAILABLE";
+            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
+        };
+        /** SatelliteOutagePayloadSchema */
+        SatelliteOutagePayloadSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /**
+             * Outage Start
+             * Format: date-time
+             */
+            outage_start: string;
+            /**
+             * Outage End
+             * Format: date-time
+             */
+            outage_end: string;
+        };
         /** SatelliteSchema */
         SatelliteSchema: {
             /** Id */
@@ -851,48 +1045,6 @@ export interface components {
              */
             available: boolean;
             orbit?: components["schemas"]["OrbitalElementsSchema"] | null;
-        };
-        /** SatelliteOutageEventRequest */
-        SatelliteOutageEventRequest: {
-            /**
-              * @description discriminator enum property added by openapi-typescript
-              * @enum {string}
-              */
-            event_type: "SATELLITE_UNAVAILABLE";
-            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
-        };
-        /** SatelliteOutageMissionEventSchema */
-        SatelliteOutageMissionEventSchema: {
-            /** Id */
-            id: string;
-            /** Scenario Id */
-            scenario_id: string;
-            /**
-              * Event Time
-              * Format: date-time
-              */
-            event_time: string;
-            /**
-              * @description discriminator enum property added by openapi-typescript
-              * @enum {string}
-              */
-            event_type: "SATELLITE_UNAVAILABLE";
-            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
-        };
-        /** SatelliteOutagePayloadSchema */
-        SatelliteOutagePayloadSchema: {
-            /** Satellite Id */
-            satellite_id: string;
-            /**
-              * Outage Start
-              * Format: date-time
-              */
-            outage_start: string;
-            /**
-              * Outage End
-              * Format: date-time
-              */
-            outage_end: string;
         };
         /** ScenarioPreviewSchema */
         ScenarioPreviewSchema: {
@@ -957,7 +1109,7 @@ export interface components {
             /** Id */
             id: string;
             /** Request Id */
-            request_id: string;
+            request_id: string | null;
             /** Satellite Id */
             satellite_id: string;
             /** Window Id */
@@ -977,6 +1129,10 @@ export interface components {
             /** Storage Cost Mb */
             storage_cost_mb: number;
             status: components["schemas"]["ActionStatus"];
+            /** @default imaging */
+            kind: components["schemas"]["ActionKind"];
+            /** Station Id */
+            station_id?: string | null;
         };
         /** StepRequest */
         StepRequest: {
@@ -1024,20 +1180,27 @@ export interface components {
              */
             max_off_nadir_deg: number;
             /**
-              * Min Sun Elevation Deg
-              * @default 10
-              */
+             * Min Sun Elevation Deg
+             * @default 10
+             */
             min_sun_elevation_deg: number | null;
             /**
-              * Settling Time S
-              * @default 0
-              */
+             * Settling Time S
+             * @default 0
+             */
             settling_time_s: number;
             /**
-              * Culmination Placement
-              * @default false
-              */
+             * Culmination Placement
+             * @default false
+             */
             culmination_placement: boolean;
+            /** Ground Station Ids */
+            ground_station_ids?: string[];
+            /**
+             * Downlink Rate Mb S
+             * @default 0
+             */
+            downlink_rate_mb_s: number;
         };
     };
     responses: never;
@@ -1115,6 +1278,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ground_stations_ground_stations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundStationSchema"][];
+                };
+            };
+        };
+    };
+    get_contacts_scenarios__scenario_id__contacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactWindowSchema"][];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1528,7 +1751,9 @@ export interface operations {
     };
     create_plan_scenarios__scenario_id__plan_post: {
         parameters: {
-            query?: never;
+            query?: {
+                planner?: "greedy" | "cp_sat";
+            };
             header?: never;
             path: {
                 scenario_id: string;

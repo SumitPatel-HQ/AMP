@@ -17,6 +17,11 @@ class ActionStatus(str, Enum):
     COMPLETED = "completed"
 
 
+class ActionKind(str, Enum):
+    IMAGING = "imaging"
+    DOWNLINK = "downlink"
+
+
 class EventType(str, Enum):
     CLOUD_BLOCK = "CLOUD_BLOCK"
     BATTERY_DROP = "BATTERY_DROP"

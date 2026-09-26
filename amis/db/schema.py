@@ -168,14 +168,18 @@ scheduled_actions = Table(
     ),
     Column("id", String, primary_key=True),
     Column("seq", Integer, nullable=False),
-    Column("request_id", String, nullable=False),
+    # Nullable since migration 0004: downlink actions carry no request
+    # and reference a derived contact, not a stored window (ADR-0011).
+    Column("request_id", String, nullable=True),
     Column("satellite_id", String, nullable=False),
-    Column("window_id", String, nullable=False),
+    Column("window_id", String, nullable=True),
     Column("start", String, nullable=False),
     Column("end", String, nullable=False),
     Column("energy_cost_wh", Float, nullable=False),
     Column("storage_cost_mb", Float, nullable=False),
     Column("status", String, nullable=False),
+    Column("kind", String, nullable=False, server_default="imaging"),
+    Column("station_id", String, nullable=True),
 )
 
 unscheduled_entries = Table(

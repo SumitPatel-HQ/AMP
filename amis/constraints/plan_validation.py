@@ -6,6 +6,11 @@ the frozen-action exemption. A started or completed action is frozen:
 its resource cost is already reflected in mission_state, so it is
 skipped for checks and for resource projection, but it still occupies
 time for the overlap check against unfrozen actions.
+
+Downlink actions (ADR-0011) are judged only against their contact: it
+must still exist, be valid, and contain the action. Their violations use
+the action id as the subject key. Every planned downlink is committed to
+the projection before imaging is walked, so releases land at contact end.
 """
 
 from __future__ import annotations
@@ -24,7 +29,9 @@ from amis.constraints.resources import (
 )
 from amis.domain import (
     ActionStatus,
+    ContactWindow,
     MissionPlan,
+    ReasonCode,
     MissionState,
     ObservationRequest,
     ObservationWindow,
@@ -40,6 +47,7 @@ def validate_plan(
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
     outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+    contacts: Iterable[ContactWindow] = (),
 ) -> list[Violation]:
     requests_by_id = {request.id: request for request in requests}
     windows_by_id = {window.id: window for window in windows}
@@ -47,11 +55,29 @@ def validate_plan(
     outages = tuple(outage_intervals)
     min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
 
+    contacts_by_id = {contact.id: contact for contact in contacts}
+
     projection = ResourceProjection(mission_state.battery_wh, mission_state.storage_usage_mb)
     violations: list[Violation] = []
 
+    for action in ordered_actions:
+        if action.is_downlink and action.status is ActionStatus.PLANNED:
+            projection.commit(action)
+            contact = contacts_by_id.get(action.window_id)
+            if (
+                contact is None
+                or not contact.valid
+                or action.start < contact.start
+                or action.end > contact.end
+            ):
+                violations.append(Violation(
+                    reason_code=ReasonCode.WINDOW_INVALIDATED,
+                    request_id=action.subject_key,
+                    details={"contact_id": action.window_id, "station_id": action.station_id},
+                ))
+
     for index, action in enumerate(ordered_actions):
-        if action.status is not ActionStatus.PLANNED:
+        if action.status is not ActionStatus.PLANNED or action.is_downlink:
             continue
 
         request = requests_by_id[action.request_id]

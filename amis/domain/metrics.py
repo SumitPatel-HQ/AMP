@@ -24,6 +24,10 @@ class MetricsResult:
     measured_at: datetime
     plan_churn: Optional[float] = None
     explanation_coverage: Optional[float] = None
+    # Wave 4 (ADR-0011): downlink actions in the plan and their total
+    # capacity (rate x duration). Every kept downlink frees storage.
+    downlink_action_count: int = 0
+    downlink_volume_mb: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,4 +43,6 @@ class MetricsResult:
             "measured_at": self.measured_at.isoformat(),
             "plan_churn": self.plan_churn,
             "explanation_coverage": self.explanation_coverage,
+            "downlink_action_count": self.downlink_action_count,
+            "downlink_volume_mb": self.downlink_volume_mb,
         }

@@ -52,6 +52,10 @@ class WindowPolicy:
     min_sun_elevation_deg: float | None = 10.0
     settling_time_s: float = 0.0
     culmination_placement: bool = False
+    # Wave 4 (ADR-0011): stations to compute contacts at, and the downlink
+    # rate in megabytes per second. No stations means no contacts or downlink.
+    ground_station_ids: tuple[str, ...] = ()
+    downlink_rate_mb_s: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +64,8 @@ class WindowPolicy:
             "min_sun_elevation_deg": self.min_sun_elevation_deg,
             "settling_time_s": self.settling_time_s,
             "culmination_placement": self.culmination_placement,
+            "ground_station_ids": list(self.ground_station_ids),
+            "downlink_rate_mb_s": self.downlink_rate_mb_s,
         }
 
     @staticmethod
@@ -70,4 +76,6 @@ class WindowPolicy:
             min_sun_elevation_deg=data.get("min_sun_elevation_deg", 10.0),
             settling_time_s=data.get("settling_time_s", 0.0),
             culmination_placement=data.get("culmination_placement", False),
+            ground_station_ids=tuple(data.get("ground_station_ids") or ()),
+            downlink_rate_mb_s=data.get("downlink_rate_mb_s", 0.0),
         )

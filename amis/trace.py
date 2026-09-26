@@ -76,8 +76,13 @@ def build_traces(
     request with no previous action to check) keeps the fallback.
     """
 
-    previous_actions = {action.request_id: action for action in previous.actions}
-    current_actions = {action.request_id: action for action in current.actions}
+    # Downlinks carry no request and produce no traces (ADR-0011).
+    previous_actions = {
+        action.request_id: action for action in previous.actions if not action.is_downlink
+    }
+    current_actions = {
+        action.request_id: action for action in current.actions if not action.is_downlink
+    }
 
     traces: list[DecisionTrace] = []
     for offset, entry in enumerate(

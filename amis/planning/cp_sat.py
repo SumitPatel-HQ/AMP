@@ -13,9 +13,10 @@ import ortools
 
 from amis.constraints import (ResourceProjection, check_deadline, check_overlap,
     check_satellite_availability, check_window_containment, validate_plan)
-from amis.domain import (ActionStatus, MissionPlan, MissionState, ObservationRequest,
+from amis.domain import (ActionStatus, ContactWindow, MissionPlan, MissionState, ObservationRequest,
     ObservationWindow, ReasonCode, RequestStatus, Scenario, ScheduledAction, UnscheduledEntry)
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
+from amis.planning.downlink import finalize_downlinks, reserve_downlinks
 from amis.planning.greedy import (GreedyPlanner, _frozen_actions, _ordered_candidates,
     _candidate_starts_in_window, _unscheduled_reason)
 
@@ -30,27 +31,29 @@ class CpSatPlanner:
              requests: Iterable[ObservationRequest], windows: Iterable[ObservationWindow],
              previous_plan: MissionPlan | None = None, plan_id: str = FIRST_PLAN_ID,
              first_action_number: int = 1,
-             outage_intervals: Iterable[tuple["datetime", "datetime"]] = ()) -> MissionPlan:
+             outage_intervals: Iterable[tuple["datetime", "datetime"]] = (),
+             contacts: Iterable[ContactWindow] = ()) -> MissionPlan:
         started = time.perf_counter()
         requests = tuple(sorted(requests, key=lambda r: r.id))
         windows = tuple(sorted(windows, key=lambda w: (w.request_id, w.start, w.id)))
         outages = tuple(outage_intervals)
+        contacts = tuple(contacts)
         min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
         gap_s = math.ceil(min_gap_s)
         culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
         baseline = GreedyPlanner().plan(scenario, mission_state, requests, windows,
-                                       previous_plan, plan_id, first_action_number, outages)
+                                       previous_plan, plan_id, first_action_number, outages, contacts)
         frozen = _frozen_actions(previous_plan, mission_state)
-        frozen_ids = {a.request_id for a in frozen}
+        frozen_ids = {a.request_id for a in frozen if not a.is_downlink}
         eligible = [r for r in requests if r.id not in frozen_ids
                     and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)]
-        previous = {a.request_id: a for a in previous_plan.actions} if previous_plan else {}
+        previous = {a.request_id: a for a in previous_plan.actions if not a.is_downlink} if previous_plan else {}
         model = cp_model.CpModel()
         origin = scenario.start_time
         seconds = lambda instant: (instant - origin).total_seconds()
         intervals = [model.new_fixed_size_interval_var(
             math.floor(seconds(a.start)), math.ceil(seconds(a.end)) - math.floor(seconds(a.start)) + gap_s,
-            f"frozen_{a.id}") for a in frozen]
+            f"frozen_{a.id}") for a in frozen if not a.is_downlink]
         choices = []
         penalties = []
         penalty_ranges = []
@@ -93,7 +96,10 @@ class CpSatPlanner:
                     penalty_ranges.append(high - low)
             model.add(sum(literals) <= 1)
         model.add_no_overlap(intervals)
-        committed = [a for a in frozen if a.status is ActionStatus.PLANNED]
+        # Downlink releases are ignored here: the linear sum is a conservative
+        # bound on the timeline walk, and the greedy-baseline fallback keeps
+        # downlink gains (ADR-0011).
+        committed = [a for a in frozen if a.status is ActionStatus.PLANNED and not a.is_downlink]
         # Exact decimal ratios avoid rounding a resource budget into overcommitment.
         for attr, available in (("energy_cost_wh", mission_state.battery_wh),
                                 ("storage_cost_mb", scenario.satellite.storage_capacity_mb - mission_state.storage_usage_mb)):
@@ -141,6 +147,9 @@ class CpSatPlanner:
         if use_baseline:
             actions = list(baseline.actions)
             utility = baseline.mission_utility
+        else:
+            actions = list(frozen) + self._with_downlinks(scenario, mission_state, contacts, frozen,
+                                                          actions[len(frozen):], first_action_number)
         unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages)
         result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
             mission_utility=utility, planner_name="cp_sat", solver_details={
@@ -151,7 +160,19 @@ class CpSatPlanner:
                 "workers": 1, "seed": 0, "max_deterministic_time": self.deterministic_limit,
                 "objective_priority_weight": weight, "time_resolution_s": 1,
             }, planning_time_ms=(time.perf_counter() - started) * 1000)
-        return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result, outages)))
+        return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result, outages, contacts)))
+
+    @staticmethod
+    def _with_downlinks(scenario, state, contacts, frozen, imaging, first_action_number):
+        """Imaging selection plus the downlink reservations that free storage."""
+        reservations = reserve_downlinks(scenario, state, contacts, frozen)
+        projection = ResourceProjection(state.battery_wh, state.storage_usage_mb)
+        for action in [*frozen, *imaging]:
+            if action.status is ActionStatus.PLANNED:
+                projection.commit(action)
+        for reservation in reservations:
+            projection.commit(reservation)
+        return list(imaging) + finalize_downlinks(reservations, projection, first_action_number + len(imaging))
 
     @staticmethod
     def _explain(requests, windows, actions, state, scenario, previous, outages=()):
@@ -161,7 +182,7 @@ class CpSatPlanner:
         for action in actions:
             if action.status is ActionStatus.PLANNED:
                 projection.commit(action)
-        selected_ids = {a.request_id for a in actions}
+        selected_ids = {a.request_id for a in actions if not a.is_downlink}
         entries = []
         for request in requests:
             if request.id in selected_ids:

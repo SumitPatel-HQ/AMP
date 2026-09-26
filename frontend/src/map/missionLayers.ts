@@ -1,6 +1,6 @@
 import type { Layer } from "@deck.gl/core";
 import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import type { Coordinate, MapTarget, MissionMapModel, SatellitePlacement } from "./missionMapModel";
+import type { Coordinate, MapStation, MapTarget, MissionMapModel, SatellitePlacement } from "./missionMapModel";
 import {
   EVENT_COLOR,
   type LayerVisibility,
@@ -38,6 +38,23 @@ export function buildMissionLayers({ model, selectedRequestId, visibility }: Mis
       data: model.groundTrack.map((path) => ({ path })),
       getPath: (item) => item.path as [number, number][],
       getColor: [249, 115, 22, 130], getWidth: 1.5, widthUnits: "pixels",
+    }));
+  }
+
+  if (model.stations?.length) {
+    layers.push(new ScatterplotLayer<MapStation>({
+      id: "amis-ground-stations",
+      data: model.stations,
+      getPosition: (station) => [...station.coordinate],
+      getRadius: 6,
+      radiusUnits: "pixels",
+      stroked: true,
+      filled: true,
+      getFillColor: [56, 189, 248, 180],
+      getLineColor: [224, 242, 254, 255],
+      getLineWidth: 1.5,
+      lineWidthUnits: "pixels",
+      pickable: true,
     }));
   }
 

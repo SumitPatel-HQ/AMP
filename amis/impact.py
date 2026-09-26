@@ -8,6 +8,7 @@ from typing import Iterable
 
 from amis.constraints import validate_plan
 from amis.domain import (
+    ContactWindow,
     Impact,
     MissionPlan,
     MissionState,
@@ -27,10 +28,13 @@ def analyze_impact(
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
     outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+    contacts: Iterable[ContactWindow] = (),
 ) -> Impact:
     """Classify each action once and retain every reason for invalid actions."""
 
-    violations = validate_plan(scenario, mission_state, requests, windows, plan, outage_intervals)
+    violations = validate_plan(
+        scenario, mission_state, requests, windows, plan, outage_intervals, contacts
+    )
     reasons_by_request: dict[str, list[ReasonCode]] = defaultdict(list)
     for violation in violations:
         reasons = reasons_by_request[violation.request_id]
@@ -47,7 +51,7 @@ def analyze_impact(
             frozen_action_ids.append(action.id)
             continue
 
-        action_reasons = tuple(reasons_by_request.get(action.request_id, ()))
+        action_reasons = tuple(reasons_by_request.get(action.subject_key, ()))
         if action_reasons:
             invalid_unfrozen_action_ids.append(action.id)
             reason_codes[action.id] = action_reasons

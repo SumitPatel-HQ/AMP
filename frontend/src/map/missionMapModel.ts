@@ -1,4 +1,5 @@
 import type {
+  GroundStationSchema,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
@@ -34,6 +35,13 @@ export interface MapTarget {
   eventIds: string[];
 }
 
+/** A ground station the mission downlinks through. */
+export interface MapStation {
+  stationId: string;
+  name: string;
+  coordinate: Coordinate;
+}
+
 /** Where the satellite is drawn, and the request it is over if it is observing. */
 export interface SatellitePlacement {
   satelliteId: string;
@@ -47,6 +55,8 @@ export interface MissionMapModel {
   /** Targets in the order the current plan visits them. */
   planSequence: Coordinate[];
   groundTrack?: Coordinate[][];
+  /** The mission's ground stations (ADR-0011), drawn as downlink sites. */
+  stations?: MapStation[];
   /** [west, south, east, north] around every target, or null with none. */
   bounds: [number, number, number, number] | null;
 }
@@ -155,6 +165,7 @@ export function buildMissionMapModel(
   expiredRequestIds: ReadonlySet<string> = new Set(),
   groundTrack: readonly GroundTrackPointSchema[] = [],
   satellitePosition: GroundTrackPointSchema | null = null,
+  groundStations: readonly GroundStationSchema[] = [],
 ): MissionMapModel {
   const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
@@ -201,6 +212,11 @@ export function buildMissionMapModel(
       : { satelliteId: scenario.satellite.id, coordinate: [(satellitePosition ?? nearest)!.lon, (satellitePosition ?? nearest)!.lat], overRequestId: null },
     planSequence: scheduledActionPoints(requestPool, plan).map((point) => point.coordinate),
     groundTrack: segments,
+    stations: groundStations.map((station) => ({
+      stationId: station.id,
+      name: station.name,
+      coordinate: [station.lon, station.lat] as Coordinate,
+    })),
     bounds: targetBounds(targets),
   };
 }

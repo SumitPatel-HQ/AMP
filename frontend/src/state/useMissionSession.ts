@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
   comparePlans,
@@ -7,6 +7,8 @@ import {
   fetchDemoScenario,
   fetchExample,
   fetchEvents,
+  fetchContacts,
+  fetchGroundStations,
   fetchGroundTrack,
   fetchImpact,
   fetchMetrics,
@@ -33,6 +35,8 @@ import type {
   ObservationRequestSchema,
   ObservationWindowSchema,
   ScenarioSchema,
+  ContactWindowSchema,
+  GroundStationSchema,
   GroundTrackPointSchema,
 } from "../api/client";
 import { eventAnchorRequestId, eventAnchorWindowId } from "../timeline/missionTimelineModel";
@@ -53,6 +57,10 @@ export interface MissionSessionState {
   events: MissionEventSchema[];
   windows: ObservationWindowSchema[];
   groundTrack: GroundTrackPointSchema[];
+  /** Contact windows at the mission's ground stations, outages applied. */
+  contacts: ContactWindowSchema[];
+  /** Catalogue entries for the mission's ground stations. */
+  groundStations: GroundStationSchema[];
   satellitePosition: GroundTrackPointSchema | null;
   /** The backend's request pool with live statuses, emergency arrivals included. */
   requestPool: ObservationRequestSchema[];
@@ -121,6 +129,8 @@ export function useMissionSession(): MissionSessionState {
   const [events, setEvents] = useState<MissionEventSchema[]>([]);
   const [windows, setWindows] = useState<ObservationWindowSchema[]>([]);
   const [groundTrack, setGroundTrack] = useState<GroundTrackPointSchema[]>([]);
+  const [contacts, setContacts] = useState<ContactWindowSchema[]>([]);
+  const [groundStations, setGroundStations] = useState<GroundStationSchema[]>([]);
   const [satellitePosition, setSatellitePosition] = useState<GroundTrackPointSchema | null>(null);
   const [requestPool, setRequestPool] = useState<ObservationRequestSchema[]>([]);
   const [metrics, setMetrics] = useState<MetricsSchema | null>(null);
@@ -572,6 +582,32 @@ export function useMissionSession(): MissionSessionState {
   );
   const clearSelection = useCallback(() => setSelection(EMPTY_SELECTION), []);
 
+  const stationIds = scenario?.window_policy?.ground_station_ids ?? [];
+  const stationKey = stationIds.join(",");
+  useEffect(() => {
+    if (scenario === null || stationKey === "") {
+      setContacts([]);
+      setGroundStations([]);
+      return;
+    }
+    let cancelled = false;
+    const wanted = new Set(stationKey.split(","));
+    // Contacts are re-read after every event: a communication outage
+    // changes which of them are still valid (ADR-0011).
+    Promise.all([fetchContacts(scenario.id), fetchGroundStations()])
+      .then(([nextContacts, catalogue]) => {
+        if (cancelled) return;
+        setContacts(nextContacts);
+        setGroundStations(catalogue.filter((station) => wanted.has(station.id)));
+      })
+      .catch(() => {
+        if (!cancelled) setContacts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scenario, stationKey, events.length]);
+
   const dismissError = useCallback(() => setError(null), []);
   const dismissPlanConflict = useCallback(() => setPlanConflict(null), []);
 
@@ -583,6 +619,8 @@ export function useMissionSession(): MissionSessionState {
     events,
     windows,
     groundTrack,
+    contacts,
+    groundStations,
     satellitePosition,
     requestPool,
     metrics,

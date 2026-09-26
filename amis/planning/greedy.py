@@ -45,6 +45,7 @@ from amis.constraints import (
 )
 from amis.domain import (
     ActionStatus,
+    ContactWindow,
     MissionPlan,
     MissionState,
     ObservationRequest,
@@ -57,6 +58,7 @@ from amis.domain import (
     Violation,
 )
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
+from amis.planning.downlink import finalize_downlinks, reserve_downlinks
 
 
 def _culmination_start(
@@ -87,8 +89,10 @@ class GreedyPlanner:
         plan_id: str = FIRST_PLAN_ID,
         first_action_number: int = 1,
         outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+        contacts: Iterable[ContactWindow] = (),
     ) -> MissionPlan:
         start_perf = time.perf_counter()
+        contacts = tuple(contacts)
         all_requests = tuple(requests)
         outages = tuple(outage_intervals)
         min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
@@ -128,6 +132,11 @@ class GreedyPlanner:
             # is not, so the projection still has to carry its cost.
             if action.status is ActionStatus.PLANNED:
                 projection.commit(action)
+        # Downlink reservations free storage in the walk (ADR-0011); they
+        # never take part in overlap, so they stay out of placed_actions.
+        reservations = reserve_downlinks(scenario, mission_state, contacts, frozen_actions)
+        for reservation in reservations:
+            projection.commit(reservation)
 
         placed_actions: list[ScheduledAction] = list(frozen_actions)
         actions: list[ScheduledAction] = list(frozen_actions)
@@ -212,6 +221,8 @@ class GreedyPlanner:
                     )
                 )
 
+        actions.extend(finalize_downlinks(reservations, projection, action_number))
+
         priority_by_request = {request.id: request.priority for request in all_requests}
         scheduled_request_ids = {action.request_id for action in actions}
         mission_utility = sum(
@@ -237,7 +248,9 @@ class GreedyPlanner:
         # the resulting plan, not dropped/unscheduled requests (those are
         # already reported separately in `unscheduled`).
         all_windows = tuple(window for windows in windows_by_request.values() for window in windows)
-        violation_count = len(validate_plan(scenario, mission_state, all_requests, all_windows, plan, outages))
+        violation_count = len(
+            validate_plan(scenario, mission_state, all_requests, all_windows, plan, outages, contacts)
+        )
         return replace(plan, violation_count=violation_count)
 
 

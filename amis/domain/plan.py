@@ -6,13 +6,19 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-from amis.domain.enums import ActionStatus, ReasonCode
+from amis.domain.enums import ActionKind, ActionStatus, ReasonCode
 
 
 @dataclass(frozen=True)
 class ScheduledAction:
+    """An imaging action (keyed by request) or a downlink action (keyed by station).
+
+    Downlink actions carry ``request_id=None``, ``window_id=<contact id>``, and a
+    negative ``storage_cost_mb``. See ADR-0011.
+    """
+
     id: str
-    request_id: str
+    request_id: Optional[str]
     satellite_id: str
     window_id: str
     start: datetime
@@ -20,6 +26,17 @@ class ScheduledAction:
     energy_cost_wh: float
     storage_cost_mb: float
     status: ActionStatus = ActionStatus.PLANNED
+    kind: ActionKind = ActionKind.IMAGING
+    station_id: Optional[str] = None
+
+    @property
+    def is_downlink(self) -> bool:
+        return self.kind is ActionKind.DOWNLINK
+
+    @property
+    def subject_key(self) -> str:
+        """Request id for imaging, action id for downlink (ADR-0011)."""
+        return self.request_id if self.request_id is not None else self.id
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -32,13 +49,15 @@ class ScheduledAction:
             "energy_cost_wh": self.energy_cost_wh,
             "storage_cost_mb": self.storage_cost_mb,
             "status": self.status.value,
+            "kind": self.kind.value,
+            "station_id": self.station_id,
         }
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "ScheduledAction":
         return ScheduledAction(
             id=data["id"],
-            request_id=data["request_id"],
+            request_id=data.get("request_id"),
             satellite_id=data["satellite_id"],
             window_id=data["window_id"],
             start=datetime.fromisoformat(data["start"]),
@@ -46,6 +65,8 @@ class ScheduledAction:
             energy_cost_wh=data["energy_cost_wh"],
             storage_cost_mb=data["storage_cost_mb"],
             status=ActionStatus(data["status"]),
+            kind=ActionKind(data.get("kind") or ActionKind.IMAGING.value),
+            station_id=data.get("station_id"),
         )
 
 

@@ -27,6 +27,9 @@ def check_overlap(
     """
     gap = timedelta(seconds=min_gap_s)
     for other in other_actions:
+        # Downlink uses the communication subsystem, not the payload (ADR-0011).
+        if other.is_downlink:
+            continue
         if start < other.end + gap and other.start < end + gap:
             return Violation(
                 reason_code=ReasonCode.TIME_OVERLAP,

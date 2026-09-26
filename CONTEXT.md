@@ -42,11 +42,23 @@ _Avoid_: Missed, stale, timed out, lapsed
 A span in which a request's target is observable under the scenario's window policy. An orbital window is a visible time window that can hold an observation action; it may carry peak geometry and provenance.
 _Avoid_: Opportunity, slot, pass, visibility
 
+**Ground station**:
+A catalogue entry with coordinates and an elevation mask (5 to 10 degrees) where the satellite can downlink. A mission opts in by listing station ids in its window policy.
+_Avoid_: Antenna, gateway, ground site
+
+**Contact window**:
+A span in which the satellite is above a ground station's elevation mask, computed from the stored orbit with the same pass search as observation windows. Contacts are derived, never persisted; a communication outage marks overlapping contacts invalid.
+_Avoid_: Pass, downlink window, visibility
+
 ### Planning
 
 **ScheduledAction**:
-One observation request placed into one observation window at a concrete start time. A planner produces these.
+One observation request placed into one observation window at a concrete start time (an imaging action), or one downlink action. A planner produces these; `kind` tells them apart.
 _Avoid_: Task, activity, booking, assignment
+
+**Downlink action**:
+A request-less scheduled action spanning one contact window. It frees storage by downlink rate times duration when the contact ends, floored at zero. Downlinks are reservations re-derived on every plan, so plan diff, traces, and churn ignore them (ADR-0011).
+_Avoid_: Dump, transmission task, playback
 
 **MissionPlan**:
 An immutable, versioned set of scheduled actions for one scenario. Each plan after the first names its parent.
@@ -61,7 +73,7 @@ The `solver_details` field a CP-SAT-backed plan carries: solver status, objectiv
 _Avoid_: Solver metadata, solve stats, debug info
 
 **Violation**:
-A structured record that one scheduled action breaks one constraint. It carries a reason code and the offending request's id.
+A structured record that one scheduled action breaks one constraint. It carries a reason code and the offending action's subject key: the request id for imaging, the action id for downlink.
 _Avoid_: Error, failure, conflict, breach
 
 ### Mission execution
@@ -71,7 +83,7 @@ A snapshot of the mission at one simulated instant. It holds the clock, battery,
 _Avoid_: Status, world state, context, snapshot
 
 **MissionEvent**:
-A disruption injected into a running mission at a chosen simulated time. The mission supports a cloud block, a battery drop, an emergency request arrival, and a payload outage over an interval.
+A disruption injected into a running mission at a chosen simulated time. The mission supports a cloud block, a battery drop, an emergency request arrival, a payload outage over an interval, and a communication outage that loses one station's contacts over an interval.
 _Avoid_: Incident, disturbance, trigger, anomaly
 
 **Frozen**:

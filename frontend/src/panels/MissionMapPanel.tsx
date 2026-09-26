@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  GroundStationSchema,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
@@ -187,6 +188,7 @@ export function MissionMapPanel({
   events,
   requestPool = NO_REQUESTS,
   groundTrack = [],
+  groundStations = [],
   satellitePosition = null,
   selectedRequestId,
   onSelectRequest,
@@ -198,6 +200,7 @@ export function MissionMapPanel({
   /** The backend's request pool; only its expiry is read, the rest comes from the events. */
   requestPool?: readonly ObservationRequestSchema[];
   groundTrack?: readonly GroundTrackPointSchema[];
+  groundStations?: readonly GroundStationSchema[];
   satellitePosition?: GroundTrackPointSchema | null;
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
@@ -228,8 +231,9 @@ export function MissionMapPanel({
             expiredRequestIds(requestPool),
             groundTrack,
             satellitePosition,
+            groundStations,
           ),
-    [scenario, plan, missionState, events, requestPool, groundTrack, satellitePosition],
+    [scenario, plan, missionState, events, requestPool, groundTrack, satellitePosition, groundStations],
   );
 
   useEffect(() => {

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MissionMapEngine } from "../map/missionMapEngine";
 import { buildMissionMapModel } from "../map/missionMapModel";
 import { DEFAULT_VISIBILITY } from "../map/palette";
-import { fetchOrbitalElements, parseTle, validateScenario } from "../api/amis";
-import type { ObservationRequestSchema, OrbitalElementsSchema, ScenarioPreviewSchema, ScenarioSchema } from "../api/client";
+import { fetchGroundStations, fetchOrbitalElements, parseTle, validateScenario } from "../api/amis";
+import type { GroundStationSchema, ObservationRequestSchema, OrbitalElementsSchema, ScenarioPreviewSchema, ScenarioSchema } from "../api/client";
 
 const input = "w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100";
 const button = "rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-200 hover:bg-neutral-800 disabled:opacity-40";
@@ -18,7 +18,7 @@ function initialDraft(): ScenarioSchema {
   return {
     id: `SCN-${crypto.randomUUID()}`, name: "New Earth observation mission",
     start_time: start.toISOString(), end_time: end.toISOString(),
-    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10, settling_time_s: 0, culmination_placement: false },
+    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10, settling_time_s: 0, culmination_placement: false, ground_station_ids: [], downlink_rate_mb_s: 0 },
     satellite: { id: "SAT-EO", battery_capacity_wh: 1000, battery_charge_wh: 1000,
       storage_capacity_mb: 4000, storage_usage_mb: 0, available: true },
     requests: [],
@@ -77,6 +77,10 @@ export function MissionBuilder({ onClose, onCreate }: {
 }) {
   const [draft, setDraft] = useState<ScenarioSchema>(initialDraft);
   const [catalogue, setCatalogue] = useState<OrbitalElementsSchema[]>([]);
+  const [stations, setStations] = useState<GroundStationSchema[]>([]);
+  useEffect(() => {
+    fetchGroundStations().then(setStations).catch(() => setStations([]));
+  }, []);
   const [preview, setPreview] = useState<ScenarioPreviewSchema | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [tle, setTle] = useState({ name: "Custom satellite", line1: "", line2: "" });
@@ -168,6 +172,13 @@ export function MissionBuilder({ onClose, onCreate }: {
           </label>
           <label>Settling time (s)<input className={input} type="number" min="0" step="any" value={draft.window_policy?.settling_time_s ?? 0} onChange={(event) => updatePolicy({ settling_time_s: Number(event.target.value) })} /></label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={draft.window_policy?.culmination_placement ?? false} onChange={(event) => updatePolicy({ culmination_placement: event.target.checked })} />Place at window culmination</label>
+          <fieldset className="col-span-full flex flex-wrap items-center gap-2"><legend>Ground stations (downlink)</legend>
+            {stations.map((station) => {
+              const selected = draft.window_policy?.ground_station_ids ?? [];
+              return <label key={station.id} className="flex items-center gap-1"><input type="checkbox" checked={selected.includes(station.id)} onChange={(event) => updatePolicy({ ground_station_ids: event.target.checked ? [...selected, station.id] : selected.filter((id) => id !== station.id) })} />{station.name} · {station.min_elevation_deg}°</label>;
+            })}
+          </fieldset>
+          <label>Downlink rate (MB/s)<input className={input} type="number" min="0" step="any" value={draft.window_policy?.downlink_rate_mb_s ?? 0} onChange={(event) => updatePolicy({ downlink_rate_mb_s: Number(event.target.value) })} /></label>
         </section>
         <p className="text-[10px] text-neutral-500">The orbit is published data. Pointing limits and resource values describe a hypothetical agile imager.</p>
         <details><summary className="cursor-pointer">Paste a TLE pair</summary><div className="space-y-2 pt-2">

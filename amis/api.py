@@ -31,6 +31,8 @@ from amis.api_schemas import (
     ScenarioPreviewSchema,
     OrbitalElementsSchema,
     TleParseRequest,
+    ContactWindowSchema,
+    GroundStationSchema,
     GroundTrackPointSchema,
 )
 from amis.examples import cloud_example, examples
@@ -171,6 +173,21 @@ def create_app(
         if item is None:
             raise ResourceNotFoundError("example does not exist", details={"example_id": example_id})
         return item.to_dict()
+
+    @app.get("/ground-stations", response_model=list[GroundStationSchema])
+    def list_ground_stations() -> list[dict[str, Any]]:
+        from amis.orbital.stations import station_catalogue
+
+        return [station.to_dict() for station in station_catalogue()]
+
+    @app.get(
+        "/scenarios/{scenario_id}/contacts",
+        response_model=list[ContactWindowSchema],
+        responses=_documented_errors(404, 422),
+    )
+    def get_contacts(scenario_id: ScenarioId) -> list[dict[str, Any]]:
+        """Contact windows at the mission's stations, communication outages applied."""
+        return [contact.to_dict() for contact in store.load(scenario_id).get_contacts()]
 
     @app.get("/orbital-elements", response_model=list[OrbitalElementsSchema], response_model_exclude_unset=True)
     def list_elements() -> list[dict[str, Any]]:

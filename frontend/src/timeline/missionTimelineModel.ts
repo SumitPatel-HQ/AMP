@@ -1,5 +1,6 @@
 import type { DataGroup, DataItem } from "vis-timeline";
 import type {
+  ContactWindowSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -48,10 +49,23 @@ export interface MissionEventTimelineItem extends MissionTimelineItemBase {
   eventId: string;
 }
 
+/** A ground-station contact window on its station lane (ADR-0011). */
+export interface MissionContactTimelineItem extends MissionTimelineItemBase {
+  kind: "contact";
+  requestId: string;
+  contactId: string;
+}
+
 export type MissionTimelineItem =
   | MissionWindowTimelineItem
   | MissionActionTimelineItem
-  | MissionEventTimelineItem;
+  | MissionEventTimelineItem
+  | MissionContactTimelineItem;
+
+/** Presentation-only lane id for one ground station's contacts and downlinks. */
+export function stationGroupId(stationId: string): string {
+  return `__STATION__${stationId}`;
+}
 
 export interface MissionTimelineModel {
   bounds: {
@@ -81,6 +95,7 @@ export interface MissionTimelineModelInput {
   selectedWindowId: string | null;
   selectedEventId: string | null;
   changeByRequestId: Record<string, PlanChangeType>;
+  contacts?: ContactWindowSchema[];
 }
 
 /** Returns the backend window occupying a request row at a given mission time. */
@@ -241,21 +256,25 @@ function buildActionItems({
     const selected = action.window_id === selectedWindowId;
     const frozen = action.status !== "planned" || frozenIds.has(action.id);
     const impacted = invalidIds.has(action.id);
-    const change = changeByRequestId[action.request_id];
+    // Downlink actions carry no request; they sit on their station lane and
+    // never carry a plan change (ADR-0011).
+    const downlink = action.kind === "downlink" || action.request_id == null;
+    const row = downlink ? stationGroupId(action.station_id ?? "unknown") : action.request_id!;
+    const change = downlink ? undefined : changeByRequestId[row];
     return {
       id: `action:${action.id}`,
       kind: "action",
-      requestId: action.request_id,
+      requestId: row,
       windowId: action.window_id,
       actionId: action.id,
-      "request-id": action.request_id,
+      "request-id": row,
       "window-id": action.window_id,
       "action-id": action.id,
-      group: action.request_id,
+      group: row,
       start: action.start,
       end: action.end,
       type: "range",
-      content: action.status,
+      content: downlink ? `downlink ${(-action.storage_cost_mb).toFixed(0)} MB` : action.status,
       selectable: true,
       selected,
       status: action.status,
@@ -265,6 +284,7 @@ function buildActionItems({
       className: classes(
         "amis-action",
         `amis-action-${action.status}`,
+        downlink && "amis-action-downlink",
         frozen && "amis-action-frozen",
         impacted && "amis-action-impacted",
         selected && "amis-timeline-selected",
@@ -390,6 +410,47 @@ export function buildMissionTimelineModel(
     });
   }
 
+  // One lane per ground station with contacts or downlinks, below the requests.
+  const stationIds = new Set<string>();
+  for (const contact of input.contacts ?? []) stationIds.add(contact.station_id);
+  for (const action of input.plan.actions) {
+    if (action.kind === "downlink" && action.station_id) stationIds.add(action.station_id);
+  }
+  for (const stationId of [...stationIds].sort()) {
+    groups.push({
+      id: stationGroupId(stationId),
+      requestId: stationGroupId(stationId),
+      priority: 0,
+      order: groups.length,
+      content: `${stationId} contacts`,
+      title: `Ground station ${stationId}: contact windows and downlink actions`,
+      selected: false,
+      className: classes("amis-request-group", "amis-station-group"),
+    });
+  }
+  const contactItems: MissionContactTimelineItem[] = (input.contacts ?? []).map((contact) => ({
+    id: `contact:${contact.id}`,
+    kind: "contact",
+    requestId: stationGroupId(contact.station_id),
+    contactId: contact.id,
+    "request-id": stationGroupId(contact.station_id),
+    "window-id": contact.id,
+    group: stationGroupId(contact.station_id),
+    start: contact.start,
+    end: contact.end,
+    type: "background",
+    content: "",
+    selectable: false,
+    selected: false,
+    className: classes("amis-contact", contact.valid ? "amis-contact-valid" : "amis-contact-invalid"),
+    title: [
+      contact.id,
+      `${formatUtc(contact.start)} to ${formatUtc(contact.end)}`,
+      contact.valid ? "Contact window" : contact.invalid_reason ?? "Lost contact",
+      `peak ${contact.peak_elevation_deg.toFixed(1)}°`,
+    ].join(" | "),
+  }));
+
   return {
     bounds: {
       start: scenario.start_time,
@@ -404,6 +465,7 @@ export function buildMissionTimelineModel(
         new Set([...requestIds, ...emergencyIds]),
         input.selectedWindowId,
       ),
+      ...contactItems,
       ...buildActionItems(input),
       ...buildEventItems(input.events, requestIds, emergencyIds, input.selectedEventId),
     ],

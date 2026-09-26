@@ -19,7 +19,10 @@ from amis.domain import (
     ActionStatus,
     BatteryDropPayload,
     CloudBlockPayload,
+    CommunicationOutagePayload,
+    ContactWindow,
     DecisionTrace,
+    GroundStation,
     EmergencyRequestPayload,
     EventPayload,
     EventType,
@@ -73,6 +76,7 @@ class MissionSession:
         self._events: list[MissionEvent] = []
         self._traces: list[DecisionTrace] = []
         self._impacts: list[Impact] = []
+        self._base_contacts: list[ContactWindow] | None = None
         self._window_provider = window_provider or SyntheticWindowProvider()
         self._planner = planner or GreedyPlanner()
         self._plan_id_prefix = plan_id_prefix
@@ -137,6 +141,7 @@ class MissionSession:
             plan_id=self._next_plan_id(),
             first_action_number=self._next_action_number(),
             outage_intervals=self._outage_intervals(),
+            **self._contact_kwargs(),
         )
         self._plans.append(plan)
         self._update_request_statuses_from_plan()
@@ -181,6 +186,7 @@ class MissionSession:
             plan_id=self._next_plan_id(),
             first_action_number=self._next_action_number(),
             outage_intervals=self._outage_intervals(),
+            **self._contact_kwargs(),
         )
 
         diff = self._compare(previous_plan, plan)
@@ -321,6 +327,9 @@ class MissionSession:
         elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
             event_payload = self._parse_satellite_outage_payload(payload)
             self._validate_satellite_outage(event_payload)
+        elif parsed_event_type is EventType.COMMUNICATION_OUTAGE:
+            event_payload = self._parse_communication_outage_payload(payload)
+            self._validate_communication_outage(event_payload)
         else:
             raise InvalidEventError(
                 "mission event type is not implemented",
@@ -361,8 +370,10 @@ class MissionSession:
                 battery_wh=event_payload.new_battery_wh,
                 active_event_ids=state.active_event_ids + (event.id,),
             )
-        elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
-            assert isinstance(event_payload, SatelliteOutagePayload)
+        elif parsed_event_type in (EventType.SATELLITE_UNAVAILABLE, EventType.COMMUNICATION_OUTAGE):
+            # Both spans act through the event log: payload outages through
+            # the outage intervals, communication outages by invalidating the
+            # overlapping contacts (ADR-0011).
             # The span itself invalidates overlapping actions through the
             # outage intervals below. The base availability flag stays as
             # the scenario set it, so actions outside the span keep
@@ -390,6 +401,9 @@ class MissionSession:
             plan=plan,
             outage_intervals=self._outage_intervals(
                 pending=event if parsed_event_type is EventType.SATELLITE_UNAVAILABLE else None
+            ),
+            contacts=self.get_contacts(
+                pending=event if parsed_event_type is EventType.COMMUNICATION_OUTAGE else None
             ),
         )
         self._events.append(event)
@@ -439,6 +453,55 @@ class MissionSession:
             and isinstance(event.payload, SatelliteOutagePayload)
         )
 
+    def inject_communication_outage(
+        self,
+        station_id: str,
+        outage_start: datetime,
+        outage_end: datetime,
+    ) -> MissionEvent:
+        """Record a station outage over ``[outage_start, outage_end)``."""
+
+        return self.inject_event(
+            EventType.COMMUNICATION_OUTAGE,
+            CommunicationOutagePayload(
+                station_id=station_id, outage_start=outage_start, outage_end=outage_end
+            ),
+        )
+
+    def get_ground_stations(self) -> tuple[GroundStation, ...]:
+        """The catalogue stations this mission computes contacts at."""
+        from amis.orbital.stations import stations_by_ids
+
+        policy = self._require_scenario().window_policy
+        return stations_by_ids(policy.ground_station_ids) if policy else ()
+
+    def get_contacts(self, pending: MissionEvent | None = None) -> tuple[ContactWindow, ...]:
+        """Contact windows with communication outages from the event log applied.
+
+        Contacts are derived from the stored orbit and the station
+        catalogue, never persisted (ADR-0011). ``pending`` is a
+        communication outage being injected right now.
+        """
+        from amis.windows.contacts import apply_communication_outages, compute_contacts
+
+        scenario = self._require_scenario()
+        if self._base_contacts is None:
+            stations = self.get_ground_stations()
+            self._base_contacts = compute_contacts(scenario, stations) if stations else []
+        events = list(self._events) + ([pending] if pending is not None else [])
+        spans = [
+            (event.payload.station_id, event.payload.outage_start, event.payload.outage_end)
+            for event in events
+            if isinstance(event.payload, CommunicationOutagePayload)
+        ]
+        return tuple(apply_communication_outages(self._base_contacts, spans))
+
+    def _contact_kwargs(self) -> dict[str, Any]:
+        # Only downlink-enabled missions pass contacts, so a planner written
+        # before Wave 4 keeps working for every other mission.
+        contacts = self.get_contacts()
+        return {"contacts": contacts} if contacts else {}
+
     def inject_emergency_request(
         self,
         request: ObservationRequest,
@@ -484,6 +547,7 @@ class MissionSession:
         self._events = list(events)
         self._impacts = list(impacts)
         self._traces = list(traces)
+        self._base_contacts = None
 
         introduced_by_event_id = {
             event.id: request
@@ -553,11 +617,15 @@ class MissionSession:
             if status is ActionStatus.PLANNED and action.start <= target_time:
                 status = ActionStatus.STARTED
                 battery_wh = max(0.0, battery_wh - action.energy_cost_wh)
-                storage_usage_mb = max(0.0, storage_usage_mb + action.storage_cost_mb)
+                if not action.is_downlink:
+                    storage_usage_mb = max(0.0, storage_usage_mb + action.storage_cost_mb)
 
             if status is ActionStatus.STARTED and action.end <= target_time:
                 status = ActionStatus.COMPLETED
-                if action.request_id not in completed_request_id_set:
+                if action.is_downlink:
+                    # Storage frees when the contact ends (ADR-0011).
+                    storage_usage_mb = max(0.0, storage_usage_mb + action.storage_cost_mb)
+                elif action.request_id not in completed_request_id_set:
                     completed_request_ids.append(action.request_id)
                     completed_request_id_set.add(action.request_id)
 
@@ -599,6 +667,7 @@ class MissionSession:
         self._events = []
         self._traces = []
         self._impacts = []
+        self._base_contacts = None
 
     def _update_request_statuses_from_plan(self) -> None:
         plan = self.get_plan()
@@ -857,6 +926,36 @@ class MissionSession:
                 "payload outage interval must overlap the mission",
                 details={"satellite_id": payload.satellite_id},
             )
+
+    @staticmethod
+    def _parse_communication_outage_payload(
+        payload: EventPayload | dict[str, Any]
+    ) -> CommunicationOutagePayload:
+        if isinstance(payload, CommunicationOutagePayload):
+            return payload
+        if not isinstance(payload, dict):
+            raise InvalidEventError("communication outage payload has the wrong shape")
+        try:
+            return CommunicationOutagePayload.from_dict(payload)
+        except (KeyError, TypeError, ValueError) as error:
+            raise InvalidEventError(
+                "communication outage payload requires station_id, outage_start, and outage_end"
+            ) from error
+
+    def _validate_communication_outage(self, payload: CommunicationOutagePayload) -> None:
+        scenario = self._require_scenario()
+        station_ids = {station.id for station in self.get_ground_stations()}
+        if payload.station_id not in station_ids:
+            raise InvalidEventError(
+                "communication outage station is not a mission ground station",
+                details={"station_id": payload.station_id},
+            )
+        if payload.outage_start.tzinfo is None or payload.outage_end.tzinfo is None:
+            raise InvalidEventError("communication outage interval must include a timezone")
+        if payload.outage_end <= payload.outage_start:
+            raise InvalidEventError("communication outage end must be after outage start")
+        if payload.outage_end <= scenario.start_time or payload.outage_start >= scenario.end_time:
+            raise InvalidEventError("communication outage interval must overlap the mission")
 
     @staticmethod
     def _parse_emergency_request_payload(

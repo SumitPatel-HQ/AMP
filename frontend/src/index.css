@@ -359,3 +359,19 @@ body,
 .amis-vis-timeline .vis-shadow {
   box-shadow: none;
 }
+
+/* Wave 4 (ADR-0011): ground-station contacts and downlink actions. */
+.amis-vis-timeline .vis-item.amis-contact {
+  background-color: rgb(56 189 248 / 0.14);
+  border-left: 1px solid rgb(56 189 248 / 0.5);
+}
+
+.amis-vis-timeline .vis-item.amis-contact-invalid {
+  background-color: rgb(239 68 68 / 0.12);
+  border-left-color: rgb(239 68 68 / 0.5);
+}
+
+.amis-vis-timeline .vis-item.amis-action-downlink {
+  background-color: rgb(14 165 233 / 0.85);
+  border-color: rgb(125 211 252);
+}

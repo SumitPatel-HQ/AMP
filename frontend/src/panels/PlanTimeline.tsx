@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import moment from "moment";
 import { Timeline, type TimelineEventPropertiesResult, type TimelineOptions } from "vis-timeline";
 import type {
+  ContactWindowSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -32,6 +33,7 @@ export interface PlanTimelineProps {
   events: MissionEventSchema[];
   impact: ImpactSchema | null;
   changeByRequestId: Record<string, PlanChangeType>;
+  contacts?: ContactWindowSchema[];
   selectedRequestId: string | null;
   selectedWindowId: string | null;
   selectedEventId: string | null;
@@ -210,6 +212,7 @@ export function PlanTimeline({
   events,
   impact,
   changeByRequestId,
+  contacts,
   selectedRequestId,
   selectedWindowId,
   selectedEventId,
@@ -236,6 +239,7 @@ export function PlanTimeline({
         selectedWindowId,
         selectedEventId,
         changeByRequestId,
+        contacts,
       }),
     [
       scenario,
@@ -248,6 +252,7 @@ export function PlanTimeline({
       selectedWindowId,
       selectedEventId,
       changeByRequestId,
+      contacts,
     ],
   );
   useEffect(() => {
