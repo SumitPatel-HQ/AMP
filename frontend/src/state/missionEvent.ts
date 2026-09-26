@@ -10,8 +10,17 @@ import type { ReplanResult } from "./types";
 /** One line naming what an event's payload carries, in the backend's own terms. */
 export function eventSummary(event: MissionEventSchema): string {
   switch (event.event_type) {
-    case "CLOUD_BLOCK":
-      return `${event.payload.request_id} / ${event.payload.window_id}`;
+    case "CLOUD_BLOCK": {
+      const base = `${event.payload.request_id} / ${event.payload.window_id}`;
+      if (
+        event.payload.source != null &&
+        event.payload.cloud_cover_pct != null &&
+        event.payload.threshold_pct != null
+      ) {
+        return `${base} · ${event.payload.cloud_cover_pct}% cloud ≥ ${event.payload.threshold_pct}% (${event.payload.source})`;
+      }
+      return base;
+    }
     case "BATTERY_DROP":
       return `${event.payload.satellite_id} battery → ${event.payload.new_battery_wh.toFixed(1)} Wh`;
     case "EMERGENCY_TASK": {

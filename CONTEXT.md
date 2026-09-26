@@ -83,8 +83,16 @@ A snapshot of the mission at one simulated instant. It holds the clock, battery,
 _Avoid_: Status, world state, context, snapshot
 
 **MissionEvent**:
-A disruption injected into a running mission at a chosen simulated time. The mission supports a cloud block, a battery drop, an emergency request arrival, a payload outage over an interval, and a communication outage that loses one station's contacts over an interval.
+A disruption injected into a running mission at a chosen simulated time. The mission supports a cloud block, a battery drop, an emergency request arrival, a payload outage over an interval, and a communication outage that loses one station's contacts over an interval. A cloud block derived offline from archived weather carries its source, coverage, and threshold.
 _Avoid_: Incident, disturbance, trigger, anomaly
+
+**Weather archive**:
+Committed raw hourly cloud responses with retrieval time and per-location checksums. The application never fetches weather; a developer script refreshes the archive and an offline threshold rule converts it into recorded cloud-block events.
+_Avoid_: Live weather, forecast feed, nowcast
+
+**Cloud sample**:
+One normalized cloud-coverage fraction for one target at one time, derived from the weather archive. Samples inform the threshold rule only; the planner never sees them.
+_Avoid_: Forecast point, weather reading
 
 **Frozen**:
 The property of a scheduled action that has already started. Replanning may never move, drop, or recost a frozen action. An action is frozen when its start time is at or before the current simulated time.

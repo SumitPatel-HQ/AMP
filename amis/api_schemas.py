@@ -241,6 +241,20 @@ class MissionStateSchema(ApiModel):
 class CloudBlockPayloadSchema(ApiModel):
     request_id: str = Field(min_length=1)
     window_id: str = Field(min_length=1)
+    # Wave 5 (ADR-0012): archived-weather evidence. A weather-derived
+    # block carries all three; a hand-injected block carries none.
+    source: str | None = Field(default=None, min_length=1)
+    cloud_cover_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    threshold_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_weather_evidence(self) -> Self:
+        evidence = (self.source, self.cloud_cover_pct, self.threshold_pct)
+        if any(item is None for item in evidence) and any(item is not None for item in evidence):
+            raise ValueError(
+                "weather cloud blocks carry source, cloud_cover_pct, and threshold_pct together"
+            )
+        return self
 
 
 class BatteryDropPayloadSchema(ApiModel):

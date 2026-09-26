@@ -532,6 +532,12 @@ export interface components {
             request_id: string;
             /** Window Id */
             window_id: string;
+            /** Source */
+            source?: string | null;
+            /** Cloud Cover Pct */
+            cloud_cover_pct?: number | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
         };
         /** CommunicationOutageEventRequest */
         CommunicationOutageEventRequest: {

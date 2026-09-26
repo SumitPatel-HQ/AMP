@@ -1,0 +1,15 @@
+{
+  "file": "sample-2026-09-25.json",
+  "source_url": "https://archive-api.open-meteo.com/v1/archive?latitude=12.97,28.61&longitude=77.59,77.21&hourly=cloud_cover&start_date=2026-09-25&end_date=2026-09-25",
+  "retrieved_at": "2026-09-25T19:30:00+00:00",
+  "sample": true,
+  "sample_note": "Hand-written Open-Meteo-shaped excerpt for offline tests and demos; real refreshes come from scripts/fetch_weather_archive.py and set sample to false.",
+  "hashes": {
+    "12.9700,77.5900": "61998cb5d311ff0a6f04f66e09d6d0bedbd63542b647285cd6e253bcc36c4d32",
+    "28.6100,77.2100": "46e48c5036cb23aa66020aeabb83fd944c85e7fb9e3c47361a30cf4332e5e508"
+  },
+  "sources": {
+    "12.9700,77.5900": "https://archive-api.open-meteo.com/v1/archive?latitude=12.97,28.61&longitude=77.59,77.21&hourly=cloud_cover&start_date=2026-09-25&end_date=2026-09-25",
+    "28.6100,77.2100": "https://archive-api.open-meteo.com/v1/archive?latitude=12.97,28.61&longitude=77.59,77.21&hourly=cloud_cover&start_date=2026-09-25&end_date=2026-09-25"
+  }
+}

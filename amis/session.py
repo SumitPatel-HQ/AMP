@@ -850,6 +850,32 @@ class MissionSession:
                     "window_id": payload.window_id,
                 },
             )
+        evidence = (
+            payload.source,
+            payload.cloud_cover_pct,
+            payload.threshold_pct,
+        )
+        if any(item is None for item in evidence) and any(
+            item is not None for item in evidence
+        ):
+            # The HTTP schema rejects partial evidence before it reaches
+            # here; this is the facade-level backstop for callers that
+            # bypass the schema entirely (GAP-07).
+            raise InvalidEventError(
+                "weather cloud blocks carry source, cloud_cover_pct, and threshold_pct together",
+                details={"window_id": payload.window_id},
+            )
+        for value, name in (
+            (payload.cloud_cover_pct, "cloud_cover_pct"),
+            (payload.threshold_pct, "threshold_pct"),
+        ):
+            if value is not None and (
+                not math.isfinite(value) or value < 0 or value > 100
+            ):
+                raise InvalidEventError(
+                    "cloud block weather evidence must be a percentage",
+                    details={name: value},
+                )
 
     @staticmethod
     def _parse_battery_drop_payload(

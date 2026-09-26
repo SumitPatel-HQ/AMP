@@ -82,6 +82,21 @@ describe("eventSummary", () => {
     expect(eventSummary(cloudBlock)).toBe("OBS-B / WIN-OBS-B-1");
   });
 
+  it("appends the archived-weather evidence of a weather-derived block", () => {
+    const weatherBlock = {
+      ...cloudBlock,
+      payload: {
+        ...cloudBlock.payload,
+        source: "open-meteo-archive",
+        cloud_cover_pct: 85,
+        threshold_pct: 50,
+      },
+    } satisfies MissionEventSchema;
+    expect(eventSummary(weatherBlock)).toBe(
+      "OBS-B / WIN-OBS-B-1 · 85% cloud ≥ 50% (open-meteo-archive)",
+    );
+  });
+
   it("gives the battery value a battery drop set, with no request", () => {
     expect(eventSummary(batteryDrop)).toBe("SAT-001 battery → 120.0 Wh");
   });

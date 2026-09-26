@@ -13,17 +13,52 @@ from amis.domain.window import ObservationWindow
 
 @dataclass(frozen=True)
 class CloudBlockPayload:
+    """A blocked observation window.
+
+    Hand-injected blocks carry only the request and window. Blocks
+    derived offline from archived weather (Wave 5, ADR-0012) carry the
+    full evidence triple -- source, coverage, and threshold -- so a
+    replay reads recorded values and the planner never sees weather.
+    """
+
     request_id: str
     window_id: str
+    source: str | None = None
+    cloud_cover_pct: float | None = None
+    threshold_pct: float | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        return {"request_id": self.request_id, "window_id": self.window_id}
+    def to_dict(self) -> dict[str, Any]:
+        # Optional evidence keys are omitted when absent, so payloads
+        # recorded before Wave 5 keep their exact serialized shape.
+        result: dict[str, Any] = {
+            "request_id": self.request_id,
+            "window_id": self.window_id,
+        }
+        if self.source is not None:
+            result["source"] = self.source
+        if self.cloud_cover_pct is not None:
+            result["cloud_cover_pct"] = self.cloud_cover_pct
+        if self.threshold_pct is not None:
+            result["threshold_pct"] = self.threshold_pct
+        return result
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "CloudBlockPayload":
         return CloudBlockPayload(
             request_id=data["request_id"],
             window_id=data["window_id"],
+            source=data.get("source"),
+            cloud_cover_pct=data.get("cloud_cover_pct"),
+            threshold_pct=data.get("threshold_pct"),
+        )
+
+    @property
+    def is_weather_derived(self) -> bool:
+        """True when the block carries archived-weather evidence."""
+        return (
+            self.source is not None
+            and self.cloud_cover_pct is not None
+            and self.threshold_pct is not None
         )
 
 
