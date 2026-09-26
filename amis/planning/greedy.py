@@ -59,6 +59,23 @@ from amis.domain import (
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
 
 
+def _culmination_start(
+    window: ObservationWindow, duration_s: float
+) -> datetime | None:
+    """Peak-centered start when the window records its culmination.
+
+    Returns ``peak_time`` minus half the duration when that centered
+    placement fits inside the window, else ``None`` so the caller falls
+    back to the window start.
+    """
+    if window.peak_time is None:
+        return None
+    start = window.peak_time - timedelta(seconds=duration_s / 2)
+    if start >= window.start and start + timedelta(seconds=duration_s) <= window.end:
+        return start
+    return None
+
+
 class GreedyPlanner:
     def plan(
         self,
@@ -69,9 +86,13 @@ class GreedyPlanner:
         previous_plan: Optional[MissionPlan] = None,
         plan_id: str = FIRST_PLAN_ID,
         first_action_number: int = 1,
+        outage_intervals: Iterable[tuple[datetime, datetime]] = (),
     ) -> MissionPlan:
         start_perf = time.perf_counter()
         all_requests = tuple(requests)
+        outages = tuple(outage_intervals)
+        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
+        culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
 
         windows_by_request: dict[str, list[ObservationWindow]] = {}
         for window in windows:
@@ -123,15 +144,19 @@ class GreedyPlanner:
 
             for window in candidates:
                 window_start = max(window.start, mission_state.simulated_time)
+                peak_start = _culmination_start(window, request.duration_s) if culmination else None
                 for candidate_start in _candidate_starts_in_window(
-                    window_start, window.end, request.duration_s, placed_actions
+                    window_start, window.end, request.duration_s, placed_actions,
+                    min_gap_s=min_gap_s, culmination_start=peak_start,
                 ):
                     candidate_end = candidate_start + timedelta(seconds=request.duration_s)
 
                     violation = (
                         check_window_containment(request.id, window, candidate_start, candidate_end)
                         or check_deadline(request.id, request.deadline, candidate_end)
-                        or check_satellite_availability(request.id, mission_state.available)
+                        or check_satellite_availability(
+                            request.id, mission_state.available, candidate_start, candidate_end, outages
+                        )
                         or projection.check_commit(
                             request.id,
                             candidate_start,
@@ -139,7 +164,7 @@ class GreedyPlanner:
                             request.storage_cost_mb,
                             scenario.satellite.storage_capacity_mb,
                         )
-                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions)
+                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions, min_gap_s)
                     )
 
                     if violation is None:
@@ -212,7 +237,7 @@ class GreedyPlanner:
         # the resulting plan, not dropped/unscheduled requests (those are
         # already reported separately in `unscheduled`).
         all_windows = tuple(window for windows in windows_by_request.values() for window in windows)
-        violation_count = len(validate_plan(scenario, mission_state, all_requests, all_windows, plan))
+        violation_count = len(validate_plan(scenario, mission_state, all_requests, all_windows, plan, outages))
         return replace(plan, violation_count=violation_count)
 
 
@@ -248,27 +273,36 @@ def _candidate_starts_in_window(
     window_end: datetime,
     duration_s: float,
     placed_actions: Iterable[ScheduledAction],
+    min_gap_s: float = 0.0,
+    culmination_start: datetime | None = None,
 ) -> list[datetime]:
     """Every start instant worth trying inside one window.
 
     The window's own (now-clamped) start is tried first, since it is the
-    preferred, most-stable slot. Then the instant right after every
-    already-placed action that ends inside the window is tried too, so a
-    request is not dropped just because the single fixed start instant
-    collides while most of the window is free. Candidates that would run
-    past the window are excluded.
+    preferred, most-stable slot. When culmination placement is on and the
+    peak-centered start fits, it is tried before the window start, since
+    it is the best-geometry slot. Then the instant right after every
+    already-placed action (plus the settling gap) that ends inside the
+    window is tried too, so a request is not dropped just because one
+    busy instant conflicts while most of the window is free. Candidates
+    that would run past the window are excluded.
     """
 
     duration = timedelta(seconds=duration_s)
+    gap = timedelta(seconds=min_gap_s)
     starts = {window_start}
+    if culmination_start is not None and culmination_start >= window_start:
+        starts.add(culmination_start)
     for action in placed_actions:
-        if window_start <= action.end <= window_end:
-            starts.add(action.end)
+        after = action.end + gap
+        if window_start <= after <= window_end:
+            starts.add(after)
 
     ordered = sorted(start for start in starts if start + duration <= window_end)
-    if window_start in ordered:
-        ordered.remove(window_start)
-        ordered.insert(0, window_start)
+    preferred = culmination_start if culmination_start in ordered else window_start
+    if preferred in ordered:
+        ordered.remove(preferred)
+        ordered.insert(0, preferred)
     return ordered
 
 

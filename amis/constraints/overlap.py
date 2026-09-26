@@ -6,7 +6,7 @@ that overlaps any already scheduled action is rejected.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterable, Optional
 
 from amis.domain import ReasonCode, ScheduledAction, Violation
@@ -17,9 +17,17 @@ def check_overlap(
     start: datetime,
     end: datetime,
     other_actions: Iterable[ScheduledAction],
+    min_gap_s: float = 0.0,
 ) -> Optional[Violation]:
+    """One observation at a time, plus the mission settling gap.
+
+    ``min_gap_s`` is the fixed settling time between observations: two
+    actions conflict unless each starts at least the gap after the other
+    ends. A zero gap is the historical overlap rule.
+    """
+    gap = timedelta(seconds=min_gap_s)
     for other in other_actions:
-        if start < other.end and other.start < end:
+        if start < other.end + gap and other.start < end + gap:
             return Violation(
                 reason_code=ReasonCode.TIME_OVERLAP,
                 request_id=request_id,

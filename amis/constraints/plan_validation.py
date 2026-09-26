@@ -10,6 +10,7 @@ time for the overlap check against unfrozen actions.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterable
 
 from amis.constraints.availability import check_satellite_availability
@@ -38,10 +39,13 @@ def validate_plan(
     requests: Iterable[ObservationRequest],
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
+    outage_intervals: Iterable[tuple[datetime, datetime]] = (),
 ) -> list[Violation]:
     requests_by_id = {request.id: request for request in requests}
     windows_by_id = {window.id: window for window in windows}
     ordered_actions = sorted(plan.actions, key=lambda action: (action.start, action.id))
+    outages = tuple(outage_intervals)
+    min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
 
     projection = ResourceProjection(mission_state.battery_wh, mission_state.storage_usage_mb)
     violations: list[Violation] = []
@@ -58,7 +62,9 @@ def validate_plan(
         checks = (
             check_window_containment(action.request_id, window, action.start, action.end),
             check_deadline(action.request_id, request.deadline, action.end),
-            check_satellite_availability(action.request_id, mission_state.available),
+            check_satellite_availability(
+                action.request_id, mission_state.available, action.start, action.end, outages
+            ),
             check_projected_battery(action.request_id, action.energy_cost_wh, battery_wh),
             check_projected_storage(
                 action.request_id,
@@ -66,7 +72,7 @@ def validate_plan(
                 storage_used_mb,
                 scenario.satellite.storage_capacity_mb,
             ),
-            check_overlap(action.request_id, action.start, action.end, other_actions),
+            check_overlap(action.request_id, action.start, action.end, other_actions, min_gap_s),
         )
         violations.extend(violation for violation in checks if violation is not None)
         projection.commit(action)

@@ -640,12 +640,12 @@ export interface components {
          * MissionEventRequest
          * @description Every event the route accepts, chosen by ``event_type``.
          */
-        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"];
+        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"] | components["schemas"]["SatelliteOutageEventRequest"];
         /**
-         * MissionEventSchema
-         * @description Every event the log can hold, chosen by ``event_type``.
-         */
-        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"];
+          * MissionEventSchema
+          * @description Every event the log can hold, chosen by ``event_type``.
+          */
+        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"] | components["schemas"]["SatelliteOutageMissionEventSchema"];
         /** MissionPlanSchema */
         MissionPlanSchema: {
             /** Id */
@@ -852,6 +852,48 @@ export interface components {
             available: boolean;
             orbit?: components["schemas"]["OrbitalElementsSchema"] | null;
         };
+        /** SatelliteOutageEventRequest */
+        SatelliteOutageEventRequest: {
+            /**
+              * @description discriminator enum property added by openapi-typescript
+              * @enum {string}
+              */
+            event_type: "SATELLITE_UNAVAILABLE";
+            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
+        };
+        /** SatelliteOutageMissionEventSchema */
+        SatelliteOutageMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+              * Event Time
+              * Format: date-time
+              */
+            event_time: string;
+            /**
+              * @description discriminator enum property added by openapi-typescript
+              * @enum {string}
+              */
+            event_type: "SATELLITE_UNAVAILABLE";
+            payload: components["schemas"]["SatelliteOutagePayloadSchema"];
+        };
+        /** SatelliteOutagePayloadSchema */
+        SatelliteOutagePayloadSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /**
+              * Outage Start
+              * Format: date-time
+              */
+            outage_start: string;
+            /**
+              * Outage End
+              * Format: date-time
+              */
+            outage_end: string;
+        };
         /** ScenarioPreviewSchema */
         ScenarioPreviewSchema: {
             /** Errors */
@@ -982,10 +1024,20 @@ export interface components {
              */
             max_off_nadir_deg: number;
             /**
-             * Min Sun Elevation Deg
-             * @default 10
-             */
+              * Min Sun Elevation Deg
+              * @default 10
+              */
             min_sun_elevation_deg: number | null;
+            /**
+              * Settling Time S
+              * @default 0
+              */
+            settling_time_s: number;
+            /**
+              * Culmination Placement
+              * @default false
+              */
+            culmination_placement: boolean;
         };
     };
     responses: never;

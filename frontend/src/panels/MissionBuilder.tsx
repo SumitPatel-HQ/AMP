@@ -18,20 +18,32 @@ function initialDraft(): ScenarioSchema {
   return {
     id: `SCN-${crypto.randomUUID()}`, name: "New Earth observation mission",
     start_time: start.toISOString(), end_time: end.toISOString(),
-    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10 },
+    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10, settling_time_s: 0, culmination_placement: false },
     satellite: { id: "SAT-EO", battery_capacity_wh: 1000, battery_charge_wh: 1000,
       storage_capacity_mb: 4000, storage_usage_mb: 0, available: true },
     requests: [],
   };
 }
 
-function requestAt(lat: number, lon: number, deadline: string, index: number): ObservationRequestSchema {
+/** Builder-side engineering defaults: power × duration for energy, data rate × duration for storage. */
+export function deriveEnergyWh(powerW: number, durationS: number): number {
+  return (powerW * durationS) / 3600;
+}
+
+export function deriveStorageMb(dataRateMbps: number, durationS: number): number {
+  return (dataRateMbps * durationS) / 8;
+}
+
+function requestAt(lat: number, lon: number, deadline: string, index: number, powerW: number, dataRateMbps: number): ObservationRequestSchema {
+  const durationS = 30;
   return {
     id: `OBS-${index}`, target_name: `Target ${index}`,
     target_lat: Math.round(lat * 100000) / 100000,
     target_lon: Math.round(lon * 100000) / 100000,
-    priority: 3, duration_s: 30, deadline, energy_cost_wh: 20,
-    storage_cost_mb: 100, status: "pending",
+    priority: 3, duration_s: durationS, deadline,
+    energy_cost_wh: Math.round(deriveEnergyWh(powerW, durationS) * 10) / 10,
+    storage_cost_mb: Math.round(deriveStorageMb(dataRateMbps, durationS) * 10) / 10,
+    status: "pending",
   };
 }
 
@@ -69,6 +81,8 @@ export function MissionBuilder({ onClose, onCreate }: {
   const [failure, setFailure] = useState<string | null>(null);
   const [tle, setTle] = useState({ name: "Custom satellite", line1: "", line2: "" });
   const [busy, setBusy] = useState(false);
+  const [powerW, setPowerW] = useState(800);
+  const [dataRateMbps, setDataRateMbps] = useState(20);
   const imported = useRef(false);
 
   useEffect(() => {
@@ -100,8 +114,16 @@ export function MissionBuilder({ onClose, onCreate }: {
     const ids = new Set(current.requests.map((item) => item.id));
     let next = 1;
     while (ids.has(`OBS-${next}`)) next += 1;
-    return { ...current, requests: [...current.requests, requestAt(lat, lon, current.end_time, next)] };
+    return { ...current, requests: [...current.requests, requestAt(lat, lon, current.end_time, next, powerW, dataRateMbps)] };
   });
+  const applyDerivedCosts = () => setDraft((current) => ({
+    ...current,
+    requests: current.requests.map((item) => ({
+      ...item,
+      energy_cost_wh: Math.round(deriveEnergyWh(powerW, item.duration_s) * 10) / 10,
+      storage_cost_mb: Math.round(deriveStorageMb(dataRateMbps, item.duration_s) * 10) / 10,
+    })),
+  }));
   const updateSatellite = (patch: Partial<ScenarioSchema["satellite"]>) =>
     setDraft((current) => ({ ...current, satellite: { ...current.satellite, ...patch } }));
   const updatePolicy = (patch: Partial<NonNullable<ScenarioSchema["window_policy"]>>) =>
@@ -144,6 +166,8 @@ export function MissionBuilder({ onClose, onCreate }: {
           <label>Min Sun elevation °<input className={input} type="number" min="-10" max="60" disabled={draft.window_policy?.min_sun_elevation_deg === null} value={draft.window_policy?.min_sun_elevation_deg ?? 10} onChange={(event) => updatePolicy({ min_sun_elevation_deg: Number(event.target.value) })} />
             <span className="flex gap-1"><input type="checkbox" checked={draft.window_policy?.min_sun_elevation_deg === null} onChange={(event) => updatePolicy({ min_sun_elevation_deg: event.target.checked ? null : 10 })} /> No daylight requirement</span>
           </label>
+          <label>Settling time (s)<input className={input} type="number" min="0" step="any" value={draft.window_policy?.settling_time_s ?? 0} onChange={(event) => updatePolicy({ settling_time_s: Number(event.target.value) })} /></label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={draft.window_policy?.culmination_placement ?? false} onChange={(event) => updatePolicy({ culmination_placement: event.target.checked })} />Place at window culmination</label>
         </section>
         <p className="text-[10px] text-neutral-500">The orbit is published data. Pointing limits and resource values describe a hypothetical agile imager.</p>
         <details><summary className="cursor-pointer">Paste a TLE pair</summary><div className="space-y-2 pt-2">
@@ -157,6 +181,12 @@ export function MissionBuilder({ onClose, onCreate }: {
           <label className="flex items-center gap-2"><input type="checkbox" checked={draft.satellite.available} onChange={(event) => updateSatellite({ available: event.target.checked })} />Available</label>
         </div></section>
         <section><div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">Targets</h3><button className={button} onClick={() => addTarget()}>Add target</button></div>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <label>Payload power (W)<input className={input} type="number" min="0" step="any" value={powerW} onChange={(event) => setPowerW(Number(event.target.value))} /></label>
+            <label>Data rate (Mbit/s)<input className={input} type="number" min="0" step="any" value={dataRateMbps} onChange={(event) => setDataRateMbps(Number(event.target.value))} /></label>
+            <p className="col-span-2 text-[10px] text-neutral-500">Starting costs come from power × duration and data rate × duration; stored costs stay editable per target.</p>
+            <button className={`${button} col-span-2`} onClick={applyDerivedCosts}>Apply derived costs to all targets</button>
+          </div>
           <div className="space-y-3">{draft.requests.map((request, index) => <div key={index} className="rounded border border-neutral-800 p-2">
             <div className="grid grid-cols-2 gap-2">
               {(["id", "target_name"] as const).map((key) => <label key={key}>{key.replace("_", " ")}<input className={input} value={request[key] ?? ""} onChange={(event) => updateRequest(index, { [key]: event.target.value })} /></label>)}

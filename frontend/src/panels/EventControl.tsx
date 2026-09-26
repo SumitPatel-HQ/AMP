@@ -22,12 +22,14 @@ const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
   { type: "CLOUD_BLOCK", label: "Cloud block" },
   { type: "BATTERY_DROP", label: "Battery drop" },
   { type: "EMERGENCY_TASK", label: "Emergency request" },
+  { type: "SATELLITE_UNAVAILABLE", label: "Payload outage" },
 ];
 
 const INJECT_LABEL: Record<MissionEventType, string> = {
   CLOUD_BLOCK: "Inject cloud block",
   BATTERY_DROP: "Inject battery drop",
   EMERGENCY_TASK: "Inject emergency request",
+  SATELLITE_UNAVAILABLE: "Inject payload outage",
 };
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -152,6 +154,68 @@ function BatteryDropFields({
           className={`${CONTROL_INPUT} w-28`}
         />
       </Field>
+    </div>
+  );
+}
+
+/** A payload outage over an interval: the instrument cannot observe inside it. */
+function SatelliteOutageFields({
+  satelliteId,
+  simulatedTime,
+  missionEnd,
+  onChange,
+}: {
+  satelliteId: string;
+  simulatedTime: string;
+  missionEnd: string;
+  onChange: (event: MissionEventRequest | null) => void;
+}) {
+  const toInput = (iso: string) => iso.slice(0, 16);
+  const fromInput = (value: string): string | null => {
+    const iso = `${value}:00Z`;
+    return Number.isNaN(Date.parse(iso)) ? null : iso;
+  };
+  const [start, setStart] = useState(toInput(simulatedTime));
+  const [end, setEnd] = useState(toInput(missionEnd));
+
+  const update = (nextStart: string, nextEnd: string) => {
+    setStart(nextStart);
+    setEnd(nextEnd);
+    const outageStart = fromInput(nextStart);
+    const outageEnd = fromInput(nextEnd);
+    onChange(
+      outageStart === null || outageEnd === null
+        ? null
+        : {
+            event_type: "SATELLITE_UNAVAILABLE",
+            payload: { satellite_id: satelliteId, outage_start: outageStart, outage_end: outageEnd },
+          },
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <Field label="Outage start (UTC)">
+        <input
+          aria-label="Outage start (UTC)"
+          type="datetime-local"
+          value={start}
+          onChange={(event) => update(event.target.value, end)}
+          className={CONTROL_INPUT}
+        />
+      </Field>
+      <Field label="Outage end (UTC)">
+        <input
+          aria-label="Outage end (UTC)"
+          type="datetime-local"
+          value={end}
+          onChange={(event) => update(start, event.target.value)}
+          className={CONTROL_INPUT}
+        />
+      </Field>
+      <p className="text-[10px] text-neutral-500">
+        {`Actions overlapping the span on ${satelliteId} fail validation; frozen actions stay exempt.`}
+      </p>
     </div>
   );
 }
@@ -282,6 +346,13 @@ export function EventControl({
           satelliteId={missionState.satellite_id}
           batteryWh={missionState.battery_wh}
           capacityWh={scenario.satellite.battery_capacity_wh}
+          onChange={setConfigured}
+        />
+      ) : type === "SATELLITE_UNAVAILABLE" ? (
+        <SatelliteOutageFields
+          satelliteId={missionState.satellite_id}
+          simulatedTime={missionState.simulated_time}
+          missionEnd={scenario.end_time}
           onChange={setConfigured}
         />
       ) : (

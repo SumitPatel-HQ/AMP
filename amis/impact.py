@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 from typing import Iterable
 
 from amis.constraints import validate_plan
@@ -25,10 +26,11 @@ def analyze_impact(
     requests: Iterable[ObservationRequest],
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
+    outage_intervals: Iterable[tuple[datetime, datetime]] = (),
 ) -> Impact:
     """Classify each action once and retain every reason for invalid actions."""
 
-    violations = validate_plan(scenario, mission_state, requests, windows, plan)
+    violations = validate_plan(scenario, mission_state, requests, windows, plan, outage_intervals)
     reasons_by_request: dict[str, list[ReasonCode]] = defaultdict(list)
     for violation in violations:
         reasons = reasons_by_request[violation.request_id]

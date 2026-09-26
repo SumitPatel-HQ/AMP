@@ -12,6 +12,7 @@ from amis.domain.event import (
     EmergencyRequestPayload,
     EventPayload,
     MissionEvent,
+    SatelliteOutagePayload,
 )
 from amis.domain.impact import Impact
 from amis.domain.metrics import MetricsResult
@@ -34,6 +35,7 @@ __all__ = [
     "EmergencyRequestPayload",
     "EventPayload",
     "MissionEvent",
+    "SatelliteOutagePayload",
     "Impact",
     "MetricsResult",
     "MissionPlan",

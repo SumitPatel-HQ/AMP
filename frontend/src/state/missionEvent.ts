@@ -20,6 +20,8 @@ export function eventSummary(event: MissionEventSchema): string {
         count === 1 ? "" : "s"
       }`;
     }
+    case "SATELLITE_UNAVAILABLE":
+      return `${event.payload.satellite_id} payload outage`;
   }
 }
 

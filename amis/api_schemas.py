@@ -57,6 +57,8 @@ class WindowPolicySchema(ApiModel):
     provider: Literal["synthetic", "canonical_demo", "orbital"]
     max_off_nadir_deg: float = Field(default=30, ge=0, le=60, allow_inf_nan=False)
     min_sun_elevation_deg: float | None = Field(default=10, ge=-10, le=60, allow_inf_nan=False)
+    settling_time_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    culmination_placement: bool = False
 
 
 class SatelliteSchema(ApiModel):
@@ -208,6 +210,20 @@ class BatteryDropPayloadSchema(ApiModel):
     new_battery_wh: float = Field(ge=0, allow_inf_nan=False)
 
 
+class SatelliteOutagePayloadSchema(ApiModel):
+    satellite_id: str = Field(min_length=1)
+    outage_start: datetime
+    outage_end: datetime
+
+    @model_validator(mode="after")
+    def validate_outage_interval(self) -> Self:
+        if self.outage_start.tzinfo is None or self.outage_end.tzinfo is None:
+            raise ValueError("payload outage interval must include a timezone")
+        if self.outage_end <= self.outage_start:
+            raise ValueError("payload outage end must be after outage start")
+        return self
+
+
 class EmergencyTaskPayloadSchema(ApiModel):
     """The emergency request and the explicit windows it arrives with."""
 
@@ -225,6 +241,11 @@ class BatteryDropEventRequest(ApiModel):
     payload: BatteryDropPayloadSchema
 
 
+class SatelliteOutageEventRequest(ApiModel):
+    event_type: Literal[EventType.SATELLITE_UNAVAILABLE]
+    payload: SatelliteOutagePayloadSchema
+
+
 class EmergencyTaskEventRequest(ApiModel):
     event_type: Literal[EventType.EMERGENCY_TASK]
     payload: EmergencyTaskPayloadSchema
@@ -237,6 +258,7 @@ class MissionEventRequest(
                 CloudBlockEventRequest,
                 BatteryDropEventRequest,
                 EmergencyTaskEventRequest,
+                SatelliteOutageEventRequest,
             ],
             Field(discriminator="event_type"),
         ]
@@ -261,6 +283,11 @@ class BatteryDropMissionEventSchema(MissionEventFields):
     payload: BatteryDropPayloadSchema
 
 
+class SatelliteOutageMissionEventSchema(MissionEventFields):
+    event_type: Literal[EventType.SATELLITE_UNAVAILABLE]
+    payload: SatelliteOutagePayloadSchema
+
+
 class EmergencyTaskMissionEventSchema(MissionEventFields):
     event_type: Literal[EventType.EMERGENCY_TASK]
     payload: EmergencyTaskPayloadSchema
@@ -273,6 +300,7 @@ class MissionEventSchema(
                 CloudBlockMissionEventSchema,
                 BatteryDropMissionEventSchema,
                 EmergencyTaskMissionEventSchema,
+                SatelliteOutageMissionEventSchema,
             ],
             Field(discriminator="event_type"),
         ]

@@ -29,12 +29,17 @@ class CpSatPlanner:
     def plan(self, scenario: Scenario, mission_state: MissionState,
              requests: Iterable[ObservationRequest], windows: Iterable[ObservationWindow],
              previous_plan: MissionPlan | None = None, plan_id: str = FIRST_PLAN_ID,
-             first_action_number: int = 1) -> MissionPlan:
+             first_action_number: int = 1,
+             outage_intervals: Iterable[tuple["datetime", "datetime"]] = ()) -> MissionPlan:
         started = time.perf_counter()
         requests = tuple(sorted(requests, key=lambda r: r.id))
         windows = tuple(sorted(windows, key=lambda w: (w.request_id, w.start, w.id)))
+        outages = tuple(outage_intervals)
+        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
+        gap_s = math.ceil(min_gap_s)
+        culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
         baseline = GreedyPlanner().plan(scenario, mission_state, requests, windows,
-                                       previous_plan, plan_id, first_action_number)
+                                       previous_plan, plan_id, first_action_number, outages)
         frozen = _frozen_actions(previous_plan, mission_state)
         frozen_ids = {a.request_id for a in frozen}
         eligible = [r for r in requests if r.id not in frozen_ids
@@ -44,9 +49,12 @@ class CpSatPlanner:
         origin = scenario.start_time
         seconds = lambda instant: (instant - origin).total_seconds()
         intervals = [model.new_fixed_size_interval_var(
-            math.floor(seconds(a.start)), math.ceil(seconds(a.end)) - math.floor(seconds(a.start)),
+            math.floor(seconds(a.start)), math.ceil(seconds(a.end)) - math.floor(seconds(a.start)) + gap_s,
             f"frozen_{a.id}") for a in frozen]
         choices = []
+        penalties = []
+        penalty_ranges = []
+        outage_count = 0
         for request in eligible:
             literals = []
             for window in windows:
@@ -59,9 +67,30 @@ class CpSatPlanner:
                     continue
                 present = model.new_bool_var(f"present_{window.id}")
                 start = model.new_int_var(low, high, f"start_{window.id}")
-                intervals.append(model.new_optional_fixed_size_interval_var(start, duration, present, window.id))
+                intervals.append(model.new_optional_fixed_size_interval_var(start, duration + gap_s, present, window.id))
                 literals.append(present)
                 choices.append((request, window, present, start))
+                for outage_start, outage_end in outages:
+                    forbidden_low = math.ceil(seconds(outage_start)) - duration
+                    forbidden_high = math.ceil(seconds(outage_end))
+                    if forbidden_high < low or forbidden_low > high:
+                        continue
+                    before = model.new_bool_var(f"outage_before_{outage_count}")
+                    after = model.new_bool_var(f"outage_after_{outage_count}")
+                    outage_count += 1
+                    model.add(start + duration <= math.ceil(seconds(outage_start))).only_enforce_if(before)
+                    model.add(start + duration > math.ceil(seconds(outage_start))).only_enforce_if(before.Not())
+                    model.add(start >= math.ceil(seconds(outage_end))).only_enforce_if(after)
+                    model.add(start < math.ceil(seconds(outage_end))).only_enforce_if(after.Not())
+                    model.add_bool_or([before, after]).only_enforce_if(present)
+                if culmination and window.peak_time is not None:
+                    centered = int(round(seconds(window.peak_time - timedelta(seconds=request.duration_s / 2))))
+                    target = min(high, max(low, centered))
+                    penalty = model.new_int_var(0, high - low, f"culm_{window.id}")
+                    model.add(penalty >= start - target).only_enforce_if(present)
+                    model.add(penalty >= target - start).only_enforce_if(present)
+                    penalties.append(penalty)
+                    penalty_ranges.append(high - low)
             model.add(sum(literals) <= 1)
         model.add_no_overlap(intervals)
         committed = [a for a in frozen if a.status is ActionStatus.PLANNED]
@@ -80,9 +109,16 @@ class CpSatPlanner:
                 for _, _, present, _ in choices:
                     model.add(present == 0)
         weight = len(eligible) + 1
-        objective = sum((r.priority * weight + int(r.id in previous and previous[r.id].window_id == w.id)) * x
-                        for r, w, x, _ in choices)
-        model.maximize(objective)
+        priority_terms = [(r.priority * weight + int(r.id in previous and previous[r.id].window_id == w.id)) * x
+                          for r, w, x, _ in choices]
+        if penalties:
+            # Geometry tie-break only: scale priority above any possible
+            # total culmination distance so the preference never displaces
+            # a higher-utility selection.
+            scale = sum(penalty_ranges) + 1
+            model.maximize(sum(coef * scale for coef in priority_terms) - sum(penalties))
+        else:
+            model.maximize(sum(priority_terms))
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.random_seed = 0
@@ -105,7 +141,7 @@ class CpSatPlanner:
         if use_baseline:
             actions = list(baseline.actions)
             utility = baseline.mission_utility
-        unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous)
+        unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages)
         result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
             mission_utility=utility, planner_name="cp_sat", solver_details={
                 "status": solver.status_name(status), "objective": solver.objective_value if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
@@ -115,10 +151,12 @@ class CpSatPlanner:
                 "workers": 1, "seed": 0, "max_deterministic_time": self.deterministic_limit,
                 "objective_priority_weight": weight, "time_resolution_s": 1,
             }, planning_time_ms=(time.perf_counter() - started) * 1000)
-        return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result)))
+        return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result, outages)))
 
     @staticmethod
-    def _explain(requests, windows, actions, state, scenario, previous):
+    def _explain(requests, windows, actions, state, scenario, previous, outages=()):
+        outages = tuple(outages)
+        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
         projection = ResourceProjection(state.battery_wh, state.storage_usage_mb)
         for action in actions:
             if action.status is ActionStatus.PLANNED:
@@ -133,14 +171,14 @@ class CpSatPlanner:
             violation = None
             for window in candidates:
                 start = max(window.start, state.simulated_time)
-                starts = _candidate_starts_in_window(start, window.end, request.duration_s, actions) or [start]
+                starts = _candidate_starts_in_window(start, window.end, request.duration_s, actions, min_gap_s) or [start]
                 for instant in starts:
                     end = instant + timedelta(seconds=request.duration_s)
                     violation = (check_window_containment(request.id, window, instant, end)
                         or check_deadline(request.id, request.deadline, end)
-                        or check_satellite_availability(request.id, state.available)
+                        or check_satellite_availability(request.id, state.available, instant, end, outages)
                         or projection.check_commit(request.id, instant, request.energy_cost_wh, request.storage_cost_mb, scenario.satellite.storage_capacity_mb)
-                        or check_overlap(request.id, instant, end, actions))
+                        or check_overlap(request.id, instant, end, actions, min_gap_s))
             reason = (_unscheduled_reason(violation, old_window) if candidates else
                       ReasonCode.NO_ALTERNATIVE_WINDOW if old_window else ReasonCode.NO_OBSERVATION_WINDOW)
             # A bounded optimizer can omit a feasible request; do not claim a broken window.

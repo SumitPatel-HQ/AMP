@@ -66,7 +66,31 @@ class EmergencyRequestPayload:
         )
 
 
-EventPayload = Union[CloudBlockPayload, BatteryDropPayload, EmergencyRequestPayload]
+@dataclass(frozen=True)
+class SatelliteOutagePayload:
+    """Payload outage over an interval: the instrument cannot observe inside it."""
+
+    satellite_id: str
+    outage_start: datetime
+    outage_end: datetime
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "satellite_id": self.satellite_id,
+            "outage_start": self.outage_start.isoformat(),
+            "outage_end": self.outage_end.isoformat(),
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "SatelliteOutagePayload":
+        return SatelliteOutagePayload(
+            satellite_id=data["satellite_id"],
+            outage_start=datetime.fromisoformat(data["outage_start"]),
+            outage_end=datetime.fromisoformat(data["outage_end"]),
+        )
+
+
+EventPayload = Union[CloudBlockPayload, BatteryDropPayload, EmergencyRequestPayload, SatelliteOutagePayload]
 
 
 @dataclass(frozen=True)
@@ -95,6 +119,8 @@ class MissionEvent:
             payload = BatteryDropPayload.from_dict(data["payload"])
         elif event_type is EventType.EMERGENCY_TASK:
             payload = EmergencyRequestPayload.from_dict(data["payload"])
+        elif event_type is EventType.SATELLITE_UNAVAILABLE:
+            payload = SatelliteOutagePayload.from_dict(data["payload"])
         else:
             raise ValueError(f"unsupported mission event type: {event_type.value}")
         return MissionEvent(

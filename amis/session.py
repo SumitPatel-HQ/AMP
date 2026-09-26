@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Union
 
@@ -33,6 +33,7 @@ from amis.domain import (
     PlanDiff,
     ReasonCode,
     RequestStatus,
+    SatelliteOutagePayload,
     Scenario,
 )
 from amis.errors import (
@@ -135,6 +136,7 @@ class MissionSession:
             self._windows,
             plan_id=self._next_plan_id(),
             first_action_number=self._next_action_number(),
+            outage_intervals=self._outage_intervals(),
         )
         self._plans.append(plan)
         self._update_request_statuses_from_plan()
@@ -178,6 +180,7 @@ class MissionSession:
             previous_plan=previous_plan,
             plan_id=self._next_plan_id(),
             first_action_number=self._next_action_number(),
+            outage_intervals=self._outage_intervals(),
         )
 
         diff = self._compare(previous_plan, plan)
@@ -315,6 +318,9 @@ class MissionSession:
                     raise InvalidEventError("could not generate emergency observation windows") from error
             event_payload = self._parse_emergency_request_payload(payload)
             self._validate_emergency_request(event_payload)
+        elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
+            event_payload = self._parse_satellite_outage_payload(payload)
+            self._validate_satellite_outage(event_payload)
         else:
             raise InvalidEventError(
                 "mission event type is not implemented",
@@ -355,6 +361,16 @@ class MissionSession:
                 battery_wh=event_payload.new_battery_wh,
                 active_event_ids=state.active_event_ids + (event.id,),
             )
+        elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
+            assert isinstance(event_payload, SatelliteOutagePayload)
+            # The span itself invalidates overlapping actions through the
+            # outage intervals below. The base availability flag stays as
+            # the scenario set it, so actions outside the span keep
+            # validating against it.
+            self._state = replace(
+                state,
+                active_event_ids=state.active_event_ids + (event.id,),
+            )
         else:
             assert isinstance(event_payload, EmergencyRequestPayload)
             self._request_pool = self._request_pool + (event_payload.request,)
@@ -372,6 +388,9 @@ class MissionSession:
             requests=self._request_pool,
             windows=self._windows,
             plan=plan,
+            outage_intervals=self._outage_intervals(
+                pending=event if parsed_event_type is EventType.SATELLITE_UNAVAILABLE else None
+            ),
         )
         self._events.append(event)
         self._impacts.append(impact)
@@ -387,6 +406,37 @@ class MissionSession:
         return self.inject_event(
             EventType.BATTERY_DROP,
             BatteryDropPayload(satellite_id=satellite_id, new_battery_wh=new_battery_wh),
+        )
+
+    def inject_satellite_outage(
+        self,
+        satellite_id: str,
+        outage_start: datetime,
+        outage_end: datetime,
+    ) -> MissionEvent:
+        """Record a payload outage over ``[outage_start, outage_end)``."""
+
+        return self.inject_event(
+            EventType.SATELLITE_UNAVAILABLE,
+            SatelliteOutagePayload(
+                satellite_id=satellite_id, outage_start=outage_start, outage_end=outage_end
+            ),
+        )
+
+    def _outage_intervals(
+        self, pending: MissionEvent | None = None
+    ) -> tuple[tuple[datetime, datetime], ...]:
+        """Payload outage spans from the event log, oldest first.
+
+        ``pending`` is the outage event being injected right now: it is
+        not in ``self._events`` yet when impact is analyzed.
+        """
+        events = list(self._events) + ([pending] if pending is not None else [])
+        return tuple(
+            (event.payload.outage_start, event.payload.outage_end)
+            for event in events
+            if event.event_type is EventType.SATELLITE_UNAVAILABLE
+            and isinstance(event.payload, SatelliteOutagePayload)
         )
 
     def inject_emergency_request(
@@ -767,6 +817,45 @@ class MissionSession:
                     "new_battery_wh": payload.new_battery_wh,
                     "battery_capacity_wh": capacity_wh,
                 },
+            )
+
+    @staticmethod
+    def _parse_satellite_outage_payload(
+        payload: EventPayload | dict[str, Any],
+    ) -> SatelliteOutagePayload:
+        if isinstance(payload, SatelliteOutagePayload):
+            return payload
+        if not isinstance(payload, dict):
+            raise InvalidEventError("payload outage payload has the wrong shape")
+        try:
+            return SatelliteOutagePayload.from_dict(payload)
+        except (KeyError, TypeError, ValueError) as error:
+            raise InvalidEventError(
+                "payload outage payload requires satellite_id, outage_start, and outage_end"
+            ) from error
+
+    def _validate_satellite_outage(self, payload: SatelliteOutagePayload) -> None:
+        scenario = self._require_scenario()
+        state = self.get_state()
+        if payload.satellite_id != state.satellite_id:
+            raise InvalidEventError(
+                "payload outage satellite does not match the mission satellite",
+                details={"satellite_id": payload.satellite_id},
+            )
+        if payload.outage_start.tzinfo is None or payload.outage_end.tzinfo is None:
+            raise InvalidEventError(
+                "payload outage interval must include a timezone",
+                details={"satellite_id": payload.satellite_id},
+            )
+        if payload.outage_end <= payload.outage_start:
+            raise InvalidEventError(
+                "payload outage end must be after outage start",
+                details={"satellite_id": payload.satellite_id},
+            )
+        if payload.outage_end <= scenario.start_time or payload.outage_start >= scenario.end_time:
+            raise InvalidEventError(
+                "payload outage interval must overlap the mission",
+                details={"satellite_id": payload.satellite_id},
             )
 
     @staticmethod

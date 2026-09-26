@@ -50,14 +50,24 @@ class WindowPolicy:
     provider: str
     max_off_nadir_deg: float = 30.0
     min_sun_elevation_deg: float | None = 10.0
+    settling_time_s: float = 0.0
+    culmination_placement: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "provider": self.provider,
             "max_off_nadir_deg": self.max_off_nadir_deg,
             "min_sun_elevation_deg": self.min_sun_elevation_deg,
+            "settling_time_s": self.settling_time_s,
+            "culmination_placement": self.culmination_placement,
         }
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "WindowPolicy":
-        return WindowPolicy(**data)
+        return WindowPolicy(
+            provider=data["provider"],
+            max_off_nadir_deg=data.get("max_off_nadir_deg", 30.0),
+            min_sun_elevation_deg=data.get("min_sun_elevation_deg", 10.0),
+            settling_time_s=data.get("settling_time_s", 0.0),
+            culmination_placement=data.get("culmination_placement", False),
+        )

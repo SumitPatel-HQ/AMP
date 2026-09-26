@@ -19,7 +19,7 @@ A dated description of one satellite's orbit, including its catalogue identity, 
 _Avoid_: Live orbit, telemetry, current position
 
 **WindowPolicy**:
-The scenario's choice of window source and, for an orbital source, its pointing and daylight limits.
+The scenario's choice of window source and, for an orbital source, its pointing and daylight limits. It also carries the fixed settling time between observations and whether actions start at window culmination.
 _Avoid_: Mode, generator settings
 
 **Example**:
@@ -71,7 +71,7 @@ A snapshot of the mission at one simulated instant. It holds the clock, battery,
 _Avoid_: Status, world state, context, snapshot
 
 **MissionEvent**:
-A disruption injected into a running mission at a chosen simulated time. The MVP supports a cloud block, a battery drop, and an emergency request arrival.
+A disruption injected into a running mission at a chosen simulated time. The mission supports a cloud block, a battery drop, an emergency request arrival, and a payload outage over an interval.
 _Avoid_: Incident, disturbance, trigger, anomaly
 
 **Frozen**:
