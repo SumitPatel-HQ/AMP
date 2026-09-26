@@ -1,0 +1,10 @@
+{
+  "id": "constraint-satellite-unavailable",
+  "scenario": "synthetic_demo_unavailable",
+  "planner": "greedy",
+  "steps": [],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["SATELLITE_UNAVAILABLE"]
+  }
+}

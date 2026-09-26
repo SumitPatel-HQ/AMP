@@ -1,0 +1,10 @@
+{
+  "id": "constraint-resource-and-deadline-reasons",
+  "scenario": "synthetic_demo",
+  "planner": "greedy",
+  "steps": [],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["INSUFFICIENT_BATTERY", "INSUFFICIENT_STORAGE", "DEADLINE_VIOLATION"]
+  }
+}

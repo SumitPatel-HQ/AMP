@@ -1,0 +1,14 @@
+{
+  "id": "constraint-window-invalidated-cloud-block",
+  "scenario": "cloud",
+  "planner": "greedy",
+  "steps": [
+    { "advance_seconds": 300 },
+    { "event": { "type": "CLOUD_BLOCK", "payload": { "request_id": "OBS-B", "window_id": "WIN-OBS-B-1" } } },
+    { "replan": true }
+  ],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["WINDOW_INVALIDATED", "REQUEST_UNCHANGED"]
+  }
+}

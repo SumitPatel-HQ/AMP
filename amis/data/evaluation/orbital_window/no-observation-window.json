@@ -1,0 +1,10 @@
+{
+  "id": "orbital-window-no-observation-window",
+  "scenario": "orbital",
+  "planner": "greedy",
+  "steps": [],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["NO_OBSERVATION_WINDOW"]
+  }
+}

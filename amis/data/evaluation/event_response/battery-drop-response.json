@@ -1,0 +1,13 @@
+{
+  "id": "event-response-battery-drop",
+  "scenario": "battery",
+  "planner": "greedy",
+  "steps": [
+    { "event": { "type": "BATTERY_DROP", "payload": { "satellite_id": "SAT-001", "new_battery_wh": 41.0 } } },
+    { "replan": true }
+  ],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["INSUFFICIENT_BATTERY"]
+  }
+}

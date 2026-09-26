@@ -1,0 +1,7 @@
+{
+  "id": "planner-comparison-cp-sat-at-least-greedy",
+  "scenario": "synthetic_demo",
+  "planner": "greedy",
+  "steps": [],
+  "expect": { "cp_sat_utility_at_least_greedy": true }
+}

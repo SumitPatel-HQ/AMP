@@ -1,0 +1,41 @@
+{
+  "id": "constraint-emergency-insertion",
+  "scenario": "emergency",
+  "planner": "greedy",
+  "steps": [
+    {
+      "event": {
+        "type": "EMERGENCY_TASK",
+        "payload": {
+          "request": {
+            "id": "OBS-EMERGENCY",
+            "target_lat": 34.05,
+            "target_lon": -118.24,
+            "priority": 5,
+            "duration_s": 600.0,
+            "deadline": "2026-09-21T10:50:00+00:00",
+            "energy_cost_wh": 40.0,
+            "storage_cost_mb": 100.0,
+            "status": "pending"
+          },
+          "windows": [
+            {
+              "id": "WIN-OBS-EMERGENCY-1",
+              "request_id": "OBS-EMERGENCY",
+              "satellite_id": "SAT-001",
+              "start": "2026-09-21T10:40:00+00:00",
+              "end": "2026-09-21T10:55:00+00:00",
+              "valid": true,
+              "invalid_reason": null
+            }
+          ]
+        }
+      }
+    },
+    { "replan": true }
+  ],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": ["HIGHER_PRIORITY_TASK_INSERTED", "DISPLACED_BY_COMPETING_REQUEST"]
+  }
+}

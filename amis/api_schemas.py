@@ -172,6 +172,8 @@ class UnscheduledEntrySchema(ApiModel):
 
 
 class MissionPlanSchema(ApiModel):
+    planner_name: str = "greedy"
+    solver_details: dict[str, Any] | None = None
     id: str
     scenario_id: str
     version: int
@@ -339,6 +341,7 @@ class StepRequest(ApiModel):
 
 
 class ReplanRequest(ApiModel):
+    planner: Literal["greedy", "cp_sat"] | None = None
     expected_parent_plan_id: str = Field(min_length=1)
 
 

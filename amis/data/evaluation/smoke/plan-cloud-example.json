@@ -1,0 +1,7 @@
+{
+  "id": "smoke-plan-cloud-example",
+  "scenario": "cloud",
+  "planner": "greedy",
+  "steps": [],
+  "expect": { "max_violations": 0 }
+}

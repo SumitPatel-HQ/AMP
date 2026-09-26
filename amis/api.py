@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Literal, Annotated, Any
 
 from fastapi import FastAPI, Path, Query, Request, status
 from pydantic import ValidationError
@@ -295,8 +295,9 @@ def create_app(
         status_code=status.HTTP_201_CREATED,
         responses=_documented_errors(404, 409, 422),
     )
-    def create_plan(scenario_id: ScenarioId) -> dict[str, Any]:
+    def create_plan(scenario_id: ScenarioId, planner: Literal["greedy", "cp_sat"] = "greedy") -> dict[str, Any]:
         session = store.load(scenario_id)
+        session.select_planner(planner)
         plan = session.plan()
         store.save(session)
         return plan.to_dict()
@@ -367,6 +368,7 @@ def create_app(
         scenario_id: ScenarioId, request: ReplanRequest
     ) -> dict[str, Any]:
         session = store.load(scenario_id)
+        session.select_planner(request.planner or session.get_plan().planner_name)
         plan = session.replan(request.expected_parent_plan_id)
         store.save(
             session, expected_current_plan_id=request.expected_parent_plan_id

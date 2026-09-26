@@ -53,8 +53,12 @@ An immutable, versioned set of scheduled actions for one scenario. Each plan aft
 _Avoid_: Schedule, timeline, plan version, itinerary
 
 **Planner**:
-A component that takes a scenario, a mission state, a set of requests, and a set of windows, and returns a mission plan. `GreedyPlanner` is the only one in the MVP.
+A component that takes a scenario, a mission state, a set of requests, and a set of windows, and returns a mission plan. `GreedyPlanner` and `CpSatPlanner` both implement it; a mission picks one per run by name (`select_planner`), and the choice is recorded on the plan as `planner_name`.
 _Avoid_: Solver, optimizer, scheduler
+
+**Solver details**:
+The `solver_details` field a CP-SAT-backed plan carries: solver status, objective value and bound, optimality gap, whether the run fell back to the greedy baseline, and the library version and deterministic settings (single worker, fixed seed, time limit) it ran under. Absent on a greedy plan.
+_Avoid_: Solver metadata, solve stats, debug info
 
 **Violation**:
 A structured record that one scheduled action breaks one constraint. It carries a reason code and the offending request's id.

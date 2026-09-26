@@ -106,6 +106,11 @@ class MissionSession:
         self._require_scenario()
         return tuple(self._windows)
 
+    def select_planner(self, name: str) -> None:
+        from amis.planning.selection import make_planner
+
+        self._planner = make_planner(name)
+
     def plan(self) -> MissionPlan:
         scenario = self._require_scenario()
         if self._plans:
@@ -842,3 +847,4 @@ class MissionSession:
                     details={"window_id": window.id},
                 )
             payload_window_ids.add(window.id)
+

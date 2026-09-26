@@ -1,0 +1,584 @@
+{
+  "disclaimer": "Results come from a simulator over bundled example and generated missions. Nothing here is flight or operational certification.",
+  "case_count": 13,
+  "cases": [
+    {
+      "id": "constraint-emergency-insertion",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "DISPLACED_BY_COMPETING_REQUEST",
+        "HIGHER_PRIORITY_TASK_INSERTED",
+        "REQUEST_UNCHANGED"
+      ],
+      "failures": []
+    },
+    {
+      "id": "constraint-no-alternative-window",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "NO_ALTERNATIVE_WINDOW",
+        "REQUEST_UNCHANGED",
+        "WINDOW_INVALIDATED"
+      ],
+      "failures": []
+    },
+    {
+      "id": "constraint-overlap-and-alternative-window",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "ALTERNATIVE_WINDOW_AVAILABLE",
+        "HIGHER_PRIORITY_TASK_INSERTED",
+        "REQUEST_UNCHANGED",
+        "TIME_OVERLAP"
+      ],
+      "failures": []
+    },
+    {
+      "id": "constraint-resource-and-deadline-reasons",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "DEADLINE_VIOLATION",
+        "INSUFFICIENT_BATTERY",
+        "INSUFFICIENT_STORAGE"
+      ],
+      "failures": []
+    },
+    {
+      "id": "constraint-satellite-unavailable",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "DEADLINE_VIOLATION",
+        "SATELLITE_UNAVAILABLE"
+      ],
+      "failures": []
+    },
+    {
+      "id": "constraint-window-invalidated-cloud-block",
+      "category": "constraint",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "REQUEST_UNCHANGED",
+        "WINDOW_INVALIDATED"
+      ],
+      "failures": []
+    },
+    {
+      "id": "determinism-cp-sat-double-run",
+      "category": "determinism",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "DEADLINE_VIOLATION",
+        "INSUFFICIENT_BATTERY"
+      ],
+      "failures": []
+    },
+    {
+      "id": "event-response-battery-drop",
+      "category": "event_response",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "INSUFFICIENT_BATTERY",
+        "REQUEST_UNCHANGED"
+      ],
+      "failures": []
+    },
+    {
+      "id": "explanation-battery-drop-coverage",
+      "category": "explanation",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "INSUFFICIENT_BATTERY",
+        "REQUEST_UNCHANGED"
+      ],
+      "failures": []
+    },
+    {
+      "id": "orbital-window-no-observation-window",
+      "category": "orbital_window",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "NO_OBSERVATION_WINDOW"
+      ],
+      "failures": []
+    },
+    {
+      "id": "planner-comparison-cp-sat-at-least-greedy",
+      "category": "planner_comparison",
+      "passed": true,
+      "utilities": {
+        "greedy": 7,
+        "cp_sat": 8
+      },
+      "failures": []
+    },
+    {
+      "id": "smoke-plan-cloud-example",
+      "category": "smoke",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [],
+      "failures": []
+    },
+    {
+      "id": "smoke-plan-synthetic-demo",
+      "category": "smoke",
+      "passed": true,
+      "violation_count": 0,
+      "observed_reason_codes": [
+        "DEADLINE_VIOLATION",
+        "INSUFFICIENT_BATTERY",
+        "INSUFFICIENT_STORAGE"
+      ],
+      "failures": []
+    }
+  ],
+  "gates": {
+    "zero_violations": {
+      "passed": true,
+      "failures": []
+    },
+    "frozen_actions_identical": {
+      "passed": true,
+      "failures": []
+    },
+    "replay_equality": {
+      "passed": true,
+      "failures": []
+    },
+    "byte_identical_reruns": {
+      "passed": true,
+      "failures": []
+    }
+  },
+  "comparison": {
+    "data_origin": "MissionSession runs over the three legacy examples plus generated orbital missions",
+    "library_versions": {
+      "ortools": "9.15.6755",
+      "skyfield": "1.55",
+      "sgp4": "2.27"
+    },
+    "runs": [
+      {
+        "scenario_id": "SCN-002",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 15,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.08310002158395946,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-002",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 14,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.05099998088553548,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-002",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 15,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.657200016779825,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-002",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 14,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.3178999943193048,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-BATTERY",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 15,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.06560000474564731,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-BATTERY",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 14,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.05020000389777124,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-BATTERY",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 15,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.434299978427589,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-BATTERY",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 14,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.5460999857168645,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-EMERGENCY",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 17,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.06849999772384763,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-EMERGENCY",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 16,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.05150001379661262,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-EMERGENCY",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 17,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.5391999913845211,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-EMERGENCY",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 16,
+        "scheduled_count": 4,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.3596000208053738,
+        "plan_churn": 0.25,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.1475999888498336,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 21,
+        "scheduled_count": 6,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.11910000466741621,
+        "plan_churn": 0.14285714285714285,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.718300005653873,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.334500022698194,
+        "plan_churn": 0.2857142857142857,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N3",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 13,
+        "scheduled_count": 3,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.06520000169984996,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N3",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 9,
+        "scheduled_count": 2,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.03919997834600508,
+        "plan_churn": 0.3333333333333333,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N3",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 13,
+        "scheduled_count": 3,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.4162999868858606,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N3",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 9,
+        "scheduled_count": 2,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 1.1564000160433352,
+        "plan_churn": 0.3333333333333333,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N6",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 21,
+        "scheduled_count": 6,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.20080001559108496,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N6",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 19,
+        "scheduled_count": 5,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.08860000525601208,
+        "plan_churn": 0.16666666666666666,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N6",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 21,
+        "scheduled_count": 6,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.252200007205829,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N6",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 21,
+        "scheduled_count": 6,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.199999988079071,
+        "plan_churn": 0.3333333333333333,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N8",
+        "planner": "greedy",
+        "with_event": false,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.14570000348612666,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N8",
+        "planner": "greedy",
+        "with_event": true,
+        "mission_utility": 21,
+        "scheduled_count": 6,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 0.1008999824989587,
+        "plan_churn": 0.14285714285714285,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": null
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N8",
+        "planner": "cp_sat",
+        "with_event": false,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.740399999311194,
+        "plan_churn": null,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      },
+      {
+        "scenario_id": "SCN-EX-ORBITAL-N8",
+        "planner": "cp_sat",
+        "with_event": true,
+        "mission_utility": 23,
+        "scheduled_count": 7,
+        "completed_count": 0,
+        "violation_count": 0,
+        "planning_time_ms": 2.4335000198334455,
+        "plan_churn": 0.2857142857142857,
+        "battery_utilisation": 0.0,
+        "storage_utilisation": 0.0,
+        "optimality_gap": 0.0
+      }
+    ],
+    "summary": {
+      "greedy": {
+        "runs": 14,
+        "total_utility": 241,
+        "total_violations": 0,
+        "planning_time_median_ms": 0.07580000965390354
+      },
+      "cp_sat": {
+        "runs": 14,
+        "total_utility": 247,
+        "total_violations": 0,
+        "planning_time_median_ms": 1.6016500012483448
+      }
+    }
+  }
+}

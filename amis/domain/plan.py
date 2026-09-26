@@ -77,6 +77,8 @@ class MissionPlan:
     violation_count: int
     planning_time_ms: float
     parent_plan_id: Optional[str] = None
+    planner_name: str = "greedy"
+    solver_details: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -90,6 +92,8 @@ class MissionPlan:
             "mission_utility": self.mission_utility,
             "violation_count": self.violation_count,
             "planning_time_ms": self.planning_time_ms,
+            "planner_name": self.planner_name,
+            "solver_details": self.solver_details,
         }
 
     @staticmethod
@@ -107,4 +111,6 @@ class MissionPlan:
             mission_utility=data["mission_utility"],
             violation_count=data["violation_count"],
             planning_time_ms=data["planning_time_ms"],
+            planner_name=data.get("planner_name") or "greedy",
+            solver_details=data.get("solver_details"),
         )

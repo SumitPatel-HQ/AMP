@@ -10,6 +10,7 @@ dependencies = [
     "alembic>=1.13,<2",
     "skyfield==1.55",
     "sgp4==2.27",
+    "ortools==9.15.6755",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +27,7 @@ postgres = [
 include = ["amis*"]
 
 [tool.setuptools.package-data]
-amis = ["data/elements/*.json", "data/ephemeris/*.json", "data/ephemeris/*.bsp"]
+amis = ["data/evaluation/*/*.json", "data/elements/*.json", "data/ephemeris/*.json", "data/ephemeris/*.bsp"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
