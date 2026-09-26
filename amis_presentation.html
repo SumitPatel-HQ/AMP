@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="AMIS — a local satellite mission-planning simulator. Interactive technical presentation: plan, disrupt, replan, explain.">
+<title>AMIS — Adaptive Mission Planning · Interactive Presentation</title>
+<style>
+:root{
+  --paper:#faf9f6; --card:#ffffff; --ink:#16181d; --mut:#5b606b;
+  --line:#e3e1da; --line2:#d4d1c7;
+  --acc:#1d4ed8; --acc-soft:#e8eefc;
+  --ok:#166534; --ok-soft:#e7f4ea;
+  --warn:#92400e; --warn-soft:#fdf0dc;
+  --bad:#b91c1c; --bad-soft:#fbe7e7;
+  --vio:#6d28d9; --vio-soft:#efe8fb;
+  --code-bg:#14161b; --code-ink:#e8e6df;
+  --r:14px; --max:1080px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.62;-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto;display:block}
+a{color:var(--acc)}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:#fff;padding:10px 16px;z-index:99;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+/* ---------- progress + nav ---------- */
+.progress{position:fixed;top:0;left:0;height:3px;width:100%;background:transparent;z-index:60}
+.progress>div{height:100%;width:0;background:var(--acc)}
+.topnav{position:sticky;top:0;z-index:50;background:rgba(250,249,246,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+.topnav-in{max-width:var(--max);margin:0 auto;padding:8px 14px}
+.brand{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:700;margin:0}
+.menu{position:relative;margin:6px 0 2px}
+.menu summary{min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:15px;border:1.5px solid var(--ink);border-radius:12px;padding:9px 14px;background:var(--card);list-style:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.menu summary::-webkit-details-marker{display:none}
+.menu summary .bars{font-size:18px}
+.menu summary .count{margin-left:auto;font-size:12px;background:var(--ink);color:#fff;border-radius:999px;padding:1px 9px}
+.menu nav{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0 4px}
+.menu nav a{text-decoration:none;color:var(--ink);border:1px solid var(--line2);background:var(--card);border-radius:10px;padding:10px 12px;font-size:14px;min-height:44px;display:flex;align-items:center}
+.menu nav a.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* ---------- layout ---------- */
+.wrap{max-width:var(--max);margin:0 auto;padding:0 16px}
+section.block{padding:34px 0;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:700;margin:0 0 6px}
+h1{font-family:var(--serif);font-weight:600;font-size:32px;line-height:1.16;margin:6px 0 10px;letter-spacing:-.01em}
+h2{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.22;margin:0 0 8px;letter-spacing:-.01em}
+h2 .n{color:var(--mut);font-family:var(--font);font-size:15px;font-weight:700;letter-spacing:.08em;display:block;margin-bottom:4px}
+h3{font-size:17px;margin:20px 0 6px}
+.lede{font-size:17.5px;color:#2c2f36;max-width:62ch}
+p{margin:8px 0;max-width:70ch}
+ul.tight,ol.tight{margin:8px 0 8px 20px;padding:0}
+ul.tight li,ol.tight li{margin:5px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+.grid{display:grid;grid-template-columns:1fr;gap:10px}
+.tri3{grid-template-columns:1fr}
+@media(min-width:700px){.tri3{grid-template-columns:1fr 1fr 1fr}}
+.grid2{display:grid;grid-template-columns:1fr;gap:10px}
+.kicker{display:inline-block;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:800;border-radius:999px;padding:3px 10px;margin-bottom:8px}
+.k-blue{background:var(--acc-soft);color:var(--acc)}
+.k-green{background:var(--ok-soft);color:var(--ok)}
+.k-amber{background:var(--warn-soft);color:var(--warn)}
+.k-red{background:var(--bad-soft);color:var(--bad)}
+.k-vio{background:var(--vio-soft);color:var(--vio)}
+.quote{border-left:3px solid var(--acc);padding:8px 0 8px 14px;font-family:var(--serif);font-size:19px;line-height:1.45;margin:12px 0;max-width:60ch}
+.badge{display:inline-block;border:1.5px solid var(--ink);border-radius:8px;padding:6px 12px;font-weight:700;font-size:14px;margin:6px 8px 6px 0}
+.badge.no{border-style:dashed;color:var(--mut);border-color:var(--line2)}
+.note{font-size:14px;color:var(--mut)}
+.mono{font-family:var(--mono);font-size:13px}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:12px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.55;margin:10px 0;max-width:100%}
+code.inline{font-family:var(--mono);font-size:.86em;background:#efede6;border:1px solid var(--line);border-radius:6px;padding:1px 6px;word-break:break-word}
+/* loop strip */
+.loop{display:flex;flex-direction:column;gap:0;margin:14px 0;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:var(--card)}
+.loop .st{padding:10px 12px;font-size:14.5px;font-weight:600;display:flex;gap:10px;align-items:center}
+.loop .st small{display:block;font-weight:400;color:var(--mut);font-size:12.5px}
+.loop .st .dot{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.loop .arr{text-align:center;color:var(--mut);font-size:13px;line-height:1;padding:1px 0;background:var(--paper)}
+.loop .st.hot{background:var(--acc-soft)}
+/* flow diagram nodes */
+.flow{display:flex;flex-direction:column;gap:0;margin:12px 0}
+.node{background:var(--card);border:1.5px solid var(--line2);border-radius:12px;padding:10px 12px}
+.node b{display:block;font-size:15px}
+.node span{font-size:13.5px;color:var(--mut)}
+.node.acc{border-color:var(--acc);background:var(--acc-soft)}
+.node.ok{border-color:var(--ok)}
+.node.bad{border-color:var(--bad);background:var(--bad-soft)}
+.node.vio{border-color:var(--vio);background:var(--vio-soft)}
+.varr{text-align:center;color:var(--mut);font-weight:700;padding:2px 0}
+/* constraint pipeline */
+.pipe{display:grid;grid-template-columns:1fr;gap:8px;margin:12px 0}
+.pstep{border:1px solid var(--line2);border-radius:12px;background:var(--card);padding:10px 12px}
+.pstep b{font-size:14.5px}
+.pstep p{font-size:13.5px;color:var(--mut);margin:4px 0 0}
+/* metric cards */
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.metric{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:10px 12px}
+.metric b{font-size:14px;display:block}
+.metric .v{font-family:var(--serif);font-size:22px;margin:2px 0}
+.metric p{font-size:12.5px;color:var(--mut);margin:2px 0 0}
+/* timeline */
+.tl{border:1px solid var(--line2);border-radius:12px;background:var(--card);padding:12px;margin:12px 0;overflow:hidden}
+.tl-row{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line)}
+.tl-row:last-child{border-bottom:0}
+.tl-name{font-family:var(--mono);font-size:12.5px;font-weight:700}
+.tl-track{position:relative;height:30px;background:#f1efe8;border-radius:8px;overflow:hidden}
+.tl-bar{position:absolute;top:5px;height:20px;border-radius:6px;background:var(--acc);opacity:.9}
+.tl-bar.alt{background:var(--vio)}
+.tl-bar.ghost{background:repeating-linear-gradient(45deg,#d8d5cb,#d8d5cb 5px,#c9c6b9 5px,#c9c6b9 10px)}
+.tl-bar.bad{background:var(--bad);opacity:.85}
+.tl-win{position:absolute;top:0;height:100%;border:1.5px dashed #a8a496;border-radius:8px;background:rgba(255,255,255,.35)}
+.tl-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px;color:var(--mut)}
+.tl-legend i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:4px;vertical-align:-1px}
+/* demo stepper */
+.stepper{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.stepper button{min-height:44px;border-radius:10px;border:1.5px solid var(--ink);background:var(--card);color:var(--ink);padding:9px 14px;font-size:14.5px;font-weight:700;cursor:pointer}
+.stepper button.ghost{border-color:var(--line2);font-weight:600}
+.stepper button.on{background:var(--ink);color:#fff}
+.stages{counter-reset:st;margin:10px 0}
+.stage{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px;margin:8px 0;opacity:.55}
+.stage.lit{opacity:1;border-color:var(--ink);box-shadow:0 1px 0 var(--ink)}
+.stage h4{margin:0 0 4px;font-size:15.5px}
+.stage h4 .tag{font-size:11.5px;background:var(--ink);color:#fff;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.05em}
+.stage p{font-size:14.5px;margin:4px 0}
+.stage .out{font-family:var(--mono);font-size:12.5px;background:#f1efe8;border-radius:8px;padding:8px 10px;margin-top:6px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+/* details */
+details{border:1px solid var(--line2);border-radius:12px;background:var(--card);margin:8px 0;overflow:hidden}
+details summary{min-height:48px;display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;font-weight:700;font-size:15px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary .plus{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line2);display:inline-flex;align-items:center;justify-content:center;font-size:15px;color:var(--mut)}
+details[open] summary .plus{background:var(--ink);color:#fff;border-color:var(--ink)}
+details .dbody{padding:0 14px 14px;border-top:1px solid var(--line);font-size:14.5px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.toolbar button,.toolbar input{min-height:42px;border-radius:10px;border:1.5px solid var(--line2);background:var(--card);color:var(--ink);padding:8px 12px;font-size:14px}
+.toolbar input{flex:1;min-width:180px}
+/* tables */
+.scrollx{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:10px 0}
+.scrollx table{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+.scrollx th,.scrollx td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.scrollx th{background:#f1efe8;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+.scrollx tr:last-child td{border-bottom:0}
+/* arch */
+.arch{border:1px solid var(--line2);border-radius:var(--r);background:var(--card);padding:12px;margin:12px 0}
+.arch .layer{border:1.5px solid var(--line2);border-radius:10px;padding:8px 10px;margin:6px 0;font-size:14px;background:#fbfaf7}
+.arch .layer b{font-size:14px}
+.arch .layer span{color:var(--mut);font-size:12.5px;display:block}
+.arch .lbl{font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);margin:10px 0 2px}
+/* qa */
+.qa details summary{font-weight:600}
+.qa .a-story{background:var(--ok-soft);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:14.5px}
+.qa .a-tech{font-size:14px}
+.qa .a-proof{font-size:13px;color:var(--mut);border-left:3px solid var(--acc);padding-left:10px;margin:8px 0}
+/* footer nav */
+.botnav{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(250,249,246,.97);border-top:1px solid var(--line)}
+.botnav div{max-width:var(--max);margin:0 auto;display:flex}
+.botnav a{flex:1;text-align:center;text-decoration:none;color:var(--ink);font-size:11.5px;padding:9px 2px;font-weight:600;border-radius:10px;margin:4px}
+.botnav a.on{background:var(--ink);color:#fff}
+body.viewing section.block{display:none}
+body.viewing section.block.show{display:block}
+.botnav a span{display:block;font-size:17px}
+main{padding-bottom:90px}
+/* tablet */
+@media(min-width:700px){
+  h1{font-size:42px}
+  h2{font-size:30px}
+  .grid2{grid-template-columns:1fr 1fr}
+  .grid3{grid-template-columns:1fr 1fr 1fr;display:grid;gap:10px}
+  .metrics{grid-template-columns:1fr 1fr 1fr 1fr}
+  .loop{flex-direction:row;align-items:stretch;overflow-x:auto}
+  .loop .st{flex:1;min-width:120px;flex-direction:column;text-align:center;gap:4px}
+  .loop .arr{align-self:center;padding:0 2px;transform:rotate(-90deg)}
+  .pipe{grid-template-columns:1fr 1fr 1fr}
+}
+/* desktop */
+@media(min-width:1024px){
+  .wrap{padding:0 24px}
+  section.block{padding:48px 0}
+  .grid3{grid-template-columns:1fr 1fr 1fr}
+}
+@media print{
+  .topnav,.botnav,.progress,.stepper,.toolbar{display:none}
+  body{background:#fff}section.block{padding:18px 0}
+  .card,details{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="progress" aria-hidden="true"><div id="bar"></div></div>
+
+<nav class="topnav" aria-label="Sections">
+  <div class="topnav-in">
+    <p class="brand">AMIS · Interactive presentation</p>
+    <details class="menu" id="menu">
+      <summary aria-label="Open section menu"><span class="bars" aria-hidden="true">☰</span> Sections <span class="count">21</span></summary>
+      <nav aria-label="Sections">
+        <a href="#s01">01 · AMIS</a><a href="#s02">02 · Problem</a><a href="#s03">03 · Model</a><a href="#s04">04 · Research</a><a href="#s05">05 · Domain</a><a href="#s06">06 · Windows</a><a href="#s07">07 · Orbital</a><a href="#s08">08 · Planners</a><a href="#s09">09 · Constraints</a><a href="#s10">10 · Simulate</a><a href="#s11">11 · Demo</a><a href="#s12">12 · Impact/Replan</a><a href="#s13">13 · Diff</a><a href="#s14">14 · Trace</a><a href="#s15">15 · Metrics</a><a href="#s16">16 · Arch</a><a href="#s17">17 · Determinism</a><a href="#s18">18 · Status</a><a href="#s19">19 · Depth</a><a href="#s20">20 · Limits</a><a href="#s21">21 · Q&amp;A</a><a href="#run">Run it</a>
+      </nav>
+    </details>
+  </div>
+</nav>
+
+<main id="main">
+<div class="wrap">
+
+<!-- ================= 01 ================= -->
+<section class="block" id="s01" aria-labelledby="h01">
+  <p class="eyebrow">AMIS · Internal presentation</p>
+  <h1 id="h01">Adaptive mission planning, demonstrated end to end.</h1>
+  <div class="quote">A local simulator that plans which Earth photos a satellite should take, deliberately breaks the plan, fixes it, and explains the fix.</div>
+  <p>
+    <span class="badge">Decision support for mission planning</span>
+    <span class="badge no">Not satellite control</span>
+  </p>
+  <p class="lede">AMIS never commands a spacecraft. It is a research simulator and planning workbench: define a mission, schedule observations under real timing and resource limits, inject a controlled disruption, rebuild the remaining plan, and inspect exactly what changed and why. That distinction matters to everything that follows.</p>
+  <h3>The backbone loop — the whole presentation in nine steps</h3>
+  <div class="loop" role="list" aria-label="The AMIS demo loop">
+    <div class="st" role="listitem"><span class="dot">1</span><span>Scenario<small>mission + satellite + requests</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">2</span><span>Windows<small>when each target is visible</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">3</span><span>Plan<small>feasible v1 schedule</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">4</span><span>Simulate<small>advance clock + resources</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st hot" role="listitem"><span class="dot">5</span><span>Inject change<small>cloud · battery · emergency</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">6</span><span>Impact<small>valid vs invalid</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">7</span><span>Replan<small>next version, frozen kept</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">8</span><span>Explain<small>diff + traces</small></span></div><div class="arr" aria-hidden="true">▼</div>
+    <div class="st" role="listitem"><span class="dot">9</span><span>Measure<small>utility · churn · coverage</small></span></div>
+  </div>
+  <p class="note">Say in the first minute: what AMIS is, what it is not, and this loop. Everything after is detail on one of these nine boxes.</p>
+</section>
+
+<!-- ================= 02 ================= -->
+<section class="block" id="s02" aria-labelledby="h02">
+  <h2 id="h02"><span class="n">02 — The problem</span>More wanted than a satellite can do.</h2>
+  <p class="lede">One satellite, one day, many photo requests. Each target is only visible in short spans, each shot has a deadline and costs power and storage, and conditions change mid-mission. The planner must pick a feasible subset — then keep it feasible when reality intrudes.</p>
+  <div class="card">
+    <span class="kicker k-blue">The squeeze, visualised</span>
+    <svg viewBox="0 0 360 210" role="img" aria-label="Diagram: five requests compete for narrow windows under one satellite with limited battery and storage">
+      <text x="8" y="18" font-size="12" font-weight="700" fill="#16181d">SAT-001 · one day</text>
+      <rect x="8" y="28" width="200" height="10" rx="5" fill="#e8eefc" stroke="#1d4ed8"/>
+      <rect x="8" y="28" width="132" height="10" rx="5" fill="#1d4ed8"/>
+      <text x="214" y="37" font-size="11" fill="#5b606b">battery 66%</text>
+      <rect x="8" y="44" width="200" height="10" rx="5" fill="#efe8fb" stroke="#6d28d9"/>
+      <rect x="8" y="44" width="150" height="10" rx="5" fill="#6d28d9"/>
+      <text x="214" y="53" font-size="11" fill="#5b606b">storage 75%</text>
+      <g font-size="11" font-weight="700">
+        <text x="8" y="76" fill="#16181d">OBS-A ★5</text><rect x="90" y="66" width="70" height="14" rx="4" fill="#1d4ed8" opacity=".85"/><text x="250" y="77" font-size="10" fill="#5b606b" font-weight="400">deadline 24:00</text>
+        <text x="8" y="96" fill="#16181d">OBS-B ★4</text><rect x="110" y="86" width="34" height="14" rx="4" fill="#1d4ed8" opacity=".85"/><rect x="200" y="86" width="34" height="14" rx="4" fill="#6d28d9" opacity=".9"/><text x="250" y="97" font-size="10" fill="#5b606b" font-weight="400">2 windows</text>
+        <text x="8" y="116" fill="#b91c1c">OBS-C ★3</text><rect x="90" y="106" width="40" height="14" rx="4" fill="none" stroke="#b91c1c" stroke-dasharray="4 3"/><text x="250" y="117" font-size="10" fill="#b91c1c" font-weight="400">expired</text>
+        <text x="8" y="136" fill="#16181d">OBS-D ★2</text><rect x="150" y="126" width="60" height="14" rx="4" fill="#1d4ed8" opacity=".55"/>
+        <text x="8" y="156" fill="#16181d">OBS-E ★1</text><rect x="170" y="146" width="60" height="14" rx="4" fill="#1d4ed8" opacity=".35"/>
+      </g>
+      <text x="8" y="180" font-size="11" fill="#5b606b">blue bar = scheduled · purple = backup window · dashed red = dead on arrival</text>
+      <line x1="160" y1="60" x2="160" y2="162" stroke="#b91c1c" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="164" y="170" font-size="11" fill="#b91c1c" font-weight="700">cloud hits here ↓</text>
+      <text x="8" y="196" font-size="11" fill="#5b606b">oversubscribed: windows + deadlines + power + storage cannot fit everyone</text>
+    </svg>
+  </div>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-blue">Timing pressure</span><ul class="tight"><li>Narrow visibility spans per target</li><li>Hard deadlines per request</li><li>No two shots at once</li></ul></div>
+    <div class="card"><span class="kicker k-vio">Resource pressure</span><ul class="tight"><li>Battery per shot, floor at zero</li><li>Storage per shot, cap at capacity</li><li>Satellite must be available</li></ul></div>
+  </div>
+  <div class="card"><span class="kicker k-amber">Live pressure</span><ul class="tight"><li>Clouds kill optical chances · batteries sag · urgent requests arrive mid-mission</li><li>Past work cannot be rewritten — started actions are frozen</li></ul></div>
+</section>
+
+<!-- ================= 03 ================= -->
+<section class="block" id="s03" aria-labelledby="h03">
+  <h2 id="h03"><span class="n">03 — Mental model</span>One rider explains the whole system.</h2>
+  <p class="lede">Use this in the first 60 seconds, before any jargon. One delivery rider, one day, many orders — then map each piece to the satellite.</p>
+  <div class="card">
+    <div class="flow">
+      <div class="node"><b>Orders arrive <span>→ Requests: place, tip (priority), time needed, deadline, fuel cost</span></b></div><div class="varr">↓ maps to ↓</div>
+      <div class="node acc"><b>Reachable spans <span>→ Observation windows: when each target is actually visible</span></b></div><div class="varr">↓</div>
+      <div class="node"><b>Best route <span>→ Mission plan v1: who goes when, no rule broken</span></b></div><div class="varr">↓</div>
+      <div class="node bad"><b>Rain / fuel light / VIP order <span>→ Event: cloud block, battery drop, emergency request</span></b></div><div class="varr">↓</div>
+      <div class="node"><b>Which stops break <span>→ Impact: valid vs invalid split of the old route</span></b></div><div class="varr">↓</div>
+      <div class="node ok"><b>Re-route the rest <span>→ Replan: keep delivered stops frozen, rebuild the future</span></b></div>
+    </div>
+  </div>
+  <div class="card"><span class="kicker k-green">Say this</span><p style="margin:4px 0">“Orders are requests. Reachable spans are windows. The route is the plan. Rain is the event. The new route is the replan — and we can point at every changed stop and say why.”</p></div>
+</section>
+
+<!-- ================= 04 ================= -->
+<section class="block" id="s04" aria-labelledby="h04">
+  <h2 id="h04"><span class="n">04 — Research foundation</span>Real literature, not decoration.</h2>
+  <p class="lede">Seven themes from the project specs. No invented papers — each theme maps to a design choice in AMIS.</p>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-blue">Satellite scheduling</span><p>Imaging tasks under windows, deadlines, power and memory are a studied hard optimisation problem — NP-hard in the agile case. <span class="note">→ Why AMIS pairs a fast baseline with a bounded optimiser instead of claiming optimality.</span></p></div>
+    <div class="card"><span class="kicker k-blue">Dynamic scheduling</span><p>Tasks arrive over time with deadlines and stability matters. <span class="note">→ Emergency arrivals plus frozen past plus a stability rule.</span></p></div>
+    <div class="card"><span class="kicker k-amber">Cloud-aware scheduling</span><p>Optical takes fail under cloud: ~35% of Landsat-7, ~80% of SPOT lost in cited studies. <span class="note">→ CLOUD_BLOCK as a first-class event, not an edge case.</span></p></div>
+    <div class="card"><span class="kicker k-vio">Autonomous planning · CASPER</span><p>NASA JPL’s Continuous Activity Scheduling, Planning, Execution and Replanning: keep planning during execution and repair conflicts as they appear. <span class="note">→ The plan → execute → impact → replan loop.</span></p></div>
+    <div class="card"><span class="kicker k-vio">Flight proof · EO-1 ASE</span><p>The Autonomous Sciencecraft Experiment flew onboard EO-1 from 2004: science analysis, CASPER planner, robust execution — and cut operations cost. <span class="note">→ Evidence autonomy works in space; AMIS replays it as a ground simulator.</span></p></div>
+    <div class="card"><span class="kicker k-green">Perturbation handling</span><p>Adapt a plan while minimising disruption to the original. <span class="note">→ Churn metric plus previous-window-first stability.</span></p></div>
+    <div class="card"><span class="kicker k-green">Agile EO scheduling</span><p>VTW (visible span) vs OTW (shot inside it), slew-dependent transitions, oversubscribed targets. <span class="note">→ Window/action split, settling gap, culmination option; benchmarks frame greedy as baseline with headroom.</span></p></div>
+  </div>
+  <p class="note">Standards and engines used as-is, with links: <a href="https://rhodesmill.org/skyfield/">Skyfield</a> · <a href="https://github.com/brandon-rhodes/python-sgp4">SGP4 (sgp4 package)</a> · <a href="https://celestrak.org/">CelesTrak</a> (OMM element sets) · <a href="https://developers.google.com/optimization/cp/cp_solver">OR-Tools CP-SAT</a>. CCSDS OMM is the stored element format.</p>
+</section>
+
+<!-- ================= 05 ================= -->
+<section class="block" id="s05" aria-labelledby="h05">
+  <h2 id="h05"><span class="n">05 — System model</span>Eight objects, one story.</h2>
+  <div class="flow">
+    <div class="node acc"><b>Scenario <span>frozen mission: id, period, one satellite, request list · replay unit with the event log</span></b></div><div class="varr">↓ holds</div>
+    <div class="node"><b>Satellite <span>battery Wh, storage MB, availability, optional stored orbit (NORAD id, epoch, OMM, hash)</span></b></div><div class="varr">↓ wants</div>
+    <div class="node"><b>Observation requests <span>target lat/lon, priority 1–5, duration, deadline, energy + storage cost · no start time</span></b></div><div class="varr">↓ visible in</div>
+    <div class="node vio"><b>Observation windows <span>spans where a target is observable; peak geometry + provenance on orbital mode</span></b></div><div class="varr">↓ placed as</div>
+    <div class="node acc"><b>Mission plan <span>immutable version: actions + unscheduled-with-reason + utility + violations + timing</span></b></div><div class="varr">↓ executed as</div>
+    <div class="node"><b>Mission state <span>clock, battery, storage, availability, active events, completed ids</span></b></div><div class="varr">↓ disturbed by</div>
+    <div class="node bad"><b>Events <span>cloud block · battery drop · emergency arrival · payload / comms outage</span></b></div><div class="varr">↓ rebuilt by</div>
+    <div class="node ok"><b>Replan <span>same planner, previous plan in, next version out, frozen untouched</span></b></div>
+  </div>
+  <p class="note">Invariants: scenarios never edited in place; plans never mutated (new version + parent id); started actions frozen (<code class="inline">start ≤ now</code>).</p>
+</section>
+
+<!-- ================= 06 ================= -->
+<section class="block" id="s06" aria-labelledby="h06">
+  <h2 id="h06"><span class="n">06 — Observation windows</span>Want ≠ allowed ≠ scheduled.</h2>
+  <div class="grid tri3">
+    <div class="card" style="text-align:center"><span class="kicker k-blue">Request</span><p><b>what we want</b></p><p class="note">target + priority + duration + deadline + costs</p></div>
+    <div class="card" style="text-align:center"><span class="kicker k-vio">Window</span><p><b>when allowed</b></p><p class="note">visible + policy-passing span</p></div>
+    <div class="card" style="text-align:center"><span class="kicker k-green">Action</span><p><b>what we schedule</b></p><p class="note">request placed at one start inside one window</p></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-blue">Three window sources</span><ul class="tight"><li><b>Synthetic</b> — one whole-horizon window per request. Logic tests.</li><li><b>Canonical demo</b> — fixed offsets; OBS-B gets <b>two</b> windows so a cloud move is possible. Story tests.</li><li><b>Orbital</b> — computed from a real stored orbit. Truth.</li></ul><p class="note">Planner only ever sees windows — source never leaks into scheduling.</p></div>
+    <div class="card"><span class="kicker k-amber">Orbital filters</span><ul class="tight"><li>Off-nadir cone (sensor steering limit)</li><li>Sun elevation (optical needs daylight)</li><li>Duration fit (window must hold the shot)</li><li>Horizon + deadline clipping</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= 07 ================= -->
+<section class="block" id="s07" aria-labelledby="h07">
+  <h2 id="h07"><span class="n">07 — Orbital mode</span>From catalogue row to honest windows.</h2>
+  <div class="flow" aria-label="Orbital pipeline">
+    <div class="node"><b>TLE / OMM catalogue <span>CelesTrak rows; OMM stored canonical, TLE lines kept verbatim</span></b></div><div class="varr">↓</div>
+    <div class="node"><b>OrbitalElements in scenario <span>NORAD id · epoch · OMM fields · source · retrieval time · SHA-256</span></b></div><div class="varr">↓</div>
+    <div class="node vio"><b>SGP4 / Skyfield propagation <span>pinned versions; only orbital modules import it</span></b></div><div class="varr">↓</div>
+    <div class="node"><b>Per-target visibility search <span>Skyfield find_events: rise / culmination / set across the horizon</span></b></div><div class="varr">↓</div>
+    <div class="node acc"><b>Off-nadir + sun filtering <span>cone limit → elevation threshold; daylight check at culmination</span></b></div><div class="varr">↓</div>
+    <div class="node ok"><b>Valid observation windows <span>inward-rounded to seconds, duration-fitted, numbered per request</span></b></div>
+  </div>
+  <div class="scrollx" role="region" aria-label="Off-nadir examples at 705 km" tabindex="0">
+  <table>
+    <tr><th>Sensor cone</th><th>Needs at target</th><th>Window</th><th>Read</th></tr>
+    <tr><td>30° off-nadir (standard agile)</td><td>≈ 56.3° elevation</td><td>≈ 120 s overhead</td><td>Demo 300–600 s takes cannot fit — builder defaults 20–60 s</td></tr>
+    <tr><td>45° off-nadir (wide)</td><td>≈ 38.3° elevation</td><td>≈ 220 s overhead</td><td>Wider cone, more chances, worse geometry</td></tr>
+    <tr><td>0° (horizon pass)</td><td>0° elevation</td><td>—</td><td>≈ 64° tilt, ~2,860 km away — not imaging</td></tr>
+  </table>
+  </div>
+  <p class="note">One line for the examiner: the orbit is real, the pointing and resource numbers are stated assumptions for a hypothetical agile imager. A request with no window gets its own honest reason code — physics, not a bug.</p>
+</section>
+
+<!-- ================= 08 ================= -->
+<section class="block" id="s08" aria-labelledby="h08">
+  <h2 id="h08"><span class="n">08 — Planning engine</span>One contract, two implementations.</h2>
+  <div class="card" style="text-align:center"><span class="kicker k-blue">Planner protocol</span><p><code class="inline">plan(scenario, state, requests, windows, previous_plan) → MissionPlan</code></p><p class="note">Knows nothing of FastAPI, React, or Postgres. Same call plans and replans.</p></div>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-green">GreedyPlanner — the baseline</span><ul class="tight"><li>Sort: priority ↓, deadline ↑, duration ↑, id ↑ — ties never random</li><li>Try window start, peak-centred start, then after each placed action</li><li>First fully-feasible slot wins, else unscheduled <b>with reason</b></li><li>Deterministic, millisecond, explainable step by step</li></ul></div>
+    <div class="card"><span class="kicker k-vio">CP-SAT planner — the challenger</span><ul class="tight"><li>OR-Tools constraint model: integer seconds, optional intervals, no-overlap, linear resource sums</li><li>Maximises priority sum + small stability term</li><li>Bounded deterministic search; records status, bound, optimality gap</li><li>Never worse than greedy — falls back to it</li></ul></div>
+  </div>
+  <div class="card"><span class="kicker k-blue">Why both exist</span><p style="margin:4px 0">Greedy is the honest, fast, explainable floor. CP-SAT measures how much value the floor leaves behind on tight problems. Same protocol means the comparison is fair — and benchmarks show a real gap (priority-greedy ≈ half of optimal on small cases).</p></div>
+</section>
+
+<!-- ================= 09 ================= -->
+<section class="block" id="s09" aria-labelledby="h09">
+  <h2 id="h09"><span class="n">09 — Constraint engine</span>Six gates, one vocabulary.</h2>
+  <div class="pipe">
+    <div class="pstep"><b>1 · Containment</b><p>action inside its window</p></div>
+    <div class="pstep"><b>2 · Deadline</b><p>ends before request deadline</p></div>
+    <div class="pstep"><b>3 · No overlap</b><p>plus settling gap between shots</p></div>
+    <div class="pstep"><b>4 · Battery</b><p>projected in time order, floor 0</p></div>
+    <div class="pstep"><b>5 · Storage</b><p>projected in time order, cap respected</p></div>
+    <div class="pstep"><b>6 · Availability</b><p>satellite on, outside outage spans</p></div>
+  </div>
+  <div class="card"><span class="kicker k-red">Failure path — always the same</span>
+    <p style="margin:4px 0"><b>Constraint failure → ReasonCode → sentence.</b> The code is the source of truth and is testable; the human text is generated from a template afterward. No LLM plans, ever.</p>
+    <p class="note">Key codes: WINDOW_INVALIDATED · INSUFFICIENT_BATTERY · INSUFFICIENT_STORAGE · DEADLINE_VIOLATION · TIME_OVERLAP · SATELLITE_UNAVAILABLE · NO_OBSERVATION_WINDOW · NO_ALTERNATIVE_WINDOW. <span id="codes-more-link">Full vocabulary lives in §19.</span></p>
+  </div>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="block" id="s10" aria-labelledby="h10">
+  <h2 id="h10"><span class="n">10 — Simulation</span>A clock you can trust.</h2>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-blue">MissionState, six fields</span><ul class="tight"><li>Clock · battery Wh · storage MB</li><li>Availability flag · active event ids</li><li>Completed request ids (+ mission-complete flag)</li></ul></div>
+    <div class="card"><span class="kicker k-green">Action lifecycle</span>
+      <svg viewBox="0 0 340 64" role="img" aria-label="Planned to in progress to completed"><rect x="4" y="12" width="100" height="34" rx="9" fill="#fff" stroke="#16181d" stroke-width="1.5"/><text x="54" y="33" font-size="11" text-anchor="middle" font-weight="700">PLANNED</text><text x="118" y="33" font-size="14">→</text><rect x="132" y="12" width="100" height="34" rx="9" fill="#e8eefc" stroke="#1d4ed8" stroke-width="1.5"/><text x="182" y="33" font-size="11" text-anchor="middle" font-weight="700">IN PROGRESS</text><text x="246" y="33" font-size="14">→</text><rect x="260" y="12" width="76" height="34" rx="9" fill="#16181d"/><text x="298" y="33" font-size="11" text-anchor="middle" fill="#fff" font-weight="700">DONE</text></svg>
+      <p class="note">Costs charged on start. Deadlines past with no completion → request expired, permanently excluded.</p>
+    </div>
+  </div>
+  <p class="note">Same scenario + same steps = same state. Determinism is a tested property, not a hope.</p>
+</section>
+
+<!-- ================= 11 ================= -->
+<section class="block" id="s11" aria-labelledby="h11">
+  <h2 id="h11"><span class="n">11 — The core demo</span>Watch one request move.</h2>
+  <p class="lede">The centerpiece. Canonical story, exact sequence: five requests, OBS-C dead on arrival, OBS-B with two windows, a cloud at 10:20, and a move to 11:15. Use the stepper.</p>
+  <div class="stepper" role="group" aria-label="Demo walk controls">
+    <button id="dPrev" class="ghost" type="button">← Prev</button>
+    <button id="dNext" type="button">Next →</button>
+    <button id="dAll" class="ghost" type="button">Show all</button>
+  </div>
+  <div class="tl" aria-label="Before and after timelines">
+    <div class="tl-row"><span class="tl-name">OBS-A ★5</span><div class="tl-track"><div class="tl-win" style="left:4%;width:16%"></div><div class="tl-bar" data-v1 style="left:4%;width:12%"></div><div class="tl-bar" data-v2 style="left:4%;width:12%"></div></div></div>
+    <div class="tl-row"><span class="tl-name">OBS-B ★4</span><div class="tl-track"><div class="tl-win" style="left:22%;width:14%"></div><div class="tl-win" style="left:62%;width:14%"></div><div class="tl-bar" data-v1 style="left:22%;width:10%"></div><div class="tl-bar alt" data-v2 style="left:62%;width:10%"></div><div class="tl-bar bad" data-hit style="left:22%;width:10%;display:none"></div></div></div>
+    <div class="tl-row"><span class="tl-name">OBS-C ★3</span><div class="tl-track"><div class="tl-win" style="left:38%;width:12%;border-color:#b91c1c"></div><div class="tl-bar ghost" style="left:38%;width:12%"></div></div></div>
+    <div class="tl-row"><span class="tl-name">OBS-D ★2</span><div class="tl-track"><div class="tl-win" style="left:66%;width:14%"></div><div class="tl-bar" data-v1 style="left:66%;width:11%;opacity:.55"></div><div class="tl-bar" data-v2 style="left:66%;width:11%;opacity:.55"></div></div></div>
+    <div class="tl-row"><span class="tl-name">OBS-E ★1</span><div class="tl-track"><div class="tl-win" style="left:78%;width:14%"></div><div class="tl-bar" data-v1 style="left:78%;width:11%;opacity:.35"></div><div class="tl-bar" data-v2 style="left:78%;width:11%;opacity:.35"></div></div></div>
+    <div class="tl-legend"><span><i style="background:#1d4ed8"></i>scheduled v1</span><span><i style="background:#6d28d9"></i>moved in v2</span><span><i style="background:#b91c1c"></i>cloud-hit</span><span><i style="background:repeating-linear-gradient(45deg,#d8d5cb,#d8d5cb 4px,#c9c6b9 4px,#c9c6b9 8px)"></i>expired</span><span>dashed = window</span></div>
+  </div>
+  <div class="stages" id="stages">
+    <div class="stage" data-stage="0"><h4><span class="tag">1–3</span>Load · windows · Plan v1</h4><p>Load demo <span class="mono">SAT-001 + OBS-A…E</span>, generate windows, plan. OBS-C is already expired (deadline at start) — intentional. Everything else placed, zero violations.</p><div class="out">Plan v1: OBS-A @10:00 · OBS-B @10:20 · OBS-D · OBS-E  |  unscheduled: OBS-C (deadline)</div></div>
+    <div class="stage" data-stage="1"><h4><span class="tag">4</span>Simulate — step 300 s ×3</h4><p>Clock 10:00 → 10:15. OBS-A starts: its action is now <b>frozen</b> — future replans can never move it.</p><div class="out">state: t=10:15 · battery ↓ · storage ↑ · frozen: [OBS-A]</div></div>
+    <div class="stage" data-stage="2"><h4><span class="tag">5</span>Inject change — CLOUD_BLOCK</h4><p>Cloud blocks OBS-B’s first (10:20) window. The window is marked invalid; the scenario itself is untouched.</p><div class="out">event: CLOUD_BLOCK { request: OBS-B, window: WIN-OBS-B-1 }</div></div>
+    <div class="stage" data-stage="3"><h4><span class="tag">6</span>Impact — diagnosis, not a new plan</h4><p>Validator splits unfrozen actions: OBS-B invalid (<span class="mono">WINDOW_INVALIDATED</span>), the rest valid. Readable <b>before</b> replanning.</p><div class="out">impact on v1: invalid=[OBS-B] · valid=[OBS-D, OBS-E] · frozen=[OBS-A]</div></div>
+    <div class="stage" data-stage="4"><h4><span class="tag">7</span>Replan — Plan v2</h4><p>Same planner, previous plan in. Frozen kept byte-identical; OBS-B takes its second window. New version + parent id.</p><div class="out">Plan v2: OBS-B 10:20 → 11:15 · violations: 0</div></div>
+    <div class="stage" data-stage="5"><h4><span class="tag">8–10</span>Explain · compare · measure</h4><p>Diff: OBS-B <b>MOVED</b> with <span class="mono">WINDOW_INVALIDATED</span>. Trace: one sentence. Metrics: utility kept, churn 0.25, coverage 1.0.</p><div class="out">trace: “OBS-B moved from 10:20 to 11:15 because its window was invalidated by cloud.”</div></div>
+  </div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="block" id="s12" aria-labelledby="h12">
+  <h2 id="h12"><span class="n">12 — Impact vs replan</span>Diagnose, then operate.</h2>
+  <div class="flow">
+    <div class="node acc"><b>PLAN v1 <span>the last good schedule</span></b></div><div class="varr">↓ event lands</div>
+    <div class="node bad"><b>EVENT <span>cloud · battery · emergency · outage, at a sim time</span></b></div><div class="varr">↓ validate unfrozen</div>
+    <div class="node"><b>IMPACT <span>valid vs invalid + reason codes · stored with plan id</span></b></div><div class="varr">↓ rebuild future</div>
+    <div class="node ok"><b>REPLAN → PLAN v2 <span>frozen byte-identical · stability kept · validated</span></b></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-amber">Impact answers</span><p>“What broke?” — which unfrozen actions survive, which don’t, and which rule each breaks. No new schedule yet.</p></div>
+    <div class="card"><span class="kicker k-green">Replan answers</span><p>“What now?” — feasible future preserving history, preferring old slots that still work.</p></div>
+  </div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section class="block" id="s13" aria-labelledby="h13">
+  <h2 id="h13"><span class="n">13 — Plan diff</span>Every request gets a verdict.</h2>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-green">UNCHANGED</span><p>Same window, same start. The quiet majority — stability made visible.</p></div>
+    <div class="card"><span class="kicker k-vio">MOVED</span><p>Same request, new time/window. Demo: <b>OBS-B 10:20 → 11:15</b>.</p></div>
+    <div class="card"><span class="kicker k-blue">INSERTED</span><p>New in v2 — e.g. an emergency arrival accepted.</p></div>
+    <div class="card"><span class="kicker k-red">DROPPED</span><p>In v1, infeasible in v2 — with its reason code attached.</p></div>
+  </div>
+  <div class="card"><span class="kicker k-blue">COMPLETED</span><p>Finished before the replan — frozen history, shown so v2 reads honestly.</p></div>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="block" id="s14" aria-labelledby="h14">
+  <h2 id="h14"><span class="n">14 — Decision trace</span>One change, one sentence, one code.</h2>
+  <div class="card">
+    <p style="margin:2px 0"><b>Event</b> → <b>constraint</b> → <b>old action</b> → <b>new action</b> → <b>reason code</b> → <b>sentence</b></p>
+    <div class="scrollx"><table>
+      <tr><th>Link</th><th>Demo value</th></tr>
+      <tr><td>Event</td><td><span class="mono">CLOUD_BLOCK on WIN-OBS-B-1</span></td></tr>
+      <tr><td>Constraint</td><td>window containment</td></tr>
+      <tr><td>Old → new</td><td>OBS-B @10:20 → OBS-B @11:15</td></tr>
+      <tr><td>Reason code</td><td><span class="mono">WINDOW_INVALIDATED</span> (source of truth)</td></tr>
+      <tr><td>Sentence</td><td>“OBS-B moved from 10:20 to 11:15 because its original window was invalidated by cloud; the later window still meets its deadline.”</td></tr>
+    </table></div>
+    <p class="note">Generated from a fixed template per code — deterministic, countable, auditable. The opposite of an LLM inventing rationale.</p>
+  </div>
+</section>
+
+<!-- ================= 15 ================= -->
+<section class="block" id="s15" aria-labelledby="h15">
+  <h2 id="h15"><span class="n">15 — Metrics</span>Value, stability, honesty.</h2>
+  <div class="metrics">
+    <div class="metric"><b>Utility</b><div class="v">Σ priority</div><p>scheduled + completed, deduped</p></div>
+    <div class="metric"><b>Completion</b><div class="v">done / all</div><p>expired counts against you</p></div>
+    <div class="metric"><b>Violations</b><div class="v">0</div><p>required in every accepted plan</p></div>
+    <div class="metric"><b>Plan time</b><div class="v">ms</div><p>wall-clock, greedy vs CP-SAT</p></div>
+    <div class="metric"><b>Battery use</b><div class="v">Wh</div><p>consumed vs capacity</p></div>
+    <div class="metric"><b>Storage use</b><div class="v">MB</div><p>used vs capacity</p></div>
+    <div class="metric"><b>Churn ★</b><div class="v">0.25</div><p>changed unfrozen ÷ unfrozen before — demo value</p></div>
+    <div class="metric"><b>Coverage ★</b><div class="v">1.0</div><p>changed with trace ÷ changed — demo value</p></div>
+  </div>
+  <p><b>Churn</b> measures disruption: did the replan move only what the event forced? <b>Coverage</b> measures explainability: does every change carry its reason? Together they are the stability × honesty score of the project.</p>
+</section>
+
+<!-- ================= 16 ================= -->
+<section class="block" id="s16" aria-labelledby="h16">
+  <h2 id="h16"><span class="n">16 — Architecture</span>The real boxes, stacked for mobile.</h2>
+  <div class="arch">
+    <div class="lbl">Interface</div>
+    <div class="layer"><b>React 19 + TypeScript + Vite</b><span>MapLibre + deck.gl map · vis-timeline · generated OpenAPI types · one dashboard</span></div>
+    <div class="lbl">↓ HTTP/JSON</div>
+    <div class="layer"><b>FastAPI — thin routes</b><span>scenarios · windows · plan · step · events · replan · compare · traces · metrics</span></div>
+    <div class="lbl">↓ one facade</div>
+    <div class="layer"><b>MissionSession — the seam</b><span>scenario · windows · plans · state · pool · events · impacts · traces; every test drives this</span></div>
+    <div class="lbl">↓ two protocols</div>
+    <div class="layer"><b>Planner + WindowProvider</b><span>Greedy / CP-SAT · synthetic / canonical / orbital — planner never sees orbits, only windows</span></div>
+    <div class="layer"><b>Constraints · Impact · Diff · Trace · Metrics</b><span>pure, independently testable logic</span></div>
+    <div class="lbl">↓ persisted</div>
+    <div class="layer"><b>PostgreSQL + Alembic (SQLAlchemy repos)</b><span>same repository protocols as in-memory; restart-safe, id-recovering</span></div>
+    <div class="lbl">Side branch — physics stays out of the core</div>
+    <div class="layer"><b>Orbital provider → Skyfield / SGP4 → windows</b><span>dated OMM snapshots + manifest + ephemeris excerpt; server never fetches live</span></div>
+    <div class="layer"><b>Events → impact → replan → diff → trace → metrics</b><span>the adaptive spine from §11–15</span></div>
+  </div>
+</section>
+
+<!-- ================= 17 ================= -->
+<section class="block" id="s17" aria-labelledby="h17">
+  <h2 id="h17"><span class="n">17 — Determinism + offline</span>Guarantees, not footnotes.</h2>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-green">Reproduce anything</span><ul class="tight"><li>Fixed planner ordering; ties by id</li><li>CP-SAT: single worker, fixed seed, work-based time limit</li><li>Sorted inputs; pinned library versions recorded in outputs</li><li>Windows rounded <b>inward</b> to whole seconds</li></ul></div>
+    <div class="card"><span class="kicker k-blue">Never phone home</span><ul class="tight"><li>Offline element snapshots + SHA-256 manifest</li><li>Committed ephemeris excerpt, hash recorded</li><li>No live TLE fetch from the server (socket-blocked in tests)</li><li>Scenario + event log = full replay</li></ul></div>
+  </div>
+  <p class="note">Stale-orbit safety: warn beyond 7 days from element epoch, reject beyond 14. Same inputs → same windows → same plans, checkable by an examiner.</p>
+</section>
+
+<!-- ================= 18 ================= -->
+<section class="block" id="s18" aria-labelledby="h18">
+  <h2 id="h18"><span class="n">18 — Implementation status</span>What actually runs.</h2>
+  <div class="grid2">
+    <div class="card" style="text-align:center"><span class="kicker k-green">Backend</span><p style="font-family:var(--serif);font-size:34px;margin:2px 0">136 passed</p><p class="note">pytest · 16/16 build phases · 117/117 stories · 12/12 FR · 14/14 SRD cases · 8/8 metrics · 6/6 constraints</p></div>
+    <div class="card" style="text-align:center"><span class="kicker k-blue">Frontend</span><p style="font-family:var(--serif);font-size:34px;margin:2px 0">139 passed</p><p class="note">12 test files · full loop drivable from the browser · one-command stack</p></div>
+  </div>
+  <div class="grid tri3">
+    <div class="card"><span class="kicker k-red">Cloud replanning</span><p>The demo above. Block → move → explain.</p></div>
+    <div class="card"><span class="kicker k-amber">Battery drop</span><p>Lower the charge; future power-infeasible actions invalidate and reschedule.</p></div>
+    <div class="card"><span class="kicker k-vio">Emergency request</span><p>Priority-5 arrival with earlier deadline preempts; others shift or drop with reasons.</p></div>
+  </div>
+  <p class="note">Deliberately absent (reserved, not broken): CP-SAT implementation behind the existing protocol, orbital provider behind the existing protocol, comms/satellite-outage events, recharge, downlink lifecycle — see §20.</p>
+</section>
+
+<!-- ================= 19 ================= -->
+<section class="block" id="s19" aria-labelledby="h19">
+  <h2 id="h19"><span class="n">19 — Technical depth</span>For the examiner who pushes.</h2>
+  <p class="lede">Main page stays readable; depth lives here, expandable. Nothing below is new — it is the implementation notes, compressed.</p>
+  <div class="toolbar"><button type="button" id="expAll">Expand all</button><button type="button" id="colAll">Collapse all</button></div>
+  <div id="depth">
+  <details><summary><span class="plus">+</span>Greedy ordering + stability + candidate starts</summary><div class="dbody"><ul class="tight"><li>Order: priority desc → deadline asc → duration asc → id asc. For each request, previous window first <b>while still valid</b> (stability), then earliest start.</li><li>Starts tried per window: clamped window start, peak-centred start when culmination placement is on, then the instant after each placed action plus settling gap — anything ending past the window is excluded.</li><li>Checks in order: containment → deadline → availability/outages → projected resources → overlap. First full pass wins; last violation kept for the unscheduled reason.</li><li>Zero candidate windows → <span class="mono">NO_OBSERVATION_WINDOW</span> (first plan) or <span class="mono">NO_ALTERNATIVE_WINDOW</span> (lost placement).</li></ul></div></details>
+  <details><summary><span class="plus">+</span>CP-SAT formulation (bounded, deterministic)</summary><div class="dbody"><ul class="tight"><li>Integer seconds from mission start; per request-window pair a presence literal + optional fixed-size interval; at most one window per request; one global no-overlap over frozen + optionals.</li><li>Outages via before/after bools gated on presence. Battery/storage as linear sums under the locked one-way model. Objective: priority sum + small stability term mirroring greedy.</li><li>Single worker, fixed seed, work-based limit; records status, objective bound, optimality gap; falls back to greedy rather than returning worse. Unscheduled reasons come from re-running the standard checks on the solution.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>Resource projection + frozen + outages</summary><div class="dbody"><ul class="tight"><li>Projection walks frozen then placed actions <b>in time order</b>, committing costs — two tasks that fit alone can fail together, and only the walk catches it.</li><li>Frozen = <span class="mono">action.start ≤ now</span>: carried byte-identical, still blocks time, exempt from re-validation, excluded from churn denominator logic.</li><li>Payload outage toggles availability over an interval; comms outage invalidates overlapping contacts. Both flow through the same impact → replan path.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>Orbital equations actually used</summary><div class="dbody"><ul class="tight"><li>Mean altitude from mean motion (Kepler III); off-nadir → elevation threshold on a spherical Earth; <span class="mono">sin(off) = R/(R+h) · cos(elev)</span>.</li><li>At 705 km: 30° → ≈56.3° elevation, ≈415 km offset, ≈120 s overhead; 45° → ≈38.3°, ≈220 s; 0° horizon ≈64° tilt — not imaging.</li><li>Pair rise/set around culminations incl. windows open at either edge and repeated culminations; sun filter at culmination; round inward; drop shorter-than-duration; per-request numbering; geometry + provenance fields default absent so old serialisations stay identical.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>API routes (groups + exact list)</summary><div class="dbody"><p>Groups: scenarios · windows · planning · simulation · events · compare &amp; explain · metrics · demo/helpers. Exact routes:</p><pre>POST /scenarios · GET /scenarios/{id}
+POST /scenarios/{id}/windows/generate
+POST /scenarios/{id}/plan · POST /scenarios/{id}/replan
+POST /scenarios/{id}/simulation/step
+POST /scenarios/{id}/events
+GET  /plans/{old}/compare/{new} · GET /plans/{id}/traces
+GET  /scenarios/{id}/metrics · GET /plans/{id}/metrics
+GET  /scenarios/{id}/impact · GET /demo/scenario
+GET  /scenarios/{id}/requests · /windows · /events</pre><p class="note">Order enforced with SIMULATION_STATE_ERROR; stale parent rejected with PLAN_VERSION_CONFLICT; greedy returns empty-with-reasons rather than PLAN_INFEASIBLE.</p></div></details>
+  <details><summary><span class="plus">+</span>Database schema + frontend flow + determinism tests</summary><div class="dbody"><ul class="tight"><li>Tables: scenarios, satellites, requests, windows, states, plans, actions, events, impacts, traces, experiment results. Nullable orbit/policy/geometry columns added by migration; in-memory and SQL repos share protocols.</li><li>Frontend: one dashboard — control strip → state panel → 2D map → stacked timelines (frozen styling, change marks) → trace panel → metrics panel; trace→timeline highlight; typed from OpenAPI.</li><li>Determinism tests: double-run equality, byte-identical reruns minus wall-clock, replay from scenario + event log, socket-blocked offline test, sampler agreement within 2 s, zero-violation + frozen-identical + coverage gates.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>Full reason-code vocabulary</summary><div class="dbody"><p><span class="mono">WINDOW_INVALIDATED · NO_OBSERVATION_WINDOW · NO_ALTERNATIVE_WINDOW · INSUFFICIENT_BATTERY · INSUFFICIENT_STORAGE · DEADLINE_VIOLATION · TIME_OVERLAP · DISPLACED_BY_COMPETING_REQUEST · HIGHER_PRIORITY_TASK_INSERTED · ALTERNATIVE_WINDOW_AVAILABLE · SATELLITE_UNAVAILABLE · TASK_UNCHANGED</span></p><p class="note">Each maps to one constraint name and one sentence template in the trace builder.</p></div></details>
+  <details><summary><span class="plus">+</span>Code map — where every idea lives</summary><div class="dbody"><div class="scrollx"><table>
+    <tr><th>Idea</th><th>File</th><th>What to point at</th></tr>
+    <tr><td>Scenario, satellite, request</td><td><span class="mono">amis/domain/scenario.py:86-116</span></td><td>Frozen dataclass, JSON round trip, immutable + event log = replay (ADR-0002)</td></tr>
+    <tr><td>Observation windows</td><td><span class="mono">amis/domain/window.py:11-18</span></td><td>id, request id, validity + reason, orbital geometry fields default absent</td></tr>
+    <tr><td>Plan + action</td><td><span class="mono">amis/domain/plan.py:12-110</span></td><td>ScheduledAction kinds; MissionPlan version + parent + planner_name + solver_details</td></tr>
+    <tr><td>Mission state</td><td><span class="mono">amis/domain/state.py:12-60</span></td><td>clock, battery, storage, availability, active events, completed ids</td></tr>
+    <tr><td>Events</td><td><span class="mono">amis/domain/event.py:14-106</span></td><td>5 payloads: cloud, battery, emergency, payload outage, comms outage</td></tr>
+    <tr><td>Greedy</td><td><span class="mono">amis/planning/greedy.py:62-274</span></td><td>sort 118-126 · placement 146-200 · frozen 257-266 · starts 284-319</td></tr>
+    <tr><td>CP-SAT</td><td><span class="mono">amis/planning/cp_sat.py:54-163</span></td><td>int-time model, NoOverlap, knapsack, objective weight, 1 worker / seed 0, fallback</td></tr>
+    <tr><td>Constraints</td><td><span class="mono">amis/constraints/</span></td><td>containment, deadline, overlap, availability, <span class="mono">resources.py:21-120</span> projection walk</td></tr>
+    <tr><td>Session loop</td><td><span class="mono">amis/session.py:59-836</span></td><td>replan 137-192 · step 464-522 · single test seam (ADR-0001)</td></tr>
+    <tr><td>Impact / diff / trace / metrics</td><td><span class="mono">amis/impact.py · diff.py:58-165 · trace.py:61-106 · metrics.py:30-123</span></td><td>split · 5 verdicts · templates · 8 metrics</td></tr>
+    <tr><td>Geometry</td><td><span class="mono">amis/orbital/geometry.py</span></td><td>threshold formulas; provider in <span class="mono">amis/windows/orbital.py</span></td></tr>
+    <tr><td>API + demo</td><td><span class="mono">amis/api.py:71-317 · api_schemas.py · demo.py:130-281, 362-399</span></td><td>thin routes · forbid-extra DTOs · canonical fixtures + diffable record</td></tr>
+  </table></div></div></details>
+  <details><summary><span class="plus">+</span>CP-SAT solver_details fields (read these aloud)</summary><div class="dbody"><ul class="tight"><li><span class="mono">status</span>: OPTIMAL / FEASIBLE accepted; anything else → greedy fallback, never worse than baseline.</li><li><span class="mono">objective, objective_bound, optimality_gap</span>: value found, best bound proved, gap between them — the honesty numbers.</li><li><span class="mono">fallback</span> bool + <span class="mono">ortools_version, workers: 1, seed: 0, max_deterministic_time, objective_priority_weight, time_resolution_s: 1</span> — full provenance for a fair comparison.</li><li>Unscheduled reasons are re-derived by running the standard greedy checkers on the solution — including <span class="mono">DISPLACED_BY_COMPETING_REQUEST</span> when a bounded search omits a feasible request.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>Orbital data: NORAD ids, snapshots, age rules</summary><div class="dbody"><ul class="tight"><li>Presentation catalogue: Sentinel-2A <span class="mono">40697</span> (2015-028A), Sentinel-2B <span class="mono">42063</span>, Landsat 8 <span class="mono">39084</span>, Landsat 9 <span class="mono">49260</span> — confirm against CelesTrak at fetch time.</li><li>Snapshot = dated OMM JSON + manifest (source URL, retrieval time, SHA-256 per record) + small de421 ephemeris excerpt with hash. Developer script refreshes; server only reads <span class="mono">amis/data</span>.</li><li>TLE ≈ 1 km at epoch, degrades over weeks → warn beyond 7 days from epoch, reject beyond 14. New orbital missions stay within 14 days of epoch and inside the excerpt window.</li><li>Say honestly: real published orbit + hypothetical agile imager (±30° field of regard, assumed power/storage) — physics where it counts, assumptions where labelled.</li></ul></div></details>
+  <details><summary><span class="plus">+</span>Numbers to memorize</summary><div class="dbody"><div class="scrollx"><table>
+    <tr><th>Number</th><th>Meaning</th></tr>
+    <tr><td>705 km</td><td>Landsat altitude used for math; 30° needs 56.3° elevation, ≈120 s overhead max</td></tr>
+    <tr><td>20–60 s</td><td>Real take lengths; demo 300–600 s cannot fit a real VTW — warn above 120 s</td></tr>
+    <tr><td>7 / 14 days</td><td>Element age: warn / reject thresholds</td></tr>
+    <tr><td>5–10°</td><td>Ground-station elevation mask for contact windows</td></tr>
+    <tr><td>1 worker · seed 0</td><td>CP-SAT deterministic settings + sorted inputs</td></tr>
+    <tr><td>152 / 139</td><td>Backend / frontend tests passing</td></tr>
+    <tr><td>51.1%</td><td>Priority-greedy vs optimal on small benchmarks — the headroom CP-SAT addresses</td></tr>
+    <tr><td>35 / 80 / 60%</td><td>Cloud-blocked stats (Landsat-7 / SPOT / general) — why the cloud event is central</td></tr>
+  </table></div></div></details>
+  <details><summary><span class="plus">+</span>Glossary — one-slide vocabulary (CONTEXT.md)</summary><div class="dbody"><ul class="tight"><li><b>Scenario</b> mission definition · <b>Satellite</b> single craft · <b>Request</b> wish with priority + deadline · <b>Pool</b> wishes under consideration now (expired stay listed).</li><li><b>Window</b> chance to image · <b>Contact window</b> chance to downlink · <b>Action</b> wish placed at a time · <b>Plan</b> versioned bookings.</li><li><b>Frozen</b> started, unchangeable · <b>Replan</b> rebuild the unfrozen future · <b>Impact</b> valid-vs-invalid split · <b>Diff</b> unchanged/moved/inserted/dropped/completed.</li><li><b>ReasonCode</b> fixed why, text generated · <b>Trace</b> event→change→sentence · <b>Utility</b> Σ priorities · <b>Churn</b> share of future changed · <b>Coverage</b> share of changes with a trace.</li></ul></div></details>
+  </div>
+</section>
+
+<!-- ================= 20 ================= -->
+<section class="block" id="s20" aria-labelledby="h20">
+  <h2 id="h20"><span class="n">20 — Limits + future</span>Honest, then ambitious.</h2>
+  <div class="grid2">
+    <div class="card"><span class="kicker k-red">Admitted limits</span><ul class="tight"><li>Single satellite; global overlap and one battery</li><li>Simplified energy (no recharge) and storage (no downlink release) in MVP</li><li>Fixed costs per request, not derived from power/data-rate × duration</li><li>Image quality flat with angle unless culmination placement is on</li></ul></div>
+    <div class="card"><span class="kicker k-green">Ordered future (waves)</span><ul class="tight"><li>Real-mission builder + Load + Examples + ground track (done per plan)</li><li>CP-SAT comparison with gap reporting + evaluation suite</li><li>Payload outages, settling gap, derived costs, culmination option</li><li>Stations + contacts + downlink + comms outage</li><li>Archived-weather cloud events · slew + recharge · multi-satellite last</li></ul></div>
+  </div>
+  <p class="note">Future work is never presented as implemented. Each wave is independently testable; earlier waves keep passing as later ones land.</p>
+</section>
+
+<!-- ================= 21 ================= -->
+<section class="block qa" id="s21" aria-labelledby="h21">
+  <h2 id="h21"><span class="n">21 — Examiner Q&amp;A</span>Story first, proof ready.</h2>
+  <div class="toolbar"><input id="qq" type="search" placeholder="Filter questions…" aria-label="Filter questions"></div>
+  <div id="qalist">
+  <details open><summary><span class="plus">+</span>Why a simulator, not real satellite control?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> control needs flight software, safety, radios and licences — our research question is planning logic, and a simulator makes it repeatable and checkable.</div><p class="note">Backup: PRD §6 out-of-scope list; SRD offline rule; same-seed replay. Proof: run the no-frontend integration test.</p></div></details>
+  <details><summary><span class="plus">+</span>What is novel versus a simple calendar?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> windows from physics, six interacting constraints, frozen history, diagnosis before repair, and every change scored for stability and explainability.</div><p class="note">Backup: projection walk, stability rule, churn + coverage. Proof: §09/§15 cards.</p></div></details>
+  <details><summary><span class="plus">+</span>Why greedy first, why CP-SAT second?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> greedy is the fast explainable floor; CP-SAT measures what the floor leaves behind — fairly, on the same contract.</div><p class="note">Backup: fallback guarantee; gap recorded; benchmark headroom (~half of optimal). Proof: §08 + §19.</p></div></details>
+  <details><summary><span class="plus">+</span>Why immutable plans + event log?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> audit and repeat — same mission plus same ordered events always reproduces the same versions.</div><p class="note">Backup: ADR-0002; parent ids; diffable rerun minus wall-clock. Proof: replay test.</p></div></details>
+  <details><summary><span class="plus">+</span>What is frozen?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> started work is history — replans never rewrite it, only rebuild the future around it.</div><p class="note">Backup: start ≤ now; byte-identical carry; still blocks time; exempt from validation. Proof: §12 + replan test.</p></div></details>
+  <details><summary><span class="plus">+</span>How is utility calculated?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> sum of priorities of scheduled plus completed requests, deduplicated.</div><p class="note">Backup: simple, monotone, later weightable by geometry. Proof: metrics module + comparison table.</p></div></details>
+  <details><summary><span class="plus">+</span>What are churn and coverage?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> churn = how much of the future moved; coverage = how many moves carry a reason. Demo: 0.25 and 1.0.</div><p class="note">Backup: unfrozen-only denominators; stability goal. Proof: §15.</p></div></details>
+  <details><summary><span class="plus">+</span>Why reason codes instead of LLM text?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> codes are deterministic and countable; sentences are generated from them. An LLM must never plan.</div><p class="note">Backup: fixed vocabulary + templates; coverage gate. Proof: trace builder.</p></div></details>
+  <details><summary><span class="plus">+</span>Why synthetic vs orbital windows?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> synthetic tests logic, canonical stages the story, orbital supplies truth — the planner cannot tell which it reads.</div><p class="note">Backup: WindowProvider protocol; per-mission policy. Proof: §06–07.</p></div></details>
+  <details><summary><span class="plus">+</span>Why offline snapshots?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> catalogue policy, determinism, and audit — fetch rarely as a developer, serve always from committed data.</div><p class="note">Backup: 2-hour update cadence; hashes; socket-blocked tests. Proof: §17.</p></div></details>
+  <details><summary><span class="plus">+</span>Why single satellite?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> one battery and global overlap keep the MVP honest; constellation assignment is the last wave because it widens every interface.</div><p class="note">Backup: per-satellite overlap/resources/tracks planned; request keying preserved. Proof: §20.</p></div></details>
+  <details><summary><span class="plus">+</span>If asked anything unknown?</summary><div class="dbody"><div class="card" style="background:var(--ok-soft);border:0"><b>Say:</b> state what you know in three points, name the file where truth lives, admit the limit plus the next test — then offer to open the code live.</div><p class="note">Calm beats long defence. The §19 panels are your safety net.</p></div></details>
+  </div>
+</section>
+
+<section class="block" id="run" aria-labelledby="hrun">
+  <h2 id="hrun"><span class="n">Appendix — Run it</span></h2>
+  <pre>Backend:  .\.venv\Scripts\Activate.ps1 → uvicorn amis.main:app --reload   (127.0.0.1:8000)
+Frontend: cd frontend → npm install → npm run dev                            (localhost:5173)
+Verify:   python -m pytest tests -q  ·  npm --prefix frontend run test -- --run  ·  python -m amis.demo</pre>
+  <p class="note">Backend first — the frontend fetches the OpenAPI schema on startup. Sources: run.md, feature-implementation-status.md (2026-09-25), demo V1.md, Phase2 spec, CONTEXT.md glossary, Real-Scenario research, ADRs 0001–0012.</p>
+</section>
+
+</div>
+</main>
+
+<nav class="botnav" aria-label="Quick"><div>
+  <a href="#s01" data-sec="s01"><span>◈</span>Pitch</a>
+  <a href="#s11" data-sec="s11"><span>▶</span>Demo</a>
+  <a href="#s16" data-sec="s16"><span>⬣</span>Arch</a>
+  <a href="#s21" data-sec="s21"><span>?</span>Q&amp;A</a>
+</div></nav>
+
+<script>
+(function(){
+  var bar=document.getElementById('bar');
+  function prog(){var h=document.documentElement;var p=h.scrollTop/((h.scrollHeight-h.clientHeight)||1);bar.style.width=(p*100).toFixed(1)+'%';}
+  addEventListener('scroll',prog,{passive:true});prog();
+  // nav highlight
+  var links=[].slice.call(document.querySelectorAll('.menu nav a'));
+  var menu=document.getElementById('menu');
+  links.forEach(function(a){a.addEventListener('click',function(){menu.open=false;exitView();});});
+  // bottom bar = pages, not scroll targets
+  var views=[].slice.call(document.querySelectorAll('.botnav a[data-sec]'));
+  function exitView(){document.body.classList.remove('viewing');document.querySelectorAll('section.block.show').forEach(function(s){s.classList.remove('show');});views.forEach(function(v){v.classList.remove('on');});}
+  views.forEach(function(v){v.addEventListener('click',function(ev){
+    var sec=document.getElementById(v.getAttribute('data-sec'));
+    if(document.body.classList.contains('viewing')&&sec.classList.contains('show')){exitView();return;}
+    ev.preventDefault();exitView();document.body.classList.add('viewing');sec.classList.add('show');v.classList.add('on');scrollTo({top:0,behavior:'smooth'});
+  });});
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id);});}});},{rootMargin:'-40% 0px -55% 0px'});
+    secs.forEach(function(s){io.observe(s);});
+  }
+  // demo stepper
+  var stages=[].slice.call(document.querySelectorAll('#stages .stage'));
+  var cur=-1;
+  function paint(){
+    stages.forEach(function(s,i){s.classList.toggle('lit',cur<0||i<=cur);});
+    var v1on=cur<0||cur>=0, hit=cur>=2&&cur<=3, v2on=cur<0||cur>=4;
+    document.querySelectorAll('[data-v1]').forEach(function(b){b.style.display=v1on?'':'none';});
+    document.querySelectorAll('[data-v2]').forEach(function(b){b.style.display=v2on?'':'none';});
+    document.querySelectorAll('[data-hit]').forEach(function(b){b.style.display=hit?'':'none';});
+  }
+  document.getElementById('dNext').addEventListener('click',function(){cur=Math.min(cur+1,stages.length-1);paint();stages[cur].scrollIntoView({block:'nearest',behavior:'smooth'});});
+  document.getElementById('dPrev').addEventListener('click',function(){cur=Math.max(cur-1,0);paint();stages[cur].scrollIntoView({block:'nearest',behavior:'smooth'});});
+  document.getElementById('dAll').addEventListener('click',function(){cur=-1;paint();});
+  paint();
+  // expand/collapse depth
+  document.getElementById('expAll').addEventListener('click',function(){document.querySelectorAll('#depth details').forEach(function(d){d.open=true;});});
+  document.getElementById('colAll').addEventListener('click',function(){document.querySelectorAll('#depth details').forEach(function(d){d.open=false;});});
+  // qa filter
+  var q=document.getElementById('qq');
+  q.addEventListener('input',function(){var s=q.value.toLowerCase().trim();document.querySelectorAll('#qalist details').forEach(function(d){var t=d.textContent.toLowerCase();var hit=!s||t.indexOf(s)>-1;d.style.display=hit?'':'none';if(s&&hit)d.open=true;});});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+1. Satellite Scheduling Problems - A comprehensive survey of satellite scheduling for Earth and space observation, covering imaging tasks, constraints, optimization methods, and scheduling approaches. [Research Paper]
+
+2. Dynamic Earth Observation Satellite Scheduling - Research on real-time scheduling of Earth observation satellites with dynamically arriving tasks, deadlines, resource utilization, and schedule stability. [Research Paper]
+
+3. Cloud-Aware Satellite Scheduling - Study of Earth observation scheduling under uncertain cloud conditions, where optical observations can become unavailable due to cloud coverage. [Research Paper]
+
+4. NASA JPL CASPER - Continuous Activity Scheduling, Planning, Execution and Replanning; a NASA/JPL system for continuously updating spacecraft plans when mission state or operating conditions change. [NASA JPL Research]
+
+5. NASA Autonomous Sciencecraft Experiment (EO-1) - Demonstrated autonomous onboard science analysis, planning, scheduling, and replanning on the Earth Observing-1 spacecraft using CASPER. [NASA Research Project]
+
+6. Dynamic Mission Scheduling with Perturbations - Research on adapting Earth observation mission plans while balancing mission benefit with minimum disruption to the original plan. [Research Paper]
+
+7. Autonomous Mission Planning for Earth Observation Satellites - Research covering long-term planning, rolling replanning, and dynamic emergency mission planning when mission conditions change. [IEEE Research Paper]
