@@ -61,9 +61,13 @@ class WindowPolicySchema(ApiModel):
     culmination_placement: bool = False
     ground_station_ids: list[str] = Field(default_factory=list)
     downlink_rate_mb_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    slew_rate_deg_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    recharge_rate_w: float = Field(default=0, ge=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def validate_ground_stations(self) -> Self:
+        if (self.slew_rate_deg_s or self.recharge_rate_w) and self.provider != "orbital":
+            raise ValueError("slew and recharge require the orbital window provider")
         if self.ground_station_ids:
             from amis.orbital.stations import stations_by_ids
 

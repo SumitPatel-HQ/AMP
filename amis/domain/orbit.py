@@ -56,6 +56,10 @@ class WindowPolicy:
     # rate in megabytes per second. No stations means no contacts or downlink.
     ground_station_ids: tuple[str, ...] = ()
     downlink_rate_mb_s: float = 0.0
+    # Wave 6 (ADR-0013): attitude slew rate in degrees per second, and the
+    # battery recharge rate in watts while sunlit. Zero disables each.
+    slew_rate_deg_s: float = 0.0
+    recharge_rate_w: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +70,8 @@ class WindowPolicy:
             "culmination_placement": self.culmination_placement,
             "ground_station_ids": list(self.ground_station_ids),
             "downlink_rate_mb_s": self.downlink_rate_mb_s,
+            "slew_rate_deg_s": self.slew_rate_deg_s,
+            "recharge_rate_w": self.recharge_rate_w,
         }
 
     @staticmethod
@@ -78,4 +84,6 @@ class WindowPolicy:
             culmination_placement=data.get("culmination_placement", False),
             ground_station_ids=tuple(data.get("ground_station_ids") or ()),
             downlink_rate_mb_s=data.get("downlink_rate_mb_s", 0.0),
+            slew_rate_deg_s=data.get("slew_rate_deg_s", 0.0),
+            recharge_rate_w=data.get("recharge_rate_w", 0.0),
         )

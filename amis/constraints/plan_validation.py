@@ -11,6 +11,9 @@ Downlink actions (ADR-0011) are judged only against their contact: it
 must still exist, be valid, and contain the action. Their violations use
 the action id as the subject key. Every planned downlink is committed to
 the projection before imaging is walked, so releases land at contact end.
+
+Wave 6 (ADR-0013): overlap uses the pairwise slew gap and the battery walk
+includes sunlight recharge, exactly as the planners do.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from amis.constraints.availability import check_satellite_availability
 from amis.constraints.containment import check_window_containment
 from amis.constraints.deadline import check_deadline
 from amis.constraints.overlap import check_overlap
+from amis.dynamics.slew import SlewModel
 from amis.constraints.resources import (
     ResourceProjection,
     check_projected_battery,
@@ -53,11 +57,11 @@ def validate_plan(
     windows_by_id = {window.id: window for window in windows}
     ordered_actions = sorted(plan.actions, key=lambda action: (action.start, action.id))
     outages = tuple(outage_intervals)
-    min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
+    slew = SlewModel.from_scenario(scenario, requests_by_id.values())
 
     contacts_by_id = {contact.id: contact for contact in contacts}
 
-    projection = ResourceProjection(mission_state.battery_wh, mission_state.storage_usage_mb)
+    projection = ResourceProjection.for_mission(scenario, mission_state)
     violations: list[Violation] = []
 
     for action in ordered_actions:
@@ -98,7 +102,7 @@ def validate_plan(
                 storage_used_mb,
                 scenario.satellite.storage_capacity_mb,
             ),
-            check_overlap(action.request_id, action.start, action.end, other_actions, min_gap_s),
+            check_overlap(action.request_id, action.start, action.end, other_actions, slew=slew),
         )
         violations.extend(violation for violation in checks if violation is not None)
         projection.commit(action)

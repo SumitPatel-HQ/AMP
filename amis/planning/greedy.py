@@ -57,6 +57,7 @@ from amis.domain import (
     UnscheduledEntry,
     Violation,
 )
+from amis.dynamics.slew import SlewModel
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
 from amis.planning.downlink import finalize_downlinks, reserve_downlinks
 
@@ -95,7 +96,7 @@ class GreedyPlanner:
         contacts = tuple(contacts)
         all_requests = tuple(requests)
         outages = tuple(outage_intervals)
-        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
+        slew = SlewModel.from_scenario(scenario, all_requests)
         culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
 
         windows_by_request: dict[str, list[ObservationWindow]] = {}
@@ -125,7 +126,7 @@ class GreedyPlanner:
             ),
         )
 
-        projection = ResourceProjection(mission_state.battery_wh, mission_state.storage_usage_mb)
+        projection = ResourceProjection.for_mission(scenario, mission_state)
         for action in frozen_actions:
             # A frozen action that has started is already charged to mission
             # state. One frozen only because the clock reached its start time
@@ -156,7 +157,7 @@ class GreedyPlanner:
                 peak_start = _culmination_start(window, request.duration_s) if culmination else None
                 for candidate_start in _candidate_starts_in_window(
                     window_start, window.end, request.duration_s, placed_actions,
-                    min_gap_s=min_gap_s, culmination_start=peak_start,
+                    culmination_start=peak_start, slew=slew, request_id=request.id,
                 ):
                     candidate_end = candidate_start + timedelta(seconds=request.duration_s)
 
@@ -173,7 +174,7 @@ class GreedyPlanner:
                             request.storage_cost_mb,
                             scenario.satellite.storage_capacity_mb,
                         )
-                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions, min_gap_s)
+                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions, slew=slew)
                     )
 
                     if violation is None:
@@ -288,6 +289,8 @@ def _candidate_starts_in_window(
     placed_actions: Iterable[ScheduledAction],
     min_gap_s: float = 0.0,
     culmination_start: datetime | None = None,
+    slew: SlewModel | None = None,
+    request_id: str | None = None,
 ) -> list[datetime]:
     """Every start instant worth trying inside one window.
 
@@ -297,17 +300,18 @@ def _candidate_starts_in_window(
     it is the best-geometry slot. Then the instant right after every
     already-placed action (plus the settling gap) that ends inside the
     window is tried too, so a request is not dropped just because one
-    busy instant conflicts while most of the window is free. Candidates
-    that would run past the window are excluded.
+    busy instant conflicts while most of the window is free. With a slew
+    model the gap after each action is its pairwise slew gap (ADR-0013).
+    Candidates that would run past the window are excluded.
     """
 
     duration = timedelta(seconds=duration_s)
-    gap = timedelta(seconds=min_gap_s)
     starts = {window_start}
     if culmination_start is not None and culmination_start >= window_start:
         starts.add(culmination_start)
     for action in placed_actions:
-        after = action.end + gap
+        gap_s = slew.gap_s(request_id, action.request_id) if slew else min_gap_s
+        after = action.end + timedelta(seconds=gap_s)
         if window_start <= after <= window_end:
             starts.add(after)
 

@@ -44,7 +44,7 @@ def preview(scenario: Scenario, provider: ScenarioWindowProvider | None = None, 
                 errors.append(f"Orbital elements cannot be propagated: {error}")
         if scenario.end_time - scenario.start_time > timedelta(days=7):
             errors.append("Orbital mission horizon cannot exceed 7 days.")
-        if policy.min_sun_elevation_deg is not None and not (
+        if (policy.min_sun_elevation_deg is not None or policy.recharge_rate_w > 0) and not (
             scenario.start_time.astimezone(timezone.utc).date().isoformat() >= "2026-09-20"
             and scenario.end_time.astimezone(timezone.utc).date().isoformat() <= "2026-10-14"
         ):

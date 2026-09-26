@@ -1,7 +1,9 @@
 """Projected battery and projected storage: two of the constraint engine's checks.
 
 The planner projects resources forward along the plan in time order.
-Battery never recharges and idle drain is zero. Storage rises when an
+Idle drain is zero. With sunlight recharge (ADR-0013) the battery gains
+energy between walk steps, capped at capacity; without it battery never
+recharges. Storage rises when an
 imaging action starts and falls when a downlink action ends (ADR-0011);
 accounting floors at zero at every step, so the projection is a timeline
 walk in event-time order, not a sum. `ResourceProjection.check_commit` re-derives
@@ -17,7 +19,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from amis.domain import ReasonCode, ScheduledAction, Violation
+from amis.domain import MissionState, ReasonCode, Scenario, ScheduledAction, Violation
+from amis.dynamics.recharge import NO_RECHARGE, RechargeModel, recharge_model
 
 
 def check_projected_battery(
@@ -66,10 +69,37 @@ def _walk_key(at: datetime, is_downlink: bool, action_id: str) -> tuple[datetime
 
 
 class ResourceProjection:
-    def __init__(self, initial_battery_wh: float, initial_storage_used_mb: float) -> None:
+    def __init__(
+        self,
+        initial_battery_wh: float,
+        initial_storage_used_mb: float,
+        recharge: RechargeModel = NO_RECHARGE,
+        origin: Optional[datetime] = None,
+        battery_capacity_wh: float = float("inf"),
+    ) -> None:
         self._initial_battery_wh = initial_battery_wh
         self._initial_storage_used_mb = initial_storage_used_mb
+        self._recharge = recharge
+        self._origin = origin
+        self._capacity_wh = battery_capacity_wh
         self._committed: list[ScheduledAction] = []
+
+    @staticmethod
+    def for_mission(scenario: Scenario, mission_state: MissionState) -> "ResourceProjection":
+        """Projection from the current state, with the mission's sunlight recharge."""
+        return ResourceProjection(
+            mission_state.battery_wh,
+            mission_state.storage_usage_mb,
+            recharge_model(scenario),
+            mission_state.simulated_time,
+            scenario.satellite.battery_capacity_wh,
+        )
+
+    def _charged(self, battery_wh: float, since: Optional[datetime], at: datetime) -> float:
+        """Battery after sunlight recharge over ``[since, at]``, capped at capacity."""
+        if since is None or at <= since:
+            return battery_wh
+        return min(self._capacity_wh, battery_wh + self._recharge.gain_wh(since, at))
 
     def _ordered(self) -> list[ScheduledAction]:
         return sorted(
@@ -81,12 +111,16 @@ class ResourceProjection:
         """Battery and storage after every delta landing at or before ``at``."""
         battery_wh = self._initial_battery_wh
         storage_used_mb = self._initial_storage_used_mb
+        clock = self._origin
         for action in self._ordered():
-            if event_time(action) > at:
+            when = event_time(action)
+            if when > at:
                 break
+            battery_wh = self._charged(battery_wh, clock, when)
+            clock = max(clock, when) if clock else clock
             battery_wh = max(0.0, battery_wh - action.energy_cost_wh)
             storage_used_mb = max(0.0, storage_used_mb + action.storage_cost_mb)
-        return battery_wh, storage_used_mb
+        return self._charged(battery_wh, clock, at), storage_used_mb
 
     def freed_by_downlinks(self) -> dict[str, float]:
         """Storage each committed downlink actually frees under the walk."""
@@ -132,7 +166,10 @@ class ResourceProjection:
 
         battery_wh = self._initial_battery_wh
         storage_used_mb = self._initial_storage_used_mb
-        for _, item_energy_wh, item_storage_mb in ordered:
+        clock = self._origin
+        for (when, _, _), item_energy_wh, item_storage_mb in ordered:
+            battery_wh = self._charged(battery_wh, clock, when)
+            clock = max(clock, when) if clock else clock
             if item_energy_wh > battery_wh:
                 return Violation(
                     reason_code=ReasonCode.INSUFFICIENT_BATTERY,

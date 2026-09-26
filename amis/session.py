@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Union
 
 from amis.diff import compare_plans
+from amis.dynamics.recharge import recharge_model
 from amis.domain import (
     ActionStatus,
     BatteryDropPayload,
@@ -611,11 +612,23 @@ class MissionSession:
         completed_request_id_set = set(completed_request_ids)
         battery_wh = state.battery_wh
         storage_usage_mb = state.storage_usage_mb
+        # Sunlight recharge accrues between action starts, capped at
+        # capacity, matching the planners' resource walk (ADR-0013).
+        recharge = recharge_model(scenario)
+        capacity_wh = scenario.satellite.battery_capacity_wh
+        clock = state.simulated_time
+
+        def charge_until(at: datetime) -> None:
+            nonlocal battery_wh, clock
+            if at > clock:
+                battery_wh = min(capacity_wh, battery_wh + recharge.gain_wh(clock, at))
+                clock = at
 
         for action in sorted(plan.actions, key=lambda item: (item.start, item.id)):
             status = action.status
             if status is ActionStatus.PLANNED and action.start <= target_time:
                 status = ActionStatus.STARTED
+                charge_until(action.start)
                 battery_wh = max(0.0, battery_wh - action.energy_cost_wh)
                 if not action.is_downlink:
                     storage_usage_mb = max(0.0, storage_usage_mb + action.storage_cost_mb)
@@ -631,6 +644,7 @@ class MissionSession:
 
             action_statuses[action.id] = status
 
+        charge_until(target_time)
         self._plans[-1] = replace(
             plan,
             actions=tuple(

@@ -1,4 +1,11 @@
-"""Deterministic optional-interval planner under the one-way resource model."""
+"""Deterministic optional-interval planner under the one-way resource model.
+
+Wave 6 (ADR-0013): slew is sequence-dependent, which the no-overlap
+interval model cannot express, so every interval carries the largest
+pairwise slew gap as a conservative fixed gap. Sunlight recharge is left
+out of the linear battery sum, which is also conservative. The greedy
+baseline fallback keeps both gains whenever CP-SAT would do worse.
+"""
 from __future__ import annotations
 
 import math
@@ -15,6 +22,7 @@ from amis.constraints import (ResourceProjection, check_deadline, check_overlap,
     check_satellite_availability, check_window_containment, validate_plan)
 from amis.domain import (ActionStatus, ContactWindow, imaging_actions, MissionPlan, MissionState, ObservationRequest,
     ObservationWindow, ReasonCode, RequestStatus, Scenario, ScheduledAction, UnscheduledEntry)
+from amis.dynamics.slew import SlewModel
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
 from amis.planning.downlink import finalize_downlinks, reserve_downlinks
 from amis.planning.greedy import (GreedyPlanner, _frozen_actions, _ordered_candidates,
@@ -38,8 +46,7 @@ class CpSatPlanner:
         windows = tuple(sorted(windows, key=lambda w: (w.request_id, w.start, w.id)))
         outages = tuple(outage_intervals)
         contacts = tuple(contacts)
-        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
-        gap_s = math.ceil(min_gap_s)
+        slew = SlewModel.from_scenario(scenario, requests)
         culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
         baseline = GreedyPlanner().plan(scenario, mission_state, requests, windows,
                                        previous_plan, plan_id, first_action_number, outages, contacts)
@@ -48,6 +55,7 @@ class CpSatPlanner:
         eligible = [r for r in requests if r.id not in frozen_ids
                     and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)]
         previous = {a.request_id: a for a in imaging_actions(previous_plan.actions)} if previous_plan else {}
+        gap_s = math.ceil(slew.max_gap_s([*(i for i in frozen_ids if i), *(r.id for r in eligible)]))
         model = cp_model.CpModel()
         origin = scenario.start_time
         seconds = lambda instant: (instant - origin).total_seconds()
@@ -150,7 +158,7 @@ class CpSatPlanner:
         else:
             actions = list(frozen) + self._with_downlinks(scenario, mission_state, contacts, frozen,
                                                           actions[len(frozen):], first_action_number)
-        unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages)
+        unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages, slew)
         result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
             mission_utility=utility, planner_name="cp_sat", solver_details={
                 "status": solver.status_name(status), "objective": solver.objective_value if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
@@ -166,7 +174,7 @@ class CpSatPlanner:
     def _with_downlinks(scenario, state, contacts, frozen, imaging, first_action_number):
         """Imaging selection plus the downlink reservations that free storage."""
         reservations = reserve_downlinks(scenario, state, contacts, frozen)
-        projection = ResourceProjection(state.battery_wh, state.storage_usage_mb)
+        projection = ResourceProjection.for_mission(scenario, state)
         for action in [*frozen, *imaging]:
             if action.status is ActionStatus.PLANNED:
                 projection.commit(action)
@@ -175,10 +183,10 @@ class CpSatPlanner:
         return list(imaging) + finalize_downlinks(reservations, projection, first_action_number + len(imaging))
 
     @staticmethod
-    def _explain(requests, windows, actions, state, scenario, previous, outages=()):
+    def _explain(requests, windows, actions, state, scenario, previous, outages=(), slew=None):
         outages = tuple(outages)
-        min_gap_s = scenario.window_policy.settling_time_s if scenario.window_policy else 0.0
-        projection = ResourceProjection(state.battery_wh, state.storage_usage_mb)
+        slew = slew or SlewModel.from_scenario(scenario, requests)
+        projection = ResourceProjection.for_mission(scenario, state)
         for action in actions:
             if action.status is ActionStatus.PLANNED:
                 projection.commit(action)
@@ -192,14 +200,14 @@ class CpSatPlanner:
             violation = None
             for window in candidates:
                 start = max(window.start, state.simulated_time)
-                starts = _candidate_starts_in_window(start, window.end, request.duration_s, actions, min_gap_s) or [start]
+                starts = _candidate_starts_in_window(start, window.end, request.duration_s, actions, slew=slew, request_id=request.id) or [start]
                 for instant in starts:
                     end = instant + timedelta(seconds=request.duration_s)
                     violation = (check_window_containment(request.id, window, instant, end)
                         or check_deadline(request.id, request.deadline, end)
                         or check_satellite_availability(request.id, state.available, instant, end, outages)
                         or projection.check_commit(request.id, instant, request.energy_cost_wh, request.storage_cost_mb, scenario.satellite.storage_capacity_mb)
-                        or check_overlap(request.id, instant, end, actions, min_gap_s))
+                        or check_overlap(request.id, instant, end, actions, slew=slew))
             reason = (_unscheduled_reason(violation, old_window) if candidates else
                       ReasonCode.NO_ALTERNATIVE_WINDOW if old_window else ReasonCode.NO_OBSERVATION_WINDOW)
             # A bounded optimizer can omit a feasible request; do not claim a broken window.

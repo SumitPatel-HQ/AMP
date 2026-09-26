@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from amis.api import create_app
 from amis.demo import CanonicalWindowProvider, build_canonical_replan_scenario
+from amis.examples import cloud_example
 from amis.domain import ObservationRequest, Satellite, Scenario
 
 
@@ -372,7 +373,7 @@ def test_demo_scenario_route_returns_the_canonical_scenario_without_persisting_i
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             demo = await client.get("/demo/scenario")
             assert demo.status_code == 200
-            assert Scenario.from_dict(demo.json()) == build_canonical_replan_scenario()
+            assert Scenario.from_dict(demo.json()) == cloud_example()
 
             missing = await client.get(f"/scenarios/{demo.json()['id']}")
             assert missing.status_code == 404

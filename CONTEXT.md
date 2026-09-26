@@ -19,7 +19,7 @@ A dated description of one satellite's orbit, including its catalogue identity, 
 _Avoid_: Live orbit, telemetry, current position
 
 **WindowPolicy**:
-The scenario's choice of window source and, for an orbital source, its pointing and daylight limits. It also carries the fixed settling time between observations and whether actions start at window culmination.
+The scenario's choice of window source and, for an orbital source, its pointing and daylight limits. It also carries the fixed settling time between observations, whether actions start at window culmination, the slew rate, and the sunlight recharge rate.
 _Avoid_: Mode, generator settings
 
 **Example**:
@@ -59,6 +59,14 @@ _Avoid_: Task, activity, booking, assignment
 **Downlink action**:
 A request-less scheduled action spanning one contact window. It frees storage by downlink rate times duration when the contact ends, floored at zero. Downlinks are reservations re-derived on every plan, so plan diff, traces, and churn ignore them (ADR-0011).
 _Avoid_: Dump, transmission task, playback
+
+**Slew gap**:
+The minimum time between two consecutive imaging actions: settling time plus the slew angle between their targets divided by the slew rate. It is pairwise, so it depends on which two targets are adjacent. The angle model is approximate (ADR-0013).
+_Avoid_: Turn time, repointing delay
+
+**Sunlight recharge**:
+Battery energy gained at the recharge rate while the satellite is outside Earth's shadow, computed offline from the stored orbit and bundled ephemeris. The resource walk and the simulation clock both add it, capped at battery capacity. Missions without an orbit gain nothing (ADR-0013).
+_Avoid_: Solar charging, power generation
 
 **MissionPlan**:
 An immutable, versioned set of scheduled actions for one scenario. Each plan after the first names its parent.
