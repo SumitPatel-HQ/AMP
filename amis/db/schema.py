@@ -54,6 +54,8 @@ scenarios = Table(
 )
 
 satellites = Table(
+    # Wave 7 (ADR-0014): a mission holds one or more satellites, keyed
+    # like observation_requests (scenario_id, id, seq for load order).
     "satellites",
     metadata,
     Column(
@@ -62,7 +64,8 @@ satellites = Table(
         ForeignKey("scenarios.id", ondelete="CASCADE"),
         primary_key=True,
     ),
-    Column("id", String, nullable=False),
+    Column("id", String, primary_key=True),
+    Column("seq", Integer, nullable=False, server_default="0"),
     Column("battery_capacity_wh", Float, nullable=False),
     Column("battery_charge_wh", Float, nullable=False),
     Column("storage_capacity_mb", Float, nullable=False),
@@ -91,6 +94,9 @@ observation_requests = Table(
     Column("energy_cost_wh", Float, nullable=False),
     Column("storage_cost_mb", Float, nullable=False),
     Column("status", String, nullable=False),
+    # Nullable since migration 0005: absent means the planner assigns the
+    # satellite (Wave 7, ADR-0014).
+    Column("satellite_id", String, nullable=True),
 )
 
 observation_windows = Table(
@@ -118,6 +124,9 @@ observation_windows = Table(
 )
 
 mission_states = Table(
+    # Wave 7 (ADR-0014): per-satellite battery, storage, availability, and
+    # completed-request set live in the ``satellites`` JSON list (one entry
+    # per scenario satellite); nothing above is mission-wide any more.
     "mission_states",
     metadata,
     Column(
@@ -127,12 +136,8 @@ mission_states = Table(
         primary_key=True,
     ),
     Column("simulated_time", String, nullable=False),
-    Column("satellite_id", String, nullable=False),
-    Column("battery_wh", Float, nullable=False),
-    Column("storage_usage_mb", Float, nullable=False),
-    Column("available", Boolean, nullable=False),
+    Column("satellites", JSON, nullable=False),
     Column("active_event_ids", JSON, nullable=False),
-    Column("completed_request_ids", JSON, nullable=False),
     Column("mission_complete", Boolean, nullable=False),
 )
 

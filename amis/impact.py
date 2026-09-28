@@ -27,7 +27,7 @@ def analyze_impact(
     requests: Iterable[ObservationRequest],
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
-    outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+    outage_intervals: Iterable[tuple[str, datetime, datetime]] = (),
     contacts: Iterable[ContactWindow] = (),
 ) -> Impact:
     """Classify each action once and retain every reason for invalid actions."""

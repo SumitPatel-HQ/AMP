@@ -57,14 +57,17 @@ class OrbitalWindowProvider:
         from skyfield.api import EarthSatellite, load, load_file, wgs84
         from sgp4 import __version__ as sgp4_version
 
-        orbit = scenario.satellite.orbit
         policy = scenario.window_policy
-        if orbit is None or policy is None or policy.provider != "orbital":
+        if policy is None or policy.provider != "orbital":
             raise ValueError("orbital windows require a stored orbit and orbital policy")
+        satellites = tuple(scenario.satellites)
+        if any(satellite.orbit is None for satellite in satellites):
+            raise ValueError("orbital windows require a stored orbit and orbital policy")
+        # Wave 7 (ADR-0014): each satellite propagates against its own
+        # orbit. A single-satellite mission keeps the pre-Wave-7 window id
+        # exactly (`WIN-{request}-{n}`), so old plans stay byte identical.
+        single = len(satellites) == 1
         ts = load.timescale(builtin=True)
-        satellite = EarthSatellite.from_omm(ts, orbit.omm)
-        altitude = mean_altitude_km(float(orbit.omm["MEAN_MOTION"]))
-        threshold = target_elevation_threshold(policy.max_off_nadir_deg, altitude)
         eph_hash = "unused"
         eph = None
         if policy.min_sun_elevation_deg is not None:
@@ -74,49 +77,64 @@ class OrbitalWindowProvider:
                 raise ValueError("bundled Sun ephemeris checksum mismatch")
             eph = load_file(str(EPHEMERIS))
         min_sun = policy.min_sun_elevation_deg
-        source = (
-            f"orbital:skyfield-{skyfield_version}:sgp4-{sgp4_version}:"
-            f"elements-{orbit.sha256}:de421-{eph_hash}:"
-            f"off-nadir-{policy.max_off_nadir_deg}:sun-{policy.min_sun_elevation_deg}:"
-            f"threshold-{threshold:.6f}"
-        )
         start = scenario.start_time.astimezone(timezone.utc)
         end = scenario.end_time.astimezone(timezone.utc)
         t0, t1 = ts.from_datetime(start), ts.from_datetime(end)
+        requests = tuple(requests)
         windows: list[ObservationWindow] = []
-        for request in requests:
-            target = wgs84.latlon(request.target_lat, request.target_lon)
-            intervals = pass_intervals(satellite, target, t0, t1, threshold, start, end)
-            number = 1
-            for raw_start, raw_end, local_peaks in intervals:
-                edge_start, edge_end = _ceil_second(max(raw_start, start)), _floor_second(min(raw_end, end))
-                if (edge_end - edge_start).total_seconds() < request.duration_s:
-                    continue
-                if local_peaks:
-                    peak_time, peak_elevation = max(local_peaks, key=lambda item: item[1])
-                else:
-                    peak_time = edge_start + (edge_end - edge_start) / 2
-                    peak_elevation = float((satellite - target).at(ts.from_datetime(peak_time)).altaz()[0].degrees)
-                if not math.isfinite(peak_elevation) or peak_elevation < threshold - 1e-6:
-                    continue
-                sun_elevation = None
-                if eph is not None:
-                    # Wave 1 has no per-request sensor type, so every request
-                    # is treated as an optical daylight request while a sun
-                    # minimum is set; null min_sun_elevation_deg means a
-                    # sensor that needs no daylight and skips this filter.
-                    sun_elevation = float((eph["earth"] + target).at(ts.from_datetime(peak_time)).observe(eph["sun"]).apparent().altaz()[0].degrees)
-                    if not math.isfinite(sun_elevation) or (min_sun is not None and sun_elevation < min_sun):
+        try:
+            for orbital_satellite in satellites:
+                orbit = orbital_satellite.orbit
+                assert orbit is not None  # validated above; keeps mypy narrow
+                satellite = EarthSatellite.from_omm(ts, orbit.omm)
+                altitude = mean_altitude_km(float(orbit.omm["MEAN_MOTION"]))
+                threshold = target_elevation_threshold(policy.max_off_nadir_deg, altitude)
+                source = (
+                    f"orbital:skyfield-{skyfield_version}:sgp4-{sgp4_version}:"
+                    f"elements-{orbit.sha256}:de421-{eph_hash}:"
+                    f"off-nadir-{policy.max_off_nadir_deg}:sun-{policy.min_sun_elevation_deg}:"
+                    f"threshold-{threshold:.6f}"
+                )
+                for request in requests:
+                    if request.satellite_id not in (None, orbital_satellite.id):
                         continue
-                windows.append(ObservationWindow(
-                    id=f"WIN-{request.id}-{number}", request_id=request.id,
-                    satellite_id=scenario.satellite.id, start=edge_start, end=edge_end,
-                    peak_elevation_deg=round(peak_elevation, 6), peak_time=peak_time,
-                    min_off_nadir_deg=round(off_nadir_angle(peak_elevation, altitude), 6),
-                    sun_elevation_deg=round(sun_elevation, 6) if sun_elevation is not None else None,
-                    source=source,
-                ))
-                number += 1
-        if eph is not None:
-            eph.close()
+                    target = wgs84.latlon(request.target_lat, request.target_lon)
+                    intervals = pass_intervals(satellite, target, t0, t1, threshold, start, end)
+                    number = 1
+                    for raw_start, raw_end, local_peaks in intervals:
+                        edge_start, edge_end = _ceil_second(max(raw_start, start)), _floor_second(min(raw_end, end))
+                        if (edge_end - edge_start).total_seconds() < request.duration_s:
+                            continue
+                        if local_peaks:
+                            peak_time, peak_elevation = max(local_peaks, key=lambda item: item[1])
+                        else:
+                            peak_time = edge_start + (edge_end - edge_start) / 2
+                            peak_elevation = float((satellite - target).at(ts.from_datetime(peak_time)).altaz()[0].degrees)
+                        if not math.isfinite(peak_elevation) or peak_elevation < threshold - 1e-6:
+                            continue
+                        sun_elevation = None
+                        if eph is not None:
+                            # Wave 1 has no per-request sensor type, so every request
+                            # is treated as an optical daylight request while a sun
+                            # minimum is set; null min_sun_elevation_deg means a
+                            # sensor that needs no daylight and skips this filter.
+                            sun_elevation = float((eph["earth"] + target).at(ts.from_datetime(peak_time)).observe(eph["sun"]).apparent().altaz()[0].degrees)
+                            if not math.isfinite(sun_elevation) or (min_sun is not None and sun_elevation < min_sun):
+                                continue
+                        window_id = (
+                            f"WIN-{request.id}-{number}" if single
+                            else f"WIN-{request.id}-{orbital_satellite.id}-{number}"
+                        )
+                        windows.append(ObservationWindow(
+                            id=window_id, request_id=request.id,
+                            satellite_id=orbital_satellite.id, start=edge_start, end=edge_end,
+                            peak_elevation_deg=round(peak_elevation, 6), peak_time=peak_time,
+                            min_off_nadir_deg=round(off_nadir_angle(peak_elevation, altitude), 6),
+                            sun_elevation_deg=round(sun_elevation, 6) if sun_elevation is not None else None,
+                            source=source,
+                        ))
+                        number += 1
+        finally:
+            if eph is not None:
+                eph.close()
         return windows

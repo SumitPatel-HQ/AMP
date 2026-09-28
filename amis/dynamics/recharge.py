@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
-from amis.domain import OrbitalElements, Scenario
+from amis.domain import OrbitalElements, Satellite, Scenario
 
 _SAMPLE_S = 30
 
@@ -41,9 +41,16 @@ class RechargeModel:
 NO_RECHARGE = RechargeModel()
 
 
-def recharge_model(scenario: Scenario) -> RechargeModel:
+def recharge_model(scenario: Scenario, satellite: Satellite | None = None) -> RechargeModel:
+    """Sunlight recharge for one satellite (Wave 7, ADR-0014): each
+    satellite's own orbit decides when it is in sunlight.
+
+    ``satellite`` defaults to the first satellite so single-satellite
+    callers keep working unchanged.
+    """
+    resolved = satellite or scenario.satellite
     policy = scenario.window_policy
-    orbit = scenario.satellite.orbit
+    orbit = resolved.orbit
     rate = policy.recharge_rate_w if policy else 0.0
     if rate <= 0 or orbit is None:
         return NO_RECHARGE

@@ -8,6 +8,26 @@ from typing import Any, Optional
 
 
 @dataclass(frozen=True)
+class SatelliteMetrics:
+    """Wave 7 (ADR-0014): the per-satellite view alongside mission totals."""
+
+    satellite_id: str
+    battery_utilisation: float
+    storage_utilisation: float
+    downlink_action_count: int = 0
+    downlink_volume_mb: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "satellite_id": self.satellite_id,
+            "battery_utilisation": self.battery_utilisation,
+            "storage_utilisation": self.storage_utilisation,
+            "downlink_action_count": self.downlink_action_count,
+            "downlink_volume_mb": self.downlink_volume_mb,
+        }
+
+
+@dataclass(frozen=True)
 class MetricsResult:
     plan_id: str
     mission_utility: float
@@ -28,6 +48,9 @@ class MetricsResult:
     # capacity (rate x duration). Every kept downlink frees storage.
     downlink_action_count: int = 0
     downlink_volume_mb: float = 0.0
+    # Wave 7 (ADR-0014): mission totals above stay request-keyed and
+    # single-number; this adds the per-satellite breakdown they average.
+    per_satellite: tuple[SatelliteMetrics, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,4 +68,5 @@ class MetricsResult:
             "explanation_coverage": self.explanation_coverage,
             "downlink_action_count": self.downlink_action_count,
             "downlink_volume_mb": self.downlink_volume_mb,
+            "per_satellite": [item.to_dict() for item in self.per_satellite],
         }

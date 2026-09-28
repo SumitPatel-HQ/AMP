@@ -14,7 +14,6 @@ def preview(scenario: Scenario, provider: ScenarioWindowProvider | None = None, 
     errors: list[str] = []
     warnings: list[str] = []
     policy = scenario.window_policy
-    orbit = scenario.satellite.orbit
     if policy is not None:
         if policy.provider not in ("synthetic", "canonical_demo", "orbital"):
             errors.append(f"Unknown window provider: {policy.provider}.")
@@ -23,25 +22,28 @@ def preview(scenario: Scenario, provider: ScenarioWindowProvider | None = None, 
         if policy.min_sun_elevation_deg is not None and not -10 <= policy.min_sun_elevation_deg <= 60:
             errors.append("Minimum sun elevation must be within -10 to 60 degrees or null.")
     if policy and policy.provider == "orbital":
-        if orbit is None:
-            errors.append("Orbital missions require satellite elements.")
-        else:
+        # Wave 7 (ADR-0014): every satellite needs its own valid orbit.
+        for satellite in scenario.satellites:
+            orbit = satellite.orbit
+            if orbit is None:
+                errors.append(f"Orbital missions require satellite elements ({satellite.id}).")
+                continue
             age = max(abs((scenario.start_time - orbit.epoch).total_seconds()), abs((scenario.end_time - orbit.epoch).total_seconds()))
             if age > 14 * 86400:
-                errors.append("Mission must be within 14 days of the element epoch.")
+                errors.append(f"Mission must be within 14 days of the element epoch ({satellite.id}).")
             elif age > 7 * 86400:
-                warnings.append("Elements are more than 7 days from part of this mission.")
+                warnings.append(f"Elements are more than 7 days from part of this mission ({satellite.id}).")
             if orbit.sha256 != omm_hash(orbit.omm):
-                errors.append("Orbital element checksum does not match its OMM fields.")
+                errors.append(f"Orbital element checksum does not match its OMM fields ({satellite.id}).")
             try:
                 from skyfield.api import EarthSatellite, load
-                satellite = EarthSatellite.from_omm(load.timescale(builtin=True), orbit.omm)
+                propagated = EarthSatellite.from_omm(load.timescale(builtin=True), orbit.omm)
                 for instant in (scenario.start_time, scenario.end_time):
-                    position = satellite.at(load.timescale(builtin=True).from_datetime(instant)).position.km
+                    position = propagated.at(load.timescale(builtin=True).from_datetime(instant)).position.km
                     if not all(math.isfinite(float(value)) for value in position):
                         raise ValueError("propagation returned a nonfinite position")
             except (ValueError, KeyError, TypeError) as error:
-                errors.append(f"Orbital elements cannot be propagated: {error}")
+                errors.append(f"Orbital elements cannot be propagated: {error} ({satellite.id}).")
         if scenario.end_time - scenario.start_time > timedelta(days=7):
             errors.append("Orbital mission horizon cannot exceed 7 days.")
         if (policy.min_sun_elevation_deg is not None or policy.recharge_rate_w > 0) and not (
@@ -67,9 +69,19 @@ def preview(scenario: Scenario, provider: ScenarioWindowProvider | None = None, 
             warnings.append(f"{request.id}: deadline is before mission start.")
         elif request.deadline > scenario.end_time:
             warnings.append(f"{request.id}: deadline is after mission end.")
-        if request.energy_cost_wh > scenario.satellite.battery_charge_wh:
+        # Wave 7 (ADR-0014): a named satellite is checked against; an
+        # unassigned request only warns when no candidate can afford it.
+        candidates = (
+            [scenario.satellite_by_id(request.satellite_id)]
+            if request.satellite_id is not None
+            else list(scenario.satellites)
+        )
+        if all(request.energy_cost_wh > satellite.battery_charge_wh for satellite in candidates):
             warnings.append(f"{request.id}: energy cost exceeds available battery.")
-        if request.storage_cost_mb > scenario.satellite.storage_capacity_mb - scenario.satellite.storage_usage_mb:
+        if all(
+            request.storage_cost_mb > satellite.storage_capacity_mb - satellite.storage_usage_mb
+            for satellite in candidates
+        ):
             warnings.append(f"{request.id}: storage cost exceeds free storage.")
         if policy and policy.provider == "orbital" and counts[request.id] == 0:
             warnings.append(f"{request.id}: no observation window; check field of regard, sunlight, and duration.")

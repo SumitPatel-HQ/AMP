@@ -5,13 +5,20 @@ from datetime import datetime, timedelta, timezone
 from amis.domain import Scenario
 
 
-def ground_track(scenario: Scenario, start: datetime, end: datetime, step_s: int) -> list[dict[str, object]]:
+def ground_track(
+    scenario: Scenario, start: datetime, end: datetime, step_s: int, satellite_id: str | None = None
+) -> list[dict[str, object]]:
+    """Ground track for one satellite (Wave 7, ADR-0014): the first
+    satellite when ``satellite_id`` is omitted, for single-satellite callers."""
     from skyfield.api import EarthSatellite, load, wgs84
 
-    if scenario.satellite.orbit is None:
+    orbital_satellite = (
+        scenario.satellite_by_id(satellite_id) if satellite_id is not None else scenario.satellite
+    )
+    if orbital_satellite.orbit is None:
         raise ValueError("scenario has no orbit")
     ts = load.timescale(builtin=True)
-    satellite = EarthSatellite.from_omm(ts, scenario.satellite.orbit.omm)
+    satellite = EarthSatellite.from_omm(ts, orbital_satellite.orbit.omm)
     samples = []
     current = start.astimezone(timezone.utc)
     end = end.astimezone(timezone.utc)

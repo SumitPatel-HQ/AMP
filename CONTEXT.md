@@ -7,11 +7,11 @@ AMIS is a local simulator for Earth observation mission planning. It schedules o
 ### Mission inputs
 
 **Scenario**:
-A complete, reproducible mission definition. It holds one satellite, a simulation start and end time, initial resources, and a set of observation requests.
+A complete, reproducible mission definition. It holds one or more satellites, a simulation start and end time, initial resources, and a set of observation requests.
 _Avoid_: Mission, config, setup
 
 **Satellite**:
-The single spacecraft in a scenario. It has battery and storage resources, an availability flag, and may carry orbital elements.
+One spacecraft in a scenario. A scenario may hold several, each with its own battery and storage resources, availability flag, and orbital elements.
 _Avoid_: Spacecraft, asset, vehicle
 
 **OrbitalElements**:
@@ -27,7 +27,7 @@ A reusable scenario template that creates a new scenario when loaded.
 _Avoid_: Original mission, shared demo
 
 **ObservationRequest**:
-Something the user wants observed. It has a target coordinate, a priority from 1 to 5, a duration, a deadline, and resource costs. It never carries a start time.
+Something the user wants observed. It has a target coordinate, a priority from 1 to 5, a duration, a deadline, and resource costs. It never carries a start time. It may name a satellite, or leave assignment to the planner.
 _Avoid_: Task, job, observation, target, req
 
 **RequestPool**:
@@ -39,7 +39,7 @@ The property of an observation request whose deadline has passed in simulated ti
 _Avoid_: Missed, stale, timed out, lapsed
 
 **ObservationWindow**:
-A span in which a request's target is observable under the scenario's window policy. An orbital window is a visible time window that can hold an observation action; it may carry peak geometry and provenance.
+A span in which a request's target is observable under the scenario's window policy. It is computed per request and satellite pair and names its satellite. An orbital window is a visible time window that can hold an observation action; it may carry peak geometry and provenance.
 _Avoid_: Opportunity, slot, pass, visibility
 
 **Ground station**:
@@ -47,7 +47,7 @@ A catalogue entry with coordinates and an elevation mask (5 to 10 degrees) where
 _Avoid_: Antenna, gateway, ground site
 
 **Contact window**:
-A span in which the satellite is above a ground station's elevation mask, computed from the stored orbit with the same pass search as observation windows. Contacts are derived, never persisted; a communication outage marks overlapping contacts invalid.
+A span in which one satellite is above a ground station's elevation mask, computed per satellite from its stored orbit with the same pass search as observation windows. Contacts are derived, never persisted; a communication outage marks overlapping contacts invalid.
 _Avoid_: Pass, downlink window, visibility
 
 ### Planning
@@ -87,7 +87,7 @@ _Avoid_: Error, failure, conflict, breach
 ### Mission execution
 
 **MissionState**:
-A snapshot of the mission at one simulated instant. It holds the clock, battery, storage, satellite availability, active event ids, and completed request ids.
+A snapshot of the mission at one simulated instant. It holds the clock, per-satellite battery, storage, availability, and completed sets with mission totals alongside, plus active event ids.
 _Avoid_: Status, world state, context, snapshot
 
 **MissionEvent**:

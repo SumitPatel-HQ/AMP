@@ -50,61 +50,83 @@ def validate_plan(
     requests: Iterable[ObservationRequest],
     windows: Iterable[ObservationWindow],
     plan: MissionPlan,
-    outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+    outage_intervals: Iterable[tuple[str, datetime, datetime]] = (),
     contacts: Iterable[ContactWindow] = (),
 ) -> list[Violation]:
+    """Every check, run independently per satellite (Wave 7, ADR-0014).
+
+    Overlap and resources have always been evaluated against one
+    satellite's own timeline; with more than one satellite that timeline
+    is now scoped by ``action.satellite_id`` rather than being the whole
+    plan, so one satellite's contention or budget can never bleed into
+    another's.
+    """
     requests_by_id = {request.id: request for request in requests}
     windows_by_id = {window.id: window for window in windows}
-    ordered_actions = sorted(plan.actions, key=lambda action: (action.start, action.id))
     outages = tuple(outage_intervals)
-    slew = SlewModel.from_scenario(scenario, requests_by_id.values())
-
     contacts_by_id = {contact.id: contact for contact in contacts}
 
-    projection = ResourceProjection.for_mission(scenario, mission_state)
     violations: list[Violation] = []
 
-    for action in ordered_actions:
-        if action.is_downlink and action.status is ActionStatus.PLANNED:
-            projection.commit(action)
-            contact = contacts_by_id.get(action.window_id)
-            if (
-                contact is None
-                or not contact.valid
-                or action.start < contact.start
-                or action.end > contact.end
-            ):
-                violations.append(Violation(
-                    reason_code=ReasonCode.WINDOW_INVALIDATED,
-                    subject_key=action.subject_key,
-                    details={"contact_id": action.window_id, "station_id": action.station_id},
-                ))
-
-    for index, action in enumerate(ordered_actions):
-        if action.status is not ActionStatus.PLANNED or action.is_downlink:
-            continue
-
-        request = requests_by_id[action.request_id]
-        window = windows_by_id[action.window_id]
-        other_actions = ordered_actions[:index] + ordered_actions[index + 1 :]
-        battery_wh, storage_used_mb = projection.available_at(action.start)
-
-        checks = (
-            check_window_containment(action.request_id, window, action.start, action.end),
-            check_deadline(action.request_id, request.deadline, action.end),
-            check_satellite_availability(
-                action.request_id, mission_state.available, action.start, action.end, outages
-            ),
-            check_projected_battery(action.request_id, action.energy_cost_wh, battery_wh),
-            check_projected_storage(
-                action.request_id,
-                action.storage_cost_mb,
-                storage_used_mb,
-                scenario.satellite.storage_capacity_mb,
-            ),
-            check_overlap(action.request_id, action.start, action.end, other_actions, slew=slew),
+    for satellite in scenario.satellites:
+        satellite_outages = tuple(
+            (start, end) for outage_satellite_id, start, end in outages
+            if outage_satellite_id == satellite.id
         )
-        violations.extend(violation for violation in checks if violation is not None)
-        projection.commit(action)
+        satellite_actions = sorted(
+            (action for action in plan.actions if action.satellite_id == satellite.id),
+            key=lambda action: (action.start, action.id),
+        )
+        satellite_state = mission_state.for_satellite(satellite.id)
+        satellite_requests = {
+            request_id: request
+            for request_id, request in requests_by_id.items()
+            if request.satellite_id in (None, satellite.id)
+        }
+        slew = SlewModel.from_scenario(scenario, satellite, satellite_requests.values())
+        projection = ResourceProjection.for_mission(scenario, mission_state, satellite)
+
+        for action in satellite_actions:
+            if action.is_downlink and action.status is ActionStatus.PLANNED:
+                projection.commit(action)
+                contact = contacts_by_id.get(action.window_id)
+                if (
+                    contact is None
+                    or not contact.valid
+                    or action.start < contact.start
+                    or action.end > contact.end
+                ):
+                    violations.append(Violation(
+                        reason_code=ReasonCode.WINDOW_INVALIDATED,
+                        subject_key=action.subject_key,
+                        details={"contact_id": action.window_id, "station_id": action.station_id},
+                    ))
+
+        for index, action in enumerate(satellite_actions):
+            if action.status is not ActionStatus.PLANNED or action.is_downlink:
+                continue
+
+            request = requests_by_id[action.request_id]
+            window = windows_by_id[action.window_id]
+            other_actions = satellite_actions[:index] + satellite_actions[index + 1 :]
+            battery_wh, storage_used_mb = projection.available_at(action.start)
+
+            checks = (
+                check_window_containment(action.request_id, window, action.start, action.end),
+                check_deadline(action.request_id, request.deadline, action.end),
+                check_satellite_availability(
+                    action.request_id, satellite_state.available, action.start, action.end, satellite_outages
+                ),
+                check_projected_battery(action.request_id, action.energy_cost_wh, battery_wh),
+                check_projected_storage(
+                    action.request_id,
+                    action.storage_cost_mb,
+                    storage_used_mb,
+                    satellite.storage_capacity_mb,
+                ),
+                check_overlap(action.request_id, action.start, action.end, other_actions, slew=slew),
+            )
+            violations.extend(violation for violation in checks if violation is not None)
+            projection.commit(action)
 
     return violations

@@ -65,7 +65,7 @@ def _scenario_and_provider(key: str):
         return build_demo_scenario(), SyntheticWindowProvider()
     if key == "synthetic_demo_unavailable":
         base = build_demo_scenario()
-        return replace(base, satellite=replace(base.satellite, available=False)), SyntheticWindowProvider()
+        return replace(base, satellites=(replace(base.satellite, available=False),)), SyntheticWindowProvider()
     catalogue = _examples()
     if key not in catalogue:
         raise ValueError(f"unknown scenario key: {key}")

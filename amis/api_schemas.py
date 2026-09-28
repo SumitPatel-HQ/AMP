@@ -130,6 +130,9 @@ class ObservationRequestSchema(ApiModel):
     storage_cost_mb: float = Field(ge=0, allow_inf_nan=False)
     status: RequestStatus = RequestStatus.PENDING
     target_name: str | None = None
+    # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
+    # means the planner assigns whichever satellite can serve it.
+    satellite_id: str | None = None
 
     @model_validator(mode="after")
     def validate_deadline_timezone(self) -> Self:
@@ -149,7 +152,10 @@ class ScenarioSchema(ApiModel):
     name: str = Field(min_length=1)
     start_time: datetime
     end_time: datetime
-    satellite: SatelliteSchema
+    # Wave 7 (ADR-0014): ``satellites`` is canonical; ``satellite`` stays as
+    # legacy single-satellite input so old clients keep working.
+    satellite: SatelliteSchema | None = None
+    satellites: list[SatelliteSchema] | None = None
     requests: list[ObservationRequestSchema]
     window_policy: WindowPolicySchema | None = None
 
@@ -159,11 +165,31 @@ class ScenarioSchema(ApiModel):
             raise ValueError("scenario times must include a timezone")
         if self.end_time <= self.start_time:
             raise ValueError("scenario end_time must be after start_time")
+        if self.satellite is not None and self.satellites is not None:
+            # Single-satellite output carries both keys for backward
+            # compat; accept when the singular matches the list's only entry.
+            if len(self.satellites) != 1 or self.satellites[0] != self.satellite:
+                raise ValueError("pass either satellite or satellites, not both")
+            resolved = self.satellites
+        elif self.satellites is not None:
+            resolved = self.satellites
+        elif self.satellite is not None:
+            resolved = [self.satellite]
+        else:
+            raise ValueError("a scenario requires at least one satellite")
+        satellite_ids = [satellite.id for satellite in resolved]
+        if len(satellite_ids) != len(set(satellite_ids)):
+            raise ValueError("satellite ids must be unique")
         request_ids = [request.id for request in self.requests]
         if len(request_ids) != len(set(request_ids)):
             raise ValueError("observation request ids must be unique")
-        if self.window_policy is not None and self.window_policy.provider == "orbital" and self.satellite.orbit is None:
-            raise ValueError("orbital missions require satellite.orbit")
+        for request in self.requests:
+            if request.satellite_id is not None and request.satellite_id not in satellite_ids:
+                raise ValueError(f"request {request.id} names an unknown satellite")
+        if self.window_policy is not None and self.window_policy.provider == "orbital":
+            for satellite in resolved:
+                if satellite.orbit is None:
+                    raise ValueError("orbital missions require satellite.orbit")
         # Each request already validates its own deadline's timezone
         # (ObservationRequestSchema.validate_deadline_timezone).
         return self
@@ -230,16 +256,33 @@ class MissionPlanSchema(ApiModel):
     planning_time_ms: float
 
 
-class MissionStateSchema(ApiModel):
-    scenario_id: str
-    simulated_time: datetime
+class SatelliteStateSchema(ApiModel):
     satellite_id: str
     battery_wh: float
     storage_usage_mb: float
     available: bool
+    completed_request_ids: list[str] = Field(default_factory=list)
+
+
+class MissionStateSchema(ApiModel):
+    scenario_id: str
+    simulated_time: datetime
+    # Wave 7 (ADR-0014): ``satellites`` is canonical; the singular fields
+    # stay as legacy single-satellite output so old readers keep working.
+    satellites: list[SatelliteStateSchema] | None = None
+    satellite_id: str | None = None
+    battery_wh: float | None = None
+    storage_usage_mb: float | None = None
+    available: bool | None = None
     active_event_ids: list[str]
-    completed_request_ids: list[str]
+    completed_request_ids: list[str] | None = None
     mission_complete: bool
+
+    @model_validator(mode="after")
+    def validate_state(self) -> Self:
+        if self.satellites is None and self.satellite_id is None:
+            raise ValueError("mission state requires satellites or legacy satellite fields")
+        return self
 
 
 class CloudBlockPayloadSchema(ApiModel):
@@ -401,6 +444,14 @@ class ImpactSchema(ApiModel):
     reason_codes: dict[str, list[ReasonCode]]
 
 
+class SatelliteMetricsSchema(ApiModel):
+    satellite_id: str
+    battery_utilisation: float
+    storage_utilisation: float
+    downlink_action_count: int = 0
+    downlink_volume_mb: float = 0.0
+
+
 class MetricsSchema(ApiModel):
     plan_id: str
     mission_utility: float
@@ -416,6 +467,8 @@ class MetricsSchema(ApiModel):
     explanation_coverage: float | None
     downlink_action_count: int = 0
     downlink_volume_mb: float = 0
+    # Wave 7 (ADR-0014): per-satellite breakdown alongside mission totals.
+    per_satellite: list[SatelliteMetricsSchema] = Field(default_factory=list)
 
 
 class PlanDiffEntrySchema(ApiModel):

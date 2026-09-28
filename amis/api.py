@@ -259,9 +259,16 @@ def create_app(
         start: datetime | None = None,
         end: datetime | None = None,
         step_s: Annotated[int, Query(ge=1, le=3600)] = 30,
+        satellite_id: str | None = None,
     ) -> list[dict[str, object]]:
         scenario = store.load(scenario_id).get_scenario()
-        if scenario.satellite.orbit is None:
+        try:
+            satellite = (
+                scenario.satellite_by_id(satellite_id) if satellite_id is not None else scenario.satellite
+            )
+        except ValueError as error:
+            raise InvalidScenarioError(str(error)) from error
+        if satellite.orbit is None:
             raise InvalidScenarioError("scenario has no stored orbit")
         start = start or scenario.start_time
         end = end or scenario.end_time
@@ -269,7 +276,7 @@ def create_app(
             raise InvalidScenarioError("ground-track range must lie inside the mission")
         if (end - start).total_seconds() / step_s > 10000:
             raise InvalidScenarioError("ground-track range exceeds 10000 samples")
-        return ground_track(scenario, start, end, step_s)
+        return ground_track(scenario, start, end, step_s, satellite_id=satellite.id)
 
     @app.get(
         "/scenarios/{scenario_id}/requests",

@@ -15,7 +15,7 @@ from itertools import combinations
 from math import asin, atan, cos, degrees, radians, sin, sqrt
 from typing import Iterable
 
-from amis.domain import ObservationRequest, Scenario
+from amis.domain import ObservationRequest, Satellite, Scenario
 from amis.orbital.geometry import EARTH_RADIUS_KM, mean_altitude_km
 
 
@@ -41,9 +41,28 @@ class SlewModel:
     targets: dict[str, tuple[float, float]] = field(default_factory=dict)
 
     @staticmethod
-    def from_scenario(scenario: Scenario, requests: Iterable[ObservationRequest]) -> "SlewModel":
+    def from_scenario(
+        scenario: Scenario,
+        satellite_or_requests: Satellite | Iterable[ObservationRequest],
+        requests: Iterable[ObservationRequest] | None = None,
+    ) -> "SlewModel":
+        """The pairwise slew gap for one satellite (Wave 7, ADR-0014): each
+        satellite slews at its own orbit's altitude.
+
+        ``from_scenario(scenario, requests)`` stays as the single-satellite
+        shorthand (the first satellite); ``from_scenario(scenario,
+        satellite, requests)`` scopes to the named satellite.
+        """
+        if requests is None:
+            # Legacy two-argument form: the second argument is the requests.
+            satellite: Satellite = scenario.satellite
+            reqs = satellite_or_requests
+        else:
+            assert isinstance(satellite_or_requests, Satellite)
+            satellite = satellite_or_requests
+            reqs = requests
         policy = scenario.window_policy
-        orbit = scenario.satellite.orbit
+        orbit = satellite.orbit
         if policy is None:
             return SlewModel()
         # No orbit means no altitude to slew at: slew is zero, settling stays.
@@ -52,7 +71,7 @@ class SlewModel:
             settling_time_s=policy.settling_time_s,
             slew_rate_deg_s=policy.slew_rate_deg_s if orbit else 0.0,
             altitude_km=altitude_km,
-            targets={request.id: (request.target_lat, request.target_lon) for request in requests},
+            targets={request.id: (request.target_lat, request.target_lon) for request in reqs},  # type: ignore[union-attr]
         )
 
     def slew_time_s(self, request_a: str | None, request_b: str | None) -> float:

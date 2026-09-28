@@ -41,6 +41,23 @@ def _without(mapping: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {key: value for key, value in mapping.items() if key not in keys}
 
 
+def _state_row(state: MissionState) -> dict[str, Any]:
+    """The ``mission_states`` row: the canonical ``satellites`` JSON only.
+
+    ``MissionState.to_dict`` also carries legacy single-satellite top-level
+    fields for pre-Wave-7 readers; those have no columns and must never
+    reach the INSERT/UPDATE.
+    """
+    return _without(
+        state.to_dict(),
+        "satellite_id",
+        "battery_wh",
+        "storage_usage_mb",
+        "available",
+        "completed_request_ids",
+    )
+
+
 class SqlScenarioRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -54,14 +71,16 @@ class SqlScenarioRepository:
             with self._engine.begin() as conn:
                 conn.execute(
                     insert(schema.scenarios).values(
-                        **_without(scenario.to_dict(), "satellite", "requests"),
+                        **_without(scenario.to_dict(), "satellites", "satellite", "requests"),
                         created_at=datetime.now(timezone.utc).isoformat(),
                     )
                 )
                 conn.execute(
-                    insert(schema.satellites).values(
-                        scenario_id=scenario.id, **scenario.satellite.to_dict()
-                    )
+                    insert(schema.satellites),
+                    [
+                        {"scenario_id": scenario.id, "seq": seq, **satellite.to_dict()}
+                        for seq, satellite in enumerate(scenario.satellites)
+                    ],
                 )
                 if scenario.requests:
                     conn.execute(
@@ -96,14 +115,14 @@ class SqlScenarioRepository:
                 raise ResourceNotFoundError(
                     "scenario does not exist", details={"scenario_id": scenario_id}
                 )
-            satellite_row = (
+            satellite_rows = (
                 conn.execute(
-                    select(schema.satellites).where(
-                        schema.satellites.c.scenario_id == scenario_id
-                    )
+                    select(schema.satellites)
+                    .where(schema.satellites.c.scenario_id == scenario_id)
+                    .order_by(schema.satellites.c.seq)
                 )
                 .mappings()
-                .one()
+                .all()
             )
             request_rows = (
                 conn.execute(
@@ -114,8 +133,13 @@ class SqlScenarioRepository:
                 .mappings()
                 .all()
             )
-        satellite = Satellite.from_dict(
-            _without(dict(satellite_row), "scenario_id")
+        if not satellite_rows:
+            raise ResourceNotFoundError(
+                "scenario does not exist", details={"scenario_id": scenario_id}
+            )
+        satellites = tuple(
+            Satellite.from_dict(_without(dict(row), "scenario_id", "seq"))
+            for row in satellite_rows
         )
         requests = tuple(
             ObservationRequest.from_dict(_without(dict(row), "scenario_id", "seq"))
@@ -126,7 +150,7 @@ class SqlScenarioRepository:
             name=scenario_row["name"],
             start_time=datetime.fromisoformat(scenario_row["start_time"]),
             end_time=datetime.fromisoformat(scenario_row["end_time"]),
-            satellite=satellite,
+            satellites=satellites,
             requests=requests,
             window_policy=WindowPolicy.from_dict(scenario_row["window_policy"]) if scenario_row["window_policy"] else None,
         )
@@ -518,13 +542,13 @@ class SqlMissionStateRepository:
         # see "no row yet" and both attempt to insert.
         try:
             with self._engine.begin() as conn:
-                conn.execute(insert(schema.mission_states).values(**state.to_dict()))
+                conn.execute(insert(schema.mission_states).values(**_state_row(state)))
         except IntegrityError:
             with self._engine.begin() as conn:
                 conn.execute(
                     update(schema.mission_states)
                     .where(schema.mission_states.c.scenario_id == state.scenario_id)
-                    .values(**_without(state.to_dict(), "scenario_id"))
+                    .values(**_without(_state_row(state), "scenario_id"))
                 )
 
     def _do_put(self, conn: Connection, state: MissionState) -> None:
@@ -535,12 +559,12 @@ class SqlMissionStateRepository:
         # already made to the other tables in this same save.
         try:
             with conn.begin_nested():
-                conn.execute(insert(schema.mission_states).values(**state.to_dict()))
+                conn.execute(insert(schema.mission_states).values(**_state_row(state)))
         except IntegrityError:
             conn.execute(
                 update(schema.mission_states)
                 .where(schema.mission_states.c.scenario_id == state.scenario_id)
-                .values(**_without(state.to_dict(), "scenario_id"))
+                .values(**_without(_state_row(state), "scenario_id"))
             )
 
     def get(self, scenario_id: str) -> MissionState:

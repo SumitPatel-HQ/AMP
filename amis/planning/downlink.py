@@ -46,7 +46,7 @@ def reserve_downlinks(
         reservations.append(ScheduledAction(
             id=f"{_PENDING_PREFIX}{len(reservations) + 1:04d}",
             request_id=None,
-            satellite_id=scenario.satellite.id,
+            satellite_id=contact.satellite_id,
             window_id=contact.id,
             start=start,
             end=contact.end,

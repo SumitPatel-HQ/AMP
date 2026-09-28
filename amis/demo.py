@@ -34,16 +34,27 @@ class DemoImpactWindowProvider:
         scenario: Scenario,
         requests: Iterable[ObservationRequest],
     ) -> list[ObservationWindow]:
-        return [
-            ObservationWindow(
-                id=f"WIN-{request.id}-1",
-                request_id=request.id,
-                satellite_id=scenario.satellite.id,
-                start=scenario.start_time + timedelta(minutes=10 * (index + 1)),
-                end=scenario.end_time,
+        # Wave 7 (ADR-0014): one window per candidate satellite; single-sat
+        # missions keep the pre-Wave-7 id exactly.
+        single = len(scenario.satellites) == 1
+        windows: list[ObservationWindow] = []
+        for index, request in enumerate(requests):
+            satellite_ids = (
+                [request.satellite_id]
+                if request.satellite_id is not None
+                else [satellite.id for satellite in scenario.satellites]
             )
-            for index, request in enumerate(requests)
-        ]
+            for satellite_id in satellite_ids:
+                windows.append(
+                    ObservationWindow(
+                        id=f"WIN-{request.id}-1" if single else f"WIN-{request.id}-{satellite_id}-1",
+                        request_id=request.id,
+                        satellite_id=satellite_id,
+                        start=scenario.start_time + timedelta(minutes=10 * (index + 1)),
+                        end=scenario.end_time,
+                    )
+                )
+        return windows
 
 
 def build_demo_scenario() -> Scenario:
@@ -148,19 +159,35 @@ class CanonicalWindowProvider:
         scenario: Scenario,
         requests: Iterable[ObservationRequest],
     ) -> list[ObservationWindow]:
-        return [
-            ObservationWindow(
-                id=f"WIN-{request.id}-{number}",
-                request_id=request.id,
-                satellite_id=scenario.satellite.id,
-                start=scenario.start_time + timedelta(minutes=start_offset),
-                end=scenario.start_time + timedelta(minutes=end_offset),
+        # Wave 7 (ADR-0014): fixed offsets per candidate satellite; a
+        # single-satellite mission keeps the pre-Wave-7 ids exactly.
+        single = len(scenario.satellites) == 1
+        windows: list[ObservationWindow] = []
+        for request in requests:
+            satellite_ids = (
+                [request.satellite_id]
+                if request.satellite_id is not None
+                else [satellite.id for satellite in scenario.satellites]
             )
-            for request in requests
-            for number, (start_offset, end_offset) in enumerate(
-                self.WINDOW_OFFSETS[request.id], start=1
-            )
-        ]
+            for satellite_id in satellite_ids:
+                for number, (start_offset, end_offset) in enumerate(
+                    self.WINDOW_OFFSETS[request.id], start=1
+                ):
+                    window_id = (
+                        f"WIN-{request.id}-{number}"
+                        if single
+                        else f"WIN-{request.id}-{satellite_id}-{number}"
+                    )
+                    windows.append(
+                        ObservationWindow(
+                            id=window_id,
+                            request_id=request.id,
+                            satellite_id=satellite_id,
+                            start=scenario.start_time + timedelta(minutes=start_offset),
+                            end=scenario.start_time + timedelta(minutes=end_offset),
+                        )
+                    )
+        return windows
 
 
 class ProductionWindowProvider:
@@ -290,10 +317,11 @@ def print_state(label: str, session: MissionSession, state: MissionState) -> Non
         f"{request.id}={request.status.value}"
         for request in session.get_request_pool()
     )
+    satellite_state = state.satellites[0]
     print(
         f"{label}: time={state.simulated_time.isoformat()} "
-        f"battery={state.battery_wh:.1f}Wh "
-        f"storage={state.storage_usage_mb:.1f}MB "
+        f"battery={satellite_state.battery_wh:.1f}Wh "
+        f"storage={satellite_state.storage_usage_mb:.1f}MB "
         f"complete={state.mission_complete}"
     )
     print(f"  Actions: {action_statuses or 'none'}")

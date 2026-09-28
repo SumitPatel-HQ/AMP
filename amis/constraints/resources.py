@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from amis.domain import MissionState, ReasonCode, Scenario, ScheduledAction, Violation
+from amis.domain import MissionState, ReasonCode, Satellite, Scenario, ScheduledAction, Violation
 from amis.dynamics.recharge import NO_RECHARGE, RechargeModel, recharge_model
 
 
@@ -85,14 +85,20 @@ class ResourceProjection:
         self._committed: list[ScheduledAction] = []
 
     @staticmethod
-    def for_mission(scenario: Scenario, mission_state: MissionState) -> "ResourceProjection":
-        """Projection from the current state, with the mission's sunlight recharge."""
+    def for_mission(
+        scenario: Scenario, mission_state: MissionState, satellite: Satellite | None = None
+    ) -> "ResourceProjection":
+        """Projection for one satellite (Wave 7, ADR-0014), from its current
+        state, with its own sunlight recharge. ``satellite`` defaults to the
+        first satellite so single-satellite callers keep working."""
+        resolved = satellite or scenario.satellite
+        satellite_state = mission_state.for_satellite(resolved.id)
         return ResourceProjection(
-            mission_state.battery_wh,
-            mission_state.storage_usage_mb,
-            recharge_model(scenario),
+            satellite_state.battery_wh,
+            satellite_state.storage_usage_mb,
+            recharge_model(scenario, resolved),
             mission_state.simulated_time,
-            scenario.satellite.battery_capacity_wh,
+            resolved.battery_capacity_wh,
         )
 
     def _charged(self, battery_wh: float, since: Optional[datetime], at: datetime) -> float:

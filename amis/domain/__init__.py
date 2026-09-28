@@ -18,11 +18,11 @@ from amis.domain.event import (
     SatelliteOutagePayload,
 )
 from amis.domain.impact import Impact
-from amis.domain.metrics import MetricsResult
+from amis.domain.metrics import MetricsResult, SatelliteMetrics
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry, imaging_actions
 from amis.domain.orbit import OrbitalElements, WindowPolicy
 from amis.domain.scenario import ObservationRequest, Satellite, Scenario
-from amis.domain.state import MissionState
+from amis.domain.state import MissionState, SatelliteState
 from amis.domain.trace import DecisionTrace
 from amis.domain.violation import Violation
 from amis.domain.window import ObservationWindow
@@ -45,6 +45,7 @@ __all__ = [
     "SatelliteOutagePayload",
     "Impact",
     "MetricsResult",
+    "SatelliteMetrics",
     "MissionPlan",
     "PlanDiff",
     "PlanDiffEntry",
@@ -56,6 +57,7 @@ __all__ = [
     "Satellite",
     "Scenario",
     "MissionState",
+    "SatelliteState",
     "Violation",
     "ObservationWindow",
     "OrbitalElements",

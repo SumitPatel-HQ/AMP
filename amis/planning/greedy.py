@@ -52,6 +52,7 @@ from amis.domain import (
     ObservationWindow,
     ReasonCode,
     RequestStatus,
+    Satellite,
     Scenario,
     ScheduledAction,
     UnscheduledEntry,
@@ -79,6 +80,46 @@ def _culmination_start(
     return None
 
 
+class _SatelliteContext:
+    """One satellite's own timeline: its placed actions, its resource
+    projection, and its own slew model (Wave 7, ADR-0014). Overlap and
+    resources are enforced independently per satellite, so each context
+    is self-contained and never reads another satellite's state."""
+
+    __slots__ = (
+        "satellite", "placed_actions", "projection", "slew", "outages", "reservations", "available",
+    )
+
+    def __init__(
+        self,
+        satellite: Satellite,
+        scenario: Scenario,
+        mission_state: MissionState,
+        all_requests: tuple[ObservationRequest, ...],
+        frozen_actions: tuple[ScheduledAction, ...],
+        outages: tuple[tuple[str, datetime, datetime], ...],
+        reservations: list[ScheduledAction],
+    ) -> None:
+        self.satellite = satellite
+        own_frozen = [action for action in frozen_actions if action.satellite_id == satellite.id]
+        self.placed_actions: list[ScheduledAction] = list(own_frozen)
+        self.slew = SlewModel.from_scenario(scenario, satellite, all_requests)
+        self.outages = tuple((start, end) for sid, start, end in outages if sid == satellite.id)
+        self.projection = ResourceProjection.for_mission(scenario, mission_state, satellite)
+        for action in own_frozen:
+            # A frozen action that has started is already charged to mission
+            # state. One frozen only because the clock reached its start time
+            # is not, so the projection still has to carry its cost.
+            if action.status is ActionStatus.PLANNED:
+                self.projection.commit(action)
+        self.reservations = [
+            reservation for reservation in reservations if reservation.satellite_id == satellite.id
+        ]
+        for reservation in self.reservations:
+            self.projection.commit(reservation)
+        self.available = mission_state.for_satellite(satellite.id).available
+
+
 class GreedyPlanner:
     def plan(
         self,
@@ -89,14 +130,13 @@ class GreedyPlanner:
         previous_plan: Optional[MissionPlan] = None,
         plan_id: str = FIRST_PLAN_ID,
         first_action_number: int = 1,
-        outage_intervals: Iterable[tuple[datetime, datetime]] = (),
+        outage_intervals: Iterable[tuple[str, datetime, datetime]] = (),
         contacts: Iterable[ContactWindow] = (),
     ) -> MissionPlan:
         start_perf = time.perf_counter()
         contacts = tuple(contacts)
         all_requests = tuple(requests)
         outages = tuple(outage_intervals)
-        slew = SlewModel.from_scenario(scenario, all_requests)
         culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
 
         windows_by_request: dict[str, list[ObservationWindow]] = {}
@@ -126,103 +166,126 @@ class GreedyPlanner:
             ),
         )
 
-        projection = ResourceProjection.for_mission(scenario, mission_state)
-        for action in frozen_actions:
-            # A frozen action that has started is already charged to mission
-            # state. One frozen only because the clock reached its start time
-            # is not, so the projection still has to carry its cost.
-            if action.status is ActionStatus.PLANNED:
-                projection.commit(action)
         # Downlink reservations free storage in the walk (ADR-0011); they
         # never take part in overlap, so they stay out of placed_actions.
+        # Each reservation already names its own satellite (its contact's),
+        # so one call covers every satellite's contacts.
         reservations = reserve_downlinks(scenario, mission_state, contacts, frozen_actions)
-        for reservation in reservations:
-            projection.commit(reservation)
-
-        placed_actions: list[ScheduledAction] = list(frozen_actions)
+        contexts: dict[str, _SatelliteContext] = {
+            satellite.id: _SatelliteContext(
+                satellite, scenario, mission_state, all_requests, frozen_actions, outages, reservations
+            )
+            for satellite in scenario.satellites
+        }
         actions: list[ScheduledAction] = list(frozen_actions)
         unscheduled: list[UnscheduledEntry] = []
         action_number = first_action_number
 
         for request in ordered_requests:
             previous_window_id = previous_window_by_request.get(request.id)
-            candidates = _ordered_candidates(
-                windows_by_request.get(request.id, []), previous_window_id
+            candidate_satellites = (
+                [scenario.satellite_by_id(request.satellite_id)]
+                if request.satellite_id is not None
+                else sorted(scenario.satellites, key=lambda item: item.id)
             )
             last_violation: Optional[Violation] = None
             placed_action: Optional[ScheduledAction] = None
 
-            for window in candidates:
-                window_start = max(window.start, mission_state.simulated_time)
-                peak_start = _culmination_start(window, request.duration_s) if culmination else None
-                for candidate_start in _candidate_starts_in_window(
-                    window_start, window.end, request.duration_s, placed_actions,
-                    culmination_start=peak_start, slew=slew, request_id=request.id,
-                ):
-                    candidate_end = candidate_start + timedelta(seconds=request.duration_s)
+            for satellite in candidate_satellites:
+                context = contexts[satellite.id]
+                candidates = _ordered_candidates(
+                    [
+                        window
+                        for window in windows_by_request.get(request.id, [])
+                        if window.satellite_id == satellite.id
+                    ],
+                    previous_window_id,
+                )
 
-                    violation = (
-                        check_window_containment(request.id, window, candidate_start, candidate_end)
-                        or check_deadline(request.id, request.deadline, candidate_end)
-                        or check_satellite_availability(
-                            request.id, mission_state.available, candidate_start, candidate_end, outages
-                        )
-                        or projection.check_commit(
-                            request.id,
-                            candidate_start,
-                            request.energy_cost_wh,
-                            request.storage_cost_mb,
-                            scenario.satellite.storage_capacity_mb,
-                        )
-                        or check_overlap(request.id, candidate_start, candidate_end, placed_actions, slew=slew)
-                    )
+                for window in candidates:
+                    window_start = max(window.start, mission_state.simulated_time)
+                    peak_start = _culmination_start(window, request.duration_s) if culmination else None
+                    for candidate_start in _candidate_starts_in_window(
+                        window_start, window.end, request.duration_s, context.placed_actions,
+                        culmination_start=peak_start, slew=context.slew, request_id=request.id,
+                    ):
+                        candidate_end = candidate_start + timedelta(seconds=request.duration_s)
 
-                    if violation is None:
-                        placed_action = ScheduledAction(
-                            id=format_id(ACTION_ID_PREFIX, action_number),
-                            request_id=request.id,
-                            satellite_id=scenario.satellite.id,
-                            window_id=window.id,
-                            start=candidate_start,
-                            end=candidate_end,
-                            energy_cost_wh=request.energy_cost_wh,
-                            storage_cost_mb=request.storage_cost_mb,
+                        violation = (
+                            check_window_containment(request.id, window, candidate_start, candidate_end)
+                            or check_deadline(request.id, request.deadline, candidate_end)
+                            or check_satellite_availability(
+                                request.id, context.available, candidate_start, candidate_end, context.outages
+                            )
+                            or context.projection.check_commit(
+                                request.id,
+                                candidate_start,
+                                request.energy_cost_wh,
+                                request.storage_cost_mb,
+                                satellite.storage_capacity_mb,
+                            )
+                            or check_overlap(
+                                request.id, candidate_start, candidate_end, context.placed_actions, slew=context.slew
+                            )
                         )
+
+                        if violation is None:
+                            placed_action = ScheduledAction(
+                                id=format_id(ACTION_ID_PREFIX, action_number),
+                                request_id=request.id,
+                                satellite_id=satellite.id,
+                                window_id=window.id,
+                                start=candidate_start,
+                                end=candidate_end,
+                                energy_cost_wh=request.energy_cost_wh,
+                                storage_cost_mb=request.storage_cost_mb,
+                            )
+                            break
+                        last_violation = violation
+
+                    if placed_action is not None:
                         break
-                    last_violation = violation
 
                 if placed_action is not None:
+                    actions.append(placed_action)
+                    context.placed_actions.append(placed_action)
+                    context.projection.commit(placed_action)
+                    action_number += 1
                     break
 
-            if placed_action is not None:
-                actions.append(placed_action)
-                placed_actions.append(placed_action)
-                projection.commit(placed_action)
-                action_number += 1
-            elif not candidates:
-                # Zero candidate windows for this target in the mission: an
-                # honest no-window reason, not a generic fallback. A request
-                # that held a placement and lost every window reports the
-                # no-alternative case instead.
-                unscheduled.append(
-                    UnscheduledEntry(
-                        request_id=request.id,
-                        reason_code=(
-                            ReasonCode.NO_ALTERNATIVE_WINDOW
-                            if previous_window_id is not None
-                            else ReasonCode.NO_OBSERVATION_WINDOW
-                        ),
-                    )
+            if placed_action is None:
+                any_candidates = any(
+                    window.satellite_id == satellite.id
+                    for satellite in candidate_satellites
+                    for window in windows_by_request.get(request.id, [])
                 )
-            else:
-                unscheduled.append(
-                    UnscheduledEntry(
-                        request_id=request.id,
-                        reason_code=_unscheduled_reason(last_violation, previous_window_id),
+                if not any_candidates:
+                    # Zero candidate windows for this target in the mission: an
+                    # honest no-window reason, not a generic fallback. A request
+                    # that held a placement and lost every window reports the
+                    # no-alternative case instead.
+                    unscheduled.append(
+                        UnscheduledEntry(
+                            request_id=request.id,
+                            reason_code=(
+                                ReasonCode.NO_ALTERNATIVE_WINDOW
+                                if previous_window_id is not None
+                                else ReasonCode.NO_OBSERVATION_WINDOW
+                            ),
+                        )
                     )
-                )
+                else:
+                    unscheduled.append(
+                        UnscheduledEntry(
+                            request_id=request.id,
+                            reason_code=_unscheduled_reason(last_violation, previous_window_id),
+                        )
+                    )
 
-        actions.extend(finalize_downlinks(reservations, projection, action_number))
+        for satellite in sorted(scenario.satellites, key=lambda item: item.id):
+            context = contexts[satellite.id]
+            actions.extend(finalize_downlinks(context.reservations, context.projection, action_number))
+            action_number += len(context.reservations)
 
         priority_by_request = {request.id: request.priority for request in all_requests}
         scheduled_request_ids = {action.request_id for action in actions}

@@ -11,45 +11,56 @@ from amis.windows.orbital import _ceil_second, _floor_second, pass_intervals
 
 
 def compute_contacts(scenario: Scenario, stations: Iterable[GroundStation]) -> list[ContactWindow]:
-    """Contacts per station, ordered by start, from the same pass search as targets."""
+    """Contacts per satellite per station, ordered by start, from the same
+    pass search as targets. Wave 7 (ADR-0014): every satellite with a
+    stored orbit gets its own contacts; a single-satellite mission keeps
+    the pre-Wave-7 contact id exactly (`CON-{station}-{n}`)."""
     stations = tuple(stations)
-    orbit = scenario.satellite.orbit
-    if not stations or orbit is None:
+    satellites = tuple(satellite for satellite in scenario.satellites if satellite.orbit is not None)
+    if not stations or not satellites:
         return []
+    single = len(scenario.satellites) == 1
     from sgp4 import __version__ as sgp4_version
     from skyfield import __version__ as skyfield_version
     from skyfield.api import EarthSatellite, load, wgs84
 
     ts = load.timescale(builtin=True)
-    satellite = EarthSatellite.from_omm(ts, orbit.omm)
     start = scenario.start_time.astimezone(timezone.utc)
     end = scenario.end_time.astimezone(timezone.utc)
     t0, t1 = ts.from_datetime(start), ts.from_datetime(end)
     contacts: list[ContactWindow] = []
-    for station in stations:
-        site = wgs84.latlon(station.lat, station.lon, elevation_m=station.altitude_m)
-        source = (
-            f"contact:skyfield-{skyfield_version}:sgp4-{sgp4_version}:"
-            f"elements-{orbit.sha256}:mask-{station.min_elevation_deg}"
-        )
-        number = 1
-        for raw_start, raw_end, peaks in pass_intervals(
-            satellite, site, t0, t1, station.min_elevation_deg, start, end
-        ):
-            edge_start, edge_end = _ceil_second(max(raw_start, start)), _floor_second(min(raw_end, end))
-            if edge_end <= edge_start:
-                continue
-            if peaks:
-                peak_time, peak_elevation = max(peaks, key=lambda item: item[1])
-            else:
-                peak_time = edge_start + (edge_end - edge_start) / 2
-                peak_elevation = float((satellite - site).at(ts.from_datetime(peak_time)).altaz()[0].degrees)
-            contacts.append(ContactWindow(
-                id=f"CON-{station.id}-{number}", station_id=station.id,
-                satellite_id=scenario.satellite.id, start=edge_start, end=edge_end,
-                peak_elevation_deg=round(peak_elevation, 6), peak_time=peak_time, source=source,
-            ))
-            number += 1
+    for orbital_satellite in satellites:
+        orbit = orbital_satellite.orbit
+        assert orbit is not None  # filtered above; keeps mypy narrow
+        satellite = EarthSatellite.from_omm(ts, orbit.omm)
+        for station in stations:
+            site = wgs84.latlon(station.lat, station.lon, elevation_m=station.altitude_m)
+            source = (
+                f"contact:skyfield-{skyfield_version}:sgp4-{sgp4_version}:"
+                f"elements-{orbit.sha256}:mask-{station.min_elevation_deg}"
+            )
+            number = 1
+            for raw_start, raw_end, peaks in pass_intervals(
+                satellite, site, t0, t1, station.min_elevation_deg, start, end
+            ):
+                edge_start, edge_end = _ceil_second(max(raw_start, start)), _floor_second(min(raw_end, end))
+                if edge_end <= edge_start:
+                    continue
+                if peaks:
+                    peak_time, peak_elevation = max(peaks, key=lambda item: item[1])
+                else:
+                    peak_time = edge_start + (edge_end - edge_start) / 2
+                    peak_elevation = float((satellite - site).at(ts.from_datetime(peak_time)).altaz()[0].degrees)
+                contact_id = (
+                    f"CON-{station.id}-{number}" if single
+                    else f"CON-{station.id}-{orbital_satellite.id}-{number}"
+                )
+                contacts.append(ContactWindow(
+                    id=contact_id, station_id=station.id,
+                    satellite_id=orbital_satellite.id, start=edge_start, end=edge_end,
+                    peak_elevation_deg=round(peak_elevation, 6), peak_time=peak_time, source=source,
+                ))
+                number += 1
     return sorted(contacts, key=lambda contact: (contact.start, contact.id))
 
 

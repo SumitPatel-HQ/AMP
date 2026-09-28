@@ -37,8 +37,11 @@ from amis.domain import (
     PlanDiff,
     ReasonCode,
     RequestStatus,
+    Satellite,
     SatelliteOutagePayload,
+    SatelliteState,
     Scenario,
+    ScheduledAction,
 )
 from amis.errors import (
     InvalidEventError,
@@ -366,10 +369,11 @@ class MissionSession:
             # No clamping: the state takes the injected value exactly, even
             # if a frozen in flight action can no longer afford itself.
             # See ADR-0003.
+            self._state = state.with_satellite(
+                event_payload.satellite_id, battery_wh=event_payload.new_battery_wh
+            )
             self._state = replace(
-                state,
-                battery_wh=event_payload.new_battery_wh,
-                active_event_ids=state.active_event_ids + (event.id,),
+                self._state, active_event_ids=state.active_event_ids + (event.id,)
             )
         elif parsed_event_type in (EventType.SATELLITE_UNAVAILABLE, EventType.COMMUNICATION_OUTAGE):
             # Both spans act through the event log: payload outages through
@@ -440,15 +444,16 @@ class MissionSession:
 
     def _outage_intervals(
         self, pending: MissionEvent | None = None
-    ) -> tuple[tuple[datetime, datetime], ...]:
-        """Payload outage spans from the event log, oldest first.
+    ) -> tuple[tuple[str, datetime, datetime], ...]:
+        """Payload outage spans from the event log, oldest first, each
+        naming its satellite (Wave 7, ADR-0014).
 
         ``pending`` is the outage event being injected right now: it is
         not in ``self._events`` yet when impact is analyzed.
         """
         events = list(self._events) + ([pending] if pending is not None else [])
         return tuple(
-            (event.payload.outage_start, event.payload.outage_end)
+            (event.payload.satellite_id, event.payload.outage_start, event.payload.outage_end)
             for event in events
             if event.event_type is EventType.SATELLITE_UNAVAILABLE
             and isinstance(event.payload, SatelliteOutagePayload)
@@ -607,16 +612,62 @@ class MissionSession:
         remaining_seconds = (scenario.end_time - state.simulated_time).total_seconds()
         elapsed_seconds = min(seconds, remaining_seconds)
         target_time = state.simulated_time + timedelta(seconds=elapsed_seconds)
+
+        # Wave 7 (ADR-0014): each satellite walks its own actions, its own
+        # sunlight recharge, and its own battery/storage independently.
         action_statuses: dict[str, ActionStatus] = {}
-        completed_request_ids = list(state.completed_request_ids)
+        satellite_states: list[SatelliteState] = []
+        for satellite in scenario.satellites:
+            satellite_actions = [
+                action for action in plan.actions if action.satellite_id == satellite.id
+            ]
+            new_satellite_state, statuses = self._advance_satellite(
+                scenario, satellite, state.for_satellite(satellite.id),
+                satellite_actions, state.simulated_time, target_time,
+            )
+            satellite_states.append(new_satellite_state)
+            action_statuses.update(statuses)
+
+        self._plans[-1] = replace(
+            plan,
+            actions=tuple(
+                replace(action, status=action_statuses[action.id])
+                for action in plan.actions
+            ),
+        )
+        self._state = MissionState(
+            scenario_id=state.scenario_id,
+            simulated_time=target_time,
+            satellites=tuple(satellite_states),
+            active_event_ids=state.active_event_ids,
+            mission_complete=target_time == scenario.end_time,
+        )
+        self._update_request_statuses_after_step()
+        return self._state
+
+    @staticmethod
+    def _advance_satellite(
+        scenario: Scenario,
+        satellite: Satellite,
+        satellite_state: SatelliteState,
+        actions: list[ScheduledAction],
+        simulated_time: datetime,
+        target_time: datetime,
+    ) -> tuple[SatelliteState, dict[str, ActionStatus]]:
+        """One satellite's own action walk over ``[simulated_time, target_time]``.
+
+        Sunlight recharge accrues between action starts, capped at
+        capacity, matching the planners' resource walk (ADR-0013), using
+        this satellite's own orbit.
+        """
+        action_statuses: dict[str, ActionStatus] = {}
+        completed_request_ids = list(satellite_state.completed_request_ids)
         completed_request_id_set = set(completed_request_ids)
-        battery_wh = state.battery_wh
-        storage_usage_mb = state.storage_usage_mb
-        # Sunlight recharge accrues between action starts, capped at
-        # capacity, matching the planners' resource walk (ADR-0013).
-        recharge = recharge_model(scenario)
-        capacity_wh = scenario.satellite.battery_capacity_wh
-        clock = state.simulated_time
+        battery_wh = satellite_state.battery_wh
+        storage_usage_mb = satellite_state.storage_usage_mb
+        recharge = recharge_model(scenario, satellite)
+        capacity_wh = satellite.battery_capacity_wh
+        clock = simulated_time
 
         def charge_until(at: datetime) -> None:
             nonlocal battery_wh, clock
@@ -624,7 +675,7 @@ class MissionSession:
                 battery_wh = min(capacity_wh, battery_wh + recharge.gain_wh(clock, at))
                 clock = at
 
-        for action in sorted(plan.actions, key=lambda item: (item.start, item.id)):
+        for action in sorted(actions, key=lambda item: (item.start, item.id)):
             status = action.status
             if status is ActionStatus.PLANNED and action.start <= target_time:
                 status = ActionStatus.STARTED
@@ -645,26 +696,14 @@ class MissionSession:
             action_statuses[action.id] = status
 
         charge_until(target_time)
-        self._plans[-1] = replace(
-            plan,
-            actions=tuple(
-                replace(action, status=action_statuses[action.id])
-                for action in plan.actions
-            ),
-        )
-        self._state = MissionState(
-            scenario_id=state.scenario_id,
-            simulated_time=target_time,
-            satellite_id=state.satellite_id,
+        new_state = SatelliteState(
+            satellite_id=satellite.id,
             battery_wh=battery_wh,
             storage_usage_mb=storage_usage_mb,
-            available=state.available,
-            active_event_ids=state.active_event_ids,
+            available=satellite_state.available,
             completed_request_ids=tuple(completed_request_ids),
-            mission_complete=target_time == scenario.end_time,
         )
-        self._update_request_statuses_after_step()
-        return self._state
+        return new_state, action_statuses
 
     def reset(self) -> MissionState:
         self._require_scenario()
@@ -908,13 +947,13 @@ class MissionSession:
 
     def _validate_battery_drop(self, payload: BatteryDropPayload) -> None:
         scenario = self._require_scenario()
-        state = self.get_state()
-        if payload.satellite_id != state.satellite_id:
+        satellite_ids = {satellite.id for satellite in scenario.satellites}
+        if payload.satellite_id not in satellite_ids:
             raise InvalidEventError(
-                "battery drop satellite does not match the mission satellite",
+                "battery drop satellite does not match a mission satellite",
                 details={"satellite_id": payload.satellite_id},
             )
-        capacity_wh = scenario.satellite.battery_capacity_wh
+        capacity_wh = scenario.satellite_by_id(payload.satellite_id).battery_capacity_wh
         if (
             not math.isfinite(payload.new_battery_wh)
             or payload.new_battery_wh < 0
@@ -945,10 +984,10 @@ class MissionSession:
 
     def _validate_satellite_outage(self, payload: SatelliteOutagePayload) -> None:
         scenario = self._require_scenario()
-        state = self.get_state()
-        if payload.satellite_id != state.satellite_id:
+        satellite_ids = {satellite.id for satellite in scenario.satellites}
+        if payload.satellite_id not in satellite_ids:
             raise InvalidEventError(
-                "payload outage satellite does not match the mission satellite",
+                "payload outage satellite does not match a mission satellite",
                 details={"satellite_id": payload.satellite_id},
             )
         if payload.outage_start.tzinfo is None or payload.outage_end.tzinfo is None:
@@ -1056,9 +1095,12 @@ class MissionSession:
                         "window_id": window.id,
                     },
                 )
-            if window.satellite_id != scenario.satellite.id:
+            satellite_ids = {satellite.id for satellite in scenario.satellites}
+            if window.satellite_id not in satellite_ids or (
+                request.satellite_id is not None and window.satellite_id != request.satellite_id
+            ):
                 raise InvalidEventError(
-                    "emergency request window satellite does not match the mission satellite",
+                    "emergency request window satellite does not match a mission satellite",
                     details={
                         "satellite_id": window.satellite_id,
                         "window_id": window.id,
