@@ -65,9 +65,13 @@ class WindowPolicySchema(ApiModel):
     recharge_rate_w: float = Field(default=0, ge=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def validate_ground_stations(self) -> Self:
+    def validate_orbital_dynamics(self) -> Self:
         if (self.slew_rate_deg_s or self.recharge_rate_w) and self.provider != "orbital":
             raise ValueError("slew and recharge require the orbital window provider")
+        return self
+
+    @model_validator(mode="after")
+    def validate_ground_stations(self) -> Self:
         if self.ground_station_ids:
             from amis.orbital.stations import stations_by_ids
 

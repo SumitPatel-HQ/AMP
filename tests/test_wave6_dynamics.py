@@ -48,7 +48,6 @@ def test_slew_gap_is_settling_plus_angle_over_rate():
     model = SlewModel(settling_time_s=5, slew_rate_deg_s=2, altitude_km=500, targets={"A": (0, 0), "B": (0, 1)})
     assert model.gap_s("A", "B") == pytest.approx(5 + slew_angle_deg(0, 0, 0, 1, 500) / 2)
     assert model.gap_s("A", None) == 5
-    assert model.max_gap_s(["A", "B"]) == model.gap_s("A", "B")
 
 
 def test_slew_violations_are_caught_at_validation():

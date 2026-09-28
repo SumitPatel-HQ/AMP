@@ -29,6 +29,7 @@ from amis.domain import (
     Scenario,
     WindowPolicy,
 )
+from amis.domain.state import LEGACY_STATE_KEYS
 from amis.errors import (
     InvalidScenarioError,
     PlanVersionConflictError,
@@ -48,14 +49,7 @@ def _state_row(state: MissionState) -> dict[str, Any]:
     fields for pre-Wave-7 readers; those have no columns and must never
     reach the INSERT/UPDATE.
     """
-    return _without(
-        state.to_dict(),
-        "satellite_id",
-        "battery_wh",
-        "storage_usage_mb",
-        "available",
-        "completed_request_ids",
-    )
+    return _without(state.to_dict(), *LEGACY_STATE_KEYS)
 
 
 class SqlScenarioRepository:

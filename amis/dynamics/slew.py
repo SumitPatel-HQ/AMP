@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from itertools import combinations
 from math import asin, atan, cos, degrees, radians, sin, sqrt
 from typing import Iterable, Mapping
 
@@ -91,11 +90,3 @@ class SlewModel:
 
     def gap_s(self, request_a: str | None, request_b: str | None) -> float:
         return self.settling_time_s + self.slew_time_s(request_a, request_b)
-
-    def max_gap_s(self, request_ids: Iterable[str]) -> float:
-        """Largest pairwise gap among ``request_ids``."""
-        ids = sorted(set(request_ids))
-        return max(
-            (self.gap_s(a, b) for a, b in combinations(ids, 2)),
-            default=self.settling_time_s,
-        )

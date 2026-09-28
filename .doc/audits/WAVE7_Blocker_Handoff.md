@@ -1,5 +1,11 @@
 # Wave 7 handoff: blockers and prerequisites
 
+> **Status (2026-09-28): resolved.** Every blocker below is fixed on
+> `main`: CP-SAT pairwise slew and recharge/downlink-aware budgets (ADR-0013),
+> slew fails closed with a read-only target map, one shared resource walk,
+> a content-keyed recharge cache, and split API validators. Kept as a
+> historical record only.
+
 **Context:** Waves 1-6 are implemented on `main` (Wave 6 = commit `0880b9d`,
 "Implement Wave 6 slew and sunlight recharge (ADR-0013)"). Wave 7 is **multiple
 satellites** per `.doc/specs/AMIS_Phase2_Spec.md`: decision 31 plus stories

@@ -1,5 +1,11 @@
 # Wave 6 handoff: blockers and prerequisites
 
+> **Status (2026-09-28): resolved.** Every blocker below is fixed on
+> `main`: CP-SAT pairwise slew and recharge/downlink-aware budgets (ADR-0013),
+> slew fails closed with a read-only target map, one shared resource walk,
+> a content-keyed recharge cache, and split API validators. Kept as a
+> historical record only.
+
 **Context:** Waves 1–5 are implemented on `main` (Wave 5 = commit `f9ae134`,
 "Implement Wave 5 weather-driven events (ADR-0012)"). Wave 6 is **advanced
 dynamics** per `.doc/specs/AMIS_Phase2_Spec.md`: story 45 (time-dependent slew

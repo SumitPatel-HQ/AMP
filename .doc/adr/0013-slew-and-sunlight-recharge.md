@@ -44,8 +44,8 @@ rules from earlier waves.
 - `amis/dynamics/recharge.py` finds sunlit intervals over the mission span
   from the stored orbit and the bundled DE421 ephemeris (Skyfield
   `is_sunlit`), sampled every 30 s and refined to the second by bisection.
-  The ephemeris checksum is verified first. Results are cached per element
-  checksum and span.
+  The ephemeris checksum is verified first. Results are cached per
+  canonical OMM content and span.
 - Gain over an interval is rate times sunlit hours in it.
 - `ResourceProjection` walks from the mission state's simulated time and adds
   the gain before each step, capped at battery capacity.
@@ -72,8 +72,11 @@ and gain and capacity are floored. Frozen actions stay exempt (ADR-0003): a
 bucket only has to fit when a candidate lands in it. Without recharge the
 Wave 1 linear sum is unchanged.
 
-Downlink storage releases stay out of the CP-SAT storage sum; the
-greedy-baseline fallback (ADR-0009) keeps that gain.
+Downlink reservations do not depend on the imaging choice (ADR-0011), so
+their storage releases are known before the solve. With any release, CP-SAT
+models storage as a chain of upper-bound levels between releases: charges
+in a bucket must fit on top of its opening level, and the next level is at
+least `max(0, level + charge - release)`, matching the floored walk.
 
 ## Consequences
 
@@ -81,7 +84,8 @@ greedy-baseline fallback (ADR-0009) keeps that gain.
   validation fails closed on any plan that does not.
 - Multi-day missions can schedule more energy-hungry work than the one-way
   battery rule allowed, while battery stays within zero and capacity.
-- CP-SAT can still trail greedy on downlink-heavy plans; the fallback hides
-  this from utility but not from `solver_details.fallback`.
+- CP-SAT's bucketed bounds are slightly conservative (no in-bucket recharge
+  credit); the greedy-baseline fallback (ADR-0009) still guards utility and
+  shows in `solver_details.fallback`.
 - A future attitude model can replace `slew_angle_deg` without touching the
   constraint callers.

@@ -3,12 +3,13 @@
 Source of truth: `.doc/specs/AMIS_Build_Spec.md` (wins on conflict), with `AMIS_PRD.md`, `AMIS_SRD.md`, `AMIS_Implementation_Guide.md` as reference.
 Glossary: `CONTEXT.md`.
 
-Date: 2026-09-25
+Date: 2026-09-28 (Phase 2 section added; Phase 1 sections unchanged from 2026-09-25)
 Method: code read of `amis/`, `frontend/src/`, `tests/`, plus test runs.
 
 ## Evidence
 
-* Backend: `python -m pytest tests -q` → `136 passed`
+* Backend: `python -m pytest tests -q` → `229 passed`
+* Evaluation: `python -m amis.evaluation.runner` → 13/13 cases, all 4 gates pass
 * Frontend: `npm --prefix frontend run test -- --run` → `12 files, 139 passed`
 * Demo: `python -m amis.demo` →
   * Plan v1: `OBS-B @ 10:20`, Plan v2: `OBS-B @ 11:15`
@@ -79,12 +80,21 @@ Note: explanation UI lives in `PlanComparisonPanel.tsx` (`TraceLine`) rather tha
 * REST minimum: all SRD endpoints present; Build Spec adds `GET /scenarios/{id}/impact`, `GET /plans/{id}/metrics`. Extra: `GET /demo/scenario`, `GET /scenarios/{id}/requests`, `GET /scenarios/{id}/windows`, `GET /scenarios/{id}/events`.
 * Error codes: `INVALID_SCENARIO`, `INVALID_EVENT`, `CONSTRAINT_VIOLATION`, `RESOURCE_NOT_FOUND`, `SIMULATION_STATE_ERROR`, `PLAN_VERSION_CONFLICT`. `PLAN_INFEASIBLE` deliberately absent (greedy returns empty plan with reasons).
 
+## Phase 2 (`.doc/specs/AMIS_Phase2_Spec.md`)
+
+| Wave | Scope | Status | ADR |
+| --- | --- | --- | --- |
+| 1 real missions | Skyfield/SGP4 `OrbitalWindowProvider`, offline orbit snapshots, window policy | Done | 0007, 0008 |
+| 2 proof of quality | `CpSatPlanner`, planner selection, evaluation suite | Done | 0009 |
+| 3 spacecraft model | payload outages, settling time, culmination placement, derived costs | Done | 0010 |
+| 4 ground stations and downlink | contacts, downlink storage release, `COMMUNICATION_OUTAGE` | Done | 0011 |
+| 5 weather-driven events | archived weather to `CLOUD_BLOCK` events | Done | 0012 |
+| 6 advanced dynamics | pairwise slew and sunlight recharge in greedy, CP-SAT and validation | Done | 0013 |
+| 7 multiple satellites | per-satellite state, budgets, overlap; one satellite per request | Done | 0014 |
+
 ## Correctly absent (deferred / out of scope)
 
-* OR-Tools CP-SAT planner (protocol exists, no implementation).
-* Skyfield/SGP4 OrbitalWindowProvider (protocol exists, no implementation).
-* `COMMUNICATION_OUTAGE`, `SATELLITE_UNAVAILABLE` (reserved in `EventType`, inject rejected).
-* Solar recharge, downlink storage release, seeded generator, replay controls, experiment browser/benchmark screen, frontend isolation of expiry trace, 3D globe, language-model explanation, Kubernetes, auth.
+* 3D globe, language-model explanation, Kubernetes, auth, replay controls, experiment browser/benchmark screen.
 
 ## Reproduce
 

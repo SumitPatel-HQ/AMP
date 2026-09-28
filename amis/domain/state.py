@@ -18,6 +18,11 @@ from typing import Any
 from amis.domain.scenario import Scenario
 
 
+# Top-level keys ``MissionState.to_dict`` adds for single-satellite
+# missions (pre-Wave-7 readers). Persistence strips exactly these.
+LEGACY_STATE_KEYS = ("satellite_id", "battery_wh", "storage_usage_mb", "available", "completed_request_ids")
+
+
 @dataclass(frozen=True)
 class SatelliteState:
     satellite_id: str
@@ -164,13 +169,18 @@ class MissionState:
         # the mission-total completed set. Multi-satellite missions omit
         # them because no single number is correct.
         if len(self.satellites) == 1:
-            only = self.satellites[0]
-            result["satellite_id"] = only.satellite_id
-            result["battery_wh"] = only.battery_wh
-            result["storage_usage_mb"] = only.storage_usage_mb
-            result["available"] = only.available
-            result["completed_request_ids"] = list(self.completed_request_ids)
+            result.update(self._legacy_fields())
         return result
+
+    def _legacy_fields(self) -> dict[str, Any]:
+        only = self.satellites[0]
+        return dict(zip(LEGACY_STATE_KEYS, (
+            only.satellite_id,
+            only.battery_wh,
+            only.storage_usage_mb,
+            only.available,
+            list(self.completed_request_ids),
+        ), strict=True))
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "MissionState":

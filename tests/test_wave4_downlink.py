@@ -106,6 +106,15 @@ def test_downlink_keeps_a_storage_bound_mission_feasible(planner):
     assert all(a.storage_cost_mb < 0 and a.energy_cost_wh == 0 for a in downlinks)
 
 
+def test_cp_sat_counts_downlink_releases_in_its_storage_budget():
+    greedy = _session(_tight_scenario()).plan()
+    plan = _session(_tight_scenario(), "cp_sat").plan()
+
+    assert plan.violation_count == 0
+    assert plan.solver_details["fallback"] is False
+    assert plan.mission_utility >= greedy.mission_utility
+
+
 def test_storage_rises_on_imaging_and_falls_on_downlink_across_the_mission():
     session = _session(_tight_scenario())
     plan = session.plan()

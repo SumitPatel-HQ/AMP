@@ -137,13 +137,9 @@ Wave 6 review debt that copying to N satellites would multiply.
 - Single-satellite missions produce identical window ids, placements,
   and plans to pre-Wave-7 behavior; the only new output is the
   `per_satellite` breakdown and the repeated legacy keys.
-- The Wave 6 review items are explicitly accepted, not fixed here:
-  CP-SAT slew is the max gap (safe, wastes time when gaps vary),
-  CP-SAT recharge stays out of the solve (conservative, fallback
-  hides the loss), unknown targets fail open to settling-only in
-  `SlewModel`, the recharge walk is copied across projection and
-  session, `SlewModel` is frozen but holds a dict, the recharge cache
-  keys on checksum plus exact span, and the API validator keeps its
-  `validate_ground_stations` name while also gating slew/recharge.
-  Copying them per satellite does not make them worse; a future wave
-  may fix them once.
+- The Wave 6 review items listed when this ADR was written (CP-SAT
+  max-gap slew, recharge left out of the solve, slew failing open on
+  unknown targets, the copied recharge walk, the mutable target dict,
+  checksum-keyed recharge cache, the overloaded API validator) were fixed
+  after Wave 7 landed; see ADR-0013 for the CP-SAT slew, battery and
+  storage model.

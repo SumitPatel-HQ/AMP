@@ -64,20 +64,28 @@ def recharge_model(scenario: Scenario, satellite: Satellite | None = None) -> Re
 
 
 def sunlit_intervals(orbit: OrbitalElements, start: datetime, end: datetime) -> tuple[Interval, ...]:
+    # UTC, so equal instants in different zones share a cache entry.
     return _sunlit_intervals(_OrbitKey(orbit), start.astimezone(timezone.utc), end.astimezone(timezone.utc))
 
 
 class _OrbitKey:
-    """Carries the OMM into the cache while hashing by element checksum."""
+    """Carries the OMM into the cache, keyed by the elements themselves.
+
+    The stored ``sha256`` is provenance supplied with the elements, so it is
+    not trusted as a cache key: two orbits with a stale or shared checksum
+    must never share sunlit intervals.
+    """
 
     def __init__(self, orbit: OrbitalElements) -> None:
         self.orbit = orbit
+        canonical = json.dumps(orbit.omm, sort_keys=True, separators=(",", ":"), default=str)
+        self.digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def __hash__(self) -> int:
-        return hash(self.orbit.sha256)
+        return hash(self.digest)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, _OrbitKey) and other.orbit.sha256 == self.orbit.sha256
+        return isinstance(other, _OrbitKey) and other.digest == self.digest
 
 
 @lru_cache(maxsize=32)
