@@ -9,3 +9,5 @@ venv/
 node-compile-cache/
 .tmp-amis-review/
 package-lock.json
+.archify/
+archify/
