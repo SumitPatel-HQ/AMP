@@ -37,6 +37,12 @@ class RechargeModel:
         )
         return self.recharge_rate_w * sunlit_s / 3600
 
+    def charged(self, battery_wh: float, since: datetime | None, at: datetime, capacity_wh: float) -> float:
+        """Battery after recharging over ``[since, at]``, capped at capacity."""
+        if since is None or at <= since:
+            return battery_wh
+        return min(capacity_wh, battery_wh + self.gain_wh(since, at))
+
 
 NO_RECHARGE = RechargeModel()
 

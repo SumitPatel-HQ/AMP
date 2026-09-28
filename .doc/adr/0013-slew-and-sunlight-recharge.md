@@ -58,13 +58,22 @@ rules from earlier waves.
 
 ### CP-SAT
 
-Slew is a sequence-dependent setup time, which the no-overlap interval model
-cannot express. CP-SAT pads every interval with the largest pairwise slew
-gap among the requests it considers. That is conservative: it can never
-produce a slew violation, but it can leave time unused. CP-SAT also leaves
-recharge out of its linear battery sum, which is conservative too. The
-greedy-baseline fallback (ADR-0009) keeps both gains when CP-SAT would do
-worse.
+Slew is a sequence-dependent setup time. Each pair of actions on one
+satellite (with a non-zero gap) gets an order literal, and the pair's own
+gap is enforced in whichever order the solver picks, so CP-SAT matches the
+pairwise rule `check_overlap` validates.
+
+With recharge enabled, CP-SAT models the battery as a chain of levels over
+short buckets (every sunlit edge, and at least every 10 minutes). Spend in a
+bucket must fit its opening level; the next level is at most both
+`level + gain - spend` and `capacity - spend`. That is a sound lower bound
+on the capped timeline walk: no in-bucket gain is credited before a spend,
+and gain and capacity are floored. Frozen actions stay exempt (ADR-0003): a
+bucket only has to fit when a candidate lands in it. Without recharge the
+Wave 1 linear sum is unchanged.
+
+Downlink storage releases stay out of the CP-SAT storage sum; the
+greedy-baseline fallback (ADR-0009) keeps that gain.
 
 ## Consequences
 
@@ -72,7 +81,7 @@ worse.
   validation fails closed on any plan that does not.
 - Multi-day missions can schedule more energy-hungry work than the one-way
   battery rule allowed, while battery stays within zero and capacity.
-- CP-SAT is weaker than greedy when slew gaps vary widely; the fallback hides
+- CP-SAT can still trail greedy on downlink-heavy plans; the fallback hides
   this from utility but not from `solver_details.fallback`.
 - A future attitude model can replace `slew_angle_deg` without touching the
   constraint callers.

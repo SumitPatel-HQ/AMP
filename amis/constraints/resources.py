@@ -17,7 +17,7 @@ before the commit happens, not after.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Iterable, Iterator, Optional
 
 from amis.domain import MissionState, ReasonCode, Satellite, Scenario, ScheduledAction, Violation
 from amis.dynamics.recharge import NO_RECHARGE, RechargeModel, recharge_model
@@ -101,11 +101,24 @@ class ResourceProjection:
             resolved.battery_capacity_wh,
         )
 
-    def _charged(self, battery_wh: float, since: Optional[datetime], at: datetime) -> float:
-        """Battery after sunlight recharge over ``[since, at]``, capped at capacity."""
-        if since is None or at <= since:
-            return battery_wh
-        return min(self._capacity_wh, battery_wh + self._recharge.gain_wh(since, at))
+    def _walk(
+        self, steps: Iterable[tuple[datetime, float, float]]
+    ) -> Iterator[tuple[datetime, float, float, float, float]]:
+        """The one resource walk: recharge, then apply each delta, flooring at zero.
+
+        ``steps`` are ``(event time, energy, storage)`` already in walk order.
+        Yields each step with the battery and storage it meets, before its
+        delta lands, so callers can check affordability or read levels.
+        """
+        battery_wh = self._initial_battery_wh
+        storage_used_mb = self._initial_storage_used_mb
+        clock = self._origin
+        for when, energy_wh, storage_mb in steps:
+            battery_wh = self._recharge.charged(battery_wh, clock, when, self._capacity_wh)
+            clock = max(clock, when) if clock else clock
+            yield when, energy_wh, storage_mb, battery_wh, storage_used_mb
+            battery_wh = max(0.0, battery_wh - energy_wh)
+            storage_used_mb = max(0.0, storage_used_mb + storage_mb)
 
     def _ordered(self) -> list[ScheduledAction]:
         return sorted(
@@ -115,18 +128,14 @@ class ResourceProjection:
 
     def available_at(self, at: datetime) -> tuple[float, float]:
         """Battery and storage after every delta landing at or before ``at``."""
-        battery_wh = self._initial_battery_wh
-        storage_used_mb = self._initial_storage_used_mb
-        clock = self._origin
-        for action in self._ordered():
-            when = event_time(action)
-            if when > at:
-                break
-            battery_wh = self._charged(battery_wh, clock, when)
-            clock = max(clock, when) if clock else clock
-            battery_wh = max(0.0, battery_wh - action.energy_cost_wh)
-            storage_used_mb = max(0.0, storage_used_mb + action.storage_cost_mb)
-        return self._charged(battery_wh, clock, at), storage_used_mb
+        steps = [
+            (event_time(action), action.energy_cost_wh, action.storage_cost_mb)
+            for action in self._ordered()
+            if event_time(action) <= at
+        ]
+        # A zero-cost sentinel at ``at`` reads the levels after every real delta.
+        *_, (_, _, _, battery_wh, storage_used_mb) = self._walk([*steps, (at, 0.0, 0.0)])
+        return battery_wh, storage_used_mb
 
     def freed_by_downlinks(self) -> dict[str, float]:
         """Storage each committed downlink actually frees under the walk."""
@@ -170,12 +179,8 @@ class ResourceProjection:
         ordered.append((_walk_key(start, False, ""), energy_cost_wh, storage_cost_mb))
         ordered.sort(key=lambda item: item[0])
 
-        battery_wh = self._initial_battery_wh
-        storage_used_mb = self._initial_storage_used_mb
-        clock = self._origin
-        for (when, _, _), item_energy_wh, item_storage_mb in ordered:
-            battery_wh = self._charged(battery_wh, clock, when)
-            clock = max(clock, when) if clock else clock
+        steps = [(key[0], energy_wh, storage_mb) for key, energy_wh, storage_mb in ordered]
+        for _, item_energy_wh, item_storage_mb, battery_wh, storage_used_mb in self._walk(steps):
             if item_energy_wh > battery_wh:
                 return Violation(
                     reason_code=ReasonCode.INSUFFICIENT_BATTERY,
@@ -192,6 +197,4 @@ class ResourceProjection:
                         "capacity_mb": storage_capacity_mb,
                     },
                 )
-            battery_wh = max(0.0, battery_wh - item_energy_wh)
-            storage_used_mb = max(0.0, storage_used_mb + item_storage_mb)
         return None

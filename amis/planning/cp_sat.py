@@ -1,10 +1,11 @@
 """Deterministic optional-interval planner under the one-way resource model.
 
-Wave 6 (ADR-0013): slew is sequence-dependent, which the no-overlap
-interval model cannot express, so every interval carries the largest
-pairwise slew gap as a conservative fixed gap. Sunlight recharge is left
-out of the linear battery sum, which is also conservative. The greedy
-baseline fallback keeps both gains whenever CP-SAT would do worse.
+Wave 6 (ADR-0013): slew is a sequence-dependent setup time. Every pair of
+actions on one satellite gets an order literal, and the pair's own slew
+gap is enforced in whichever order the solver picks. With sunlight
+recharge, the battery is a chain of levels over short time buckets (see
+`_add_recharge_battery_budget`), sound under the capacity cap. Downlink releases stay out of the storage sum,
+and the greedy baseline fallback keeps that gain.
 
 Wave 7 (ADR-0014): every no-overlap group and every resource budget is
 scoped to one satellite. A window already names the satellite it was
@@ -17,11 +18,12 @@ stage.
 from __future__ import annotations
 
 import math
+from itertools import combinations
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from fractions import Fraction
-from typing import Iterable
+from typing import Any, Iterable
 
 from ortools.sat.python import cp_model
 import ortools
@@ -30,6 +32,7 @@ from amis.constraints import (ResourceProjection, check_deadline, check_overlap,
     check_satellite_availability, check_window_containment, validate_plan)
 from amis.domain import (ActionStatus, ContactWindow, imaging_actions, MissionPlan, MissionState, ObservationRequest,
     ObservationWindow, ReasonCode, RequestStatus, Satellite, Scenario, ScheduledAction, UnscheduledEntry)
+from amis.dynamics.recharge import RechargeModel, recharge_model
 from amis.dynamics.slew import SlewModel
 from amis.ids import ACTION_ID_PREFIX, FIRST_PLAN_ID, format_id
 from amis.planning.downlink import finalize_downlinks, reserve_downlinks
@@ -41,6 +44,153 @@ def _candidate_satellites(scenario: Scenario, request: ObservationRequest) -> li
     if request.satellite_id is not None:
         return [scenario.satellite_by_id(request.satellite_id)]
     return sorted(scenario.satellites, key=lambda item: item.id)
+
+
+@dataclass(frozen=True)
+class _Item:
+    """One action on one satellite, frozen or optional.
+
+    ``present`` is ``True`` for a frozen action, else its presence literal.
+    ``start`` is an int for a frozen action, else its start variable;
+    ``low``/``high`` bound it, in seconds from the scenario start. ``cost``
+    carries the resource costs when the action still has to be paid for
+    (a frozen PLANNED action or a candidate request), else ``None``.
+    """
+
+    request_id: str
+    present: Any
+    start: Any
+    duration: int
+    low: int
+    high: int
+    cost: ObservationRequest | ScheduledAction | None
+
+    @property
+    def fixed(self) -> bool:
+        return self.present is True
+
+
+def _add_pairwise_slew(model: cp_model.CpModel, items: list[_Item], slew: SlewModel) -> None:
+    """Order each pair of actions and enforce that pair's own slew gap.
+
+    Pairs of the same request are exclusive, and two frozen actions are
+    already placed, so both are skipped. A pair with no gap is left to the
+    no-overlap constraint.
+    """
+    for j, k in combinations(range(len(items)), 2):
+        first, second = items[j], items[k]
+        if first.request_id == second.request_id or (first.fixed and second.fixed):
+            continue
+        gap = math.ceil(slew.gap_s(first.request_id, second.request_id))
+        if gap == 0:
+            continue
+        both = [item.present for item in (first, second) if not item.fixed]
+        before = model.new_bool_var(f"order_{j}_{k}")
+        model.add(second.start >= first.start + first.duration + gap).only_enforce_if([*both, before])
+        model.add(first.start >= second.start + second.duration + gap).only_enforce_if([*both, before.Not()])
+
+
+def _scale(values: list[Fraction]) -> int:
+    """Common denominator: exact decimal ratios avoid rounding a resource
+    budget into overcommitment."""
+    scale = math.lcm(*(value.denominator for value in values))
+    if sum(abs(value) for value in values) * scale >= 2**62:
+        raise ValueError("Resource precision exceeds CP-SAT integer range")
+    return scale
+
+
+def _add_linear_budget(model: cp_model.CpModel, items: list[_Item], attr: str, available: float) -> None:
+    """Everything paid must fit what is available now: the one-way budget."""
+    paid = [item for item in items if item.cost is not None]
+    costs = [Fraction(str(getattr(item.cost, attr))) for item in paid]
+    budget = Fraction(str(available)) - sum(cost for item, cost in zip(paid, costs) if item.fixed)
+    scale = _scale([budget, *costs])
+    optional = [(item, int(cost * scale)) for item, cost in zip(paid, costs) if not item.fixed]
+    bound = math.floor(budget * scale)
+    model.add(sum(cost * item.present for item, cost in optional) <= max(0, bound))
+    if bound < 0:
+        for item, _ in optional:
+            model.add(item.present == 0)
+
+
+_BUCKET_S = 600
+
+
+def _add_recharge_battery_budget(model: cp_model.CpModel, items: list[_Item], recharge: RechargeModel,
+                                 initial_wh: float, capacity_wh: float,
+                                 simulated_time: datetime, origin: datetime) -> None:
+    """Battery as a chain of levels over short time buckets.
+
+    Buckets end at every sunlit edge and at least every ``_BUCKET_S``
+    seconds. ``level[b]`` is a lower bound on the battery when bucket ``b``
+    opens. Everything spent in a bucket must fit its opening level, so no
+    in-bucket gain is ever credited before a spend. The capped walk ends
+    the bucket with at least ``min(level + gain, C) - spend``, so the next
+    level is bounded by both ``level + gain - spend`` and ``C - spend``.
+    Gain is floored and capacity floored, so rounding never overstates the
+    battery. Frozen actions are exempt (ADR-0003): a bucket only has to fit
+    when a candidate lands in it, and a deficit carries forward, blocking
+    later candidates until recharge repays it.
+    """
+    paid = [item for item in items if item.cost is not None]
+    if not paid:
+        return
+    costs = [Fraction(str(item.cost.energy_cost_wh)) for item in paid]
+    initial = Fraction(str(initial_wh))
+    capacity = Fraction(str(capacity_wh)) if math.isfinite(capacity_wh) else None
+    scale = _scale([initial, *costs, *([capacity] if capacity is not None else [])])
+    scaled = [int(cost * scale) for cost in costs]
+
+    seconds = lambda instant: (instant - origin).total_seconds()
+    opening = math.floor(seconds(simulated_time))
+    closing = max(item.high for item in paid) + 1
+    edges = {opening, closing, *range(opening, closing, _BUCKET_S)}
+    for lit_start, lit_end in recharge.sunlit:
+        edges.update(edge for edge in (math.ceil(seconds(lit_start)), math.floor(seconds(lit_end)))
+                     if opening < edge < closing)
+    edges = sorted(edges)
+    buckets = list(zip(edges, edges[1:]))
+    gains = [math.floor(Fraction(recharge.gain_wh(max(simulated_time, origin + timedelta(seconds=low)),
+                                                   origin + timedelta(seconds=high))) * scale)
+             for low, high in buckets]
+
+    spend_terms: list[list[Any]] = [[] for _ in buckets]
+    fixed_spend = [0] * len(buckets)
+    landings: list[list[Any]] = [[] for _ in buckets]
+    for item, cost in zip(paid, scaled):
+        spans = [index for index, (low, high) in enumerate(buckets) if low <= item.high and item.low < high]
+        if item.fixed:
+            fixed_spend[spans[0]] += cost
+            continue
+        if len(spans) == 1:
+            memberships = [(spans[0], item.present)]
+        else:
+            memberships = []
+            for index in spans:
+                inside = model.new_bool_var("")
+                low, high = buckets[index]
+                model.add(item.start >= low).only_enforce_if(inside)
+                model.add(item.start < high).only_enforce_if(inside)
+                memberships.append((index, inside))
+            model.add(sum(inside for _, inside in memberships) == item.present)
+        for index, inside in memberships:
+            spend_terms[index].append(cost * inside)
+            landings[index].append(inside)
+
+    total = sum(scaled)
+    ceiling = math.floor(initial * scale) + sum(gains)
+    if capacity is not None:
+        ceiling = max(math.floor(initial * scale), min(ceiling, math.floor(capacity * scale)))
+    level = model.new_constant(math.floor(initial * scale))
+    for index in range(len(buckets)):
+        spend = sum(spend_terms[index]) + fixed_spend[index]
+        for landing in landings[index]:
+            model.add(spend <= level).only_enforce_if(landing)
+        following = model.new_int_var(-total, ceiling, f"battery_{index}")
+        model.add(following <= level + gains[index] - spend)
+        if capacity is not None:
+            model.add(following <= math.floor(capacity * scale) - spend)
+        level = following
 
 
 class CpSatPlanner:
@@ -72,22 +222,19 @@ class CpSatPlanner:
         eligible = [r for r in requests if r.id not in frozen_ids
                     and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)]
         previous = {a.request_id: a for a in imaging_actions(previous_plan.actions)} if previous_plan else {}
-        gap_s_by_satellite = {
-            satellite.id: math.ceil(slew_by_satellite[satellite.id].max_gap_s([
-                *(a.request_id for a in imaging_actions(frozen) if a.satellite_id == satellite.id),
-                *(r.id for r in eligible if r.satellite_id in (None, satellite.id)),
-            ]))
-            for satellite in satellites
-        }
         model = cp_model.CpModel()
         origin = scenario.start_time
         seconds = lambda instant: (instant - origin).total_seconds()
         intervals_by_satellite: dict[str, list] = {satellite.id: [] for satellite in satellites}
+        items_by_satellite: dict[str, list[_Item]] = {satellite.id: [] for satellite in satellites}
         for a in imaging_actions(frozen):
-            gap_s = gap_s_by_satellite[a.satellite_id]
-            intervals_by_satellite[a.satellite_id].append(model.new_fixed_size_interval_var(
-                math.floor(seconds(a.start)), math.ceil(seconds(a.end)) - math.floor(seconds(a.start)) + gap_s,
-                f"frozen_{a.id}"))
+            fixed_start = math.floor(seconds(a.start))
+            fixed_duration = math.ceil(seconds(a.end)) - fixed_start
+            intervals_by_satellite[a.satellite_id].append(
+                model.new_fixed_size_interval_var(fixed_start, fixed_duration, f"frozen_{a.id}"))
+            items_by_satellite[a.satellite_id].append(_Item(
+                a.request_id, True, fixed_start, fixed_duration, fixed_start, fixed_start,
+                a if a.status is ActionStatus.PLANNED else None))
         choices = []
         penalties = []
         penalty_ranges = []
@@ -103,7 +250,6 @@ class CpSatPlanner:
                     or not mission_state.for_satellite(window.satellite_id).available
                 ):
                     continue
-                gap_s = gap_s_by_satellite[window.satellite_id]
                 duration = math.ceil(request.duration_s)
                 low = math.ceil(seconds(max(window.start, mission_state.simulated_time, origin)))
                 high = math.floor(seconds(min(window.end, request.deadline, scenario.end_time))) - duration
@@ -112,9 +258,11 @@ class CpSatPlanner:
                 present = model.new_bool_var(f"present_{window.id}")
                 start = model.new_int_var(low, high, f"start_{window.id}")
                 intervals_by_satellite[window.satellite_id].append(
-                    model.new_optional_fixed_size_interval_var(start, duration + gap_s, present, window.id))
+                    model.new_optional_fixed_size_interval_var(start, duration, present, window.id))
                 literals.append(present)
                 choices.append((request, window, present, start))
+                items_by_satellite[window.satellite_id].append(
+                    _Item(request.id, present, start, duration, low, high, request))
                 for outage_satellite_id, outage_start, outage_end in outages:
                     if outage_satellite_id != window.satellite_id:
                         continue
@@ -142,31 +290,18 @@ class CpSatPlanner:
             # the assignment decision falls out of this same constraint.
             model.add(sum(literals) <= 1)
         for satellite in satellites:
+            items = items_by_satellite[satellite.id]
             model.add_no_overlap(intervals_by_satellite[satellite.id])
-        # Downlink releases are ignored here: the linear sum is a conservative
-        # bound on the timeline walk, and the greedy-baseline fallback keeps
-        # downlink gains (ADR-0011).
-        for satellite in satellites:
-            committed = [
-                a for a in imaging_actions(frozen)
-                if a.status is ActionStatus.PLANNED and a.satellite_id == satellite.id
-            ]
+            recharge = recharge_model(scenario, satellite)
+            _add_pairwise_slew(model, items, slew_by_satellite[satellite.id])
             satellite_state = mission_state.for_satellite(satellite.id)
-            satellite_choices = [choice for choice in choices if choice[1].satellite_id == satellite.id]
-            # Exact decimal ratios avoid rounding a resource budget into overcommitment.
-            for attr, available in (("energy_cost_wh", satellite_state.battery_wh),
-                                    ("storage_cost_mb", satellite.storage_capacity_mb - satellite_state.storage_usage_mb)):
-                costs = [Fraction(str(getattr(r, attr))) for r, _, _, _ in satellite_choices]
-                budget = Fraction(str(available)) - sum(Fraction(str(getattr(a, attr))) for a in committed)
-                scale = math.lcm(budget.denominator, *(c.denominator for c in costs))
-                coefficients = [int(c * scale) for c in costs]
-                bound = int(budget * scale)
-                if sum(abs(c) for c in coefficients) + abs(bound) >= 2**62:
-                    raise ValueError("Resource precision exceeds CP-SAT integer range")
-                model.add(sum(c * choice[2] for c, choice in zip(coefficients, satellite_choices)) <= max(0, bound))
-                if bound < 0:
-                    for _, _, present, _ in satellite_choices:
-                        model.add(present == 0)
+            _add_linear_budget(model, items, "storage_cost_mb",
+                               satellite.storage_capacity_mb - satellite_state.storage_usage_mb)
+            if recharge.recharge_rate_w > 0:
+                _add_recharge_battery_budget(model, items, recharge, satellite_state.battery_wh,
+                                             satellite.battery_capacity_wh, mission_state.simulated_time, origin)
+            else:
+                _add_linear_budget(model, items, "energy_cost_wh", satellite_state.battery_wh)
         weight = len(eligible) + 1
         priority_terms = [(r.priority * weight + int(r.id in previous and previous[r.id].window_id == w.id)) * x
                           for r, w, x, _ in choices]

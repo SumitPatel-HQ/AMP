@@ -672,7 +672,7 @@ class MissionSession:
         def charge_until(at: datetime) -> None:
             nonlocal battery_wh, clock
             if at > clock:
-                battery_wh = min(capacity_wh, battery_wh + recharge.gain_wh(clock, at))
+                battery_wh = recharge.charged(battery_wh, clock, at, capacity_wh)
                 clock = at
 
         for action in sorted(actions, key=lambda item: (item.start, item.id)):

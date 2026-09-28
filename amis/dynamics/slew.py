@@ -11,9 +11,10 @@ so it is a planning estimate rather than an attitude simulation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from itertools import combinations
 from math import asin, atan, cos, degrees, radians, sin, sqrt
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from amis.domain import ObservationRequest, Satellite, Scenario
 from amis.orbital.geometry import EARTH_RADIUS_KM, mean_altitude_km
@@ -38,7 +39,11 @@ class SlewModel:
     settling_time_s: float = 0.0
     slew_rate_deg_s: float = 0.0
     altitude_km: float = 0.0
-    targets: dict[str, tuple[float, float]] = field(default_factory=dict)
+    targets: Mapping[str, tuple[float, float]] = field(default_factory=dict, hash=False)
+
+    def __post_init__(self) -> None:
+        # A read-only copy keeps the frozen model honestly immutable.
+        object.__setattr__(self, "targets", MappingProxyType(dict(self.targets)))
 
     @staticmethod
     def from_scenario(
@@ -77,16 +82,18 @@ class SlewModel:
     def slew_time_s(self, request_a: str | None, request_b: str | None) -> float:
         if self.slew_rate_deg_s <= 0 or request_a is None or request_b is None:
             return 0.0
-        a, b = self.targets.get(request_a), self.targets.get(request_b)
-        if a is None or b is None:
-            return 0.0
+        missing = [request_id for request_id in (request_a, request_b) if request_id not in self.targets]
+        if missing:
+            # Fail closed: an unknown target must not degrade to settling-only.
+            raise ValueError(f"slew model has no target for request(s) {', '.join(missing)}")
+        a, b = self.targets[request_a], self.targets[request_b]
         return slew_angle_deg(*a, *b, self.altitude_km) / self.slew_rate_deg_s
 
     def gap_s(self, request_a: str | None, request_b: str | None) -> float:
         return self.settling_time_s + self.slew_time_s(request_a, request_b)
 
     def max_gap_s(self, request_ids: Iterable[str]) -> float:
-        """Largest pairwise gap; the conservative fixed gap CP-SAT uses."""
+        """Largest pairwise gap among ``request_ids``."""
         ids = sorted(set(request_ids))
         return max(
             (self.gap_s(a, b) for a, b in combinations(ids, 2)),

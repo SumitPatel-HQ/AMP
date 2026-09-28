@@ -151,3 +151,38 @@ def test_multi_day_battery_stays_within_bounds_with_recharge():
         state = session.step(3600)
         assert 0 <= state.battery_wh <= capacity
     assert set(state.completed_request_ids) == {a.request_id for a in _imaging(plan)}
+
+
+# --- review follow-ups --------------------------------------------------
+
+
+def test_slew_fails_closed_on_an_unknown_target():
+    model = SlewModel(settling_time_s=5, slew_rate_deg_s=2, altitude_km=500, targets={"A": (0, 0)})
+    with pytest.raises(ValueError, match="Z"):
+        model.gap_s("A", "Z")
+
+
+def test_slew_targets_are_read_only():
+    targets = {"A": (0.0, 0.0)}
+    model = SlewModel(targets=targets)
+    targets["B"] = (1.0, 1.0)
+    assert "B" not in model.targets
+    with pytest.raises(TypeError):
+        model.targets["C"] = (2.0, 2.0)  # type: ignore[index]
+
+
+def test_cp_sat_enforces_pairwise_slew_without_the_greedy_fallback():
+    scenario = _policy(orbital_example(), slew_rate_deg_s=1.0, settling_time_s=2.0)
+    plan = _session(scenario, "cp_sat").plan()
+
+    assert plan.violation_count == 0
+    assert plan.solver_details["fallback"] is False
+
+
+def test_cp_sat_counts_sunlight_recharge_in_its_battery_budget():
+    without = _session(_battery_bound(0.0), "cp_sat").plan()
+    plan = _session(_battery_bound(20.0), "cp_sat").plan()
+
+    assert plan.violation_count == 0
+    assert plan.solver_details["fallback"] is False
+    assert len(_imaging(plan)) > len(_imaging(without))
