@@ -1,7 +1,8 @@
 """Satellite availability: one of the constraint engine's checks.
 
-No MVP event produces an unavailable satellite yet, but the check is
-required and stays reachable for the deferred event that will.
+A payload outage (`SATELLITE_UNAVAILABLE` over an interval, Wave 3 /
+ADR-0010) rejects an action whose interval overlaps the span; the base
+flag still rejects everything while the satellite is unavailable.
 """
 
 from __future__ import annotations

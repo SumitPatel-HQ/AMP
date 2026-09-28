@@ -173,8 +173,32 @@ export function useMissionSession(): MissionSessionState {
     setMetrics(nextMetrics);
   }, []);
 
-  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {
-    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
+  /**
+   * Drop every piece of mission state: a load that fails partway must not
+   * leave the previous scenario's plan and readings on screen (the refresh
+   * the user asked for never completed, so they describe nothing).
+   * Contacts and stations follow the null scenario through their own
+   * effect; everything else is reset here.
+   */
+  const clearMission = useCallback(() => {
+    setScenario(null);
+    setPlans([]);
+    setPlan(null);
+    setWindows([]);
+    setGroundTrack([]);
+    setSatellitePosition(null);
+    setMissionState(null);
+    setEvents([]);
+    setRequestPool([]);
+    setMetrics(null);
+    setImpact(null);
+    setReplanResult(null);
+    setPlanConflict(null);
+    setStalePlan(false);
+    setSelection(EMPTY_SELECTION);
+  }, []);
+
+  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
       fetchMissionPlans(loaded.id), fetchWindows(loaded.id), fetchState(loaded.id),
       fetchEvents(loaded.id), fetchRequests(loaded.id),
       loaded.satellite.orbit ? fetchGroundTrack(loaded.id) : Promise.resolve([]),
@@ -219,20 +243,24 @@ export function useMissionSession(): MissionSessionState {
       await openLoaded(loaded);
       return true;
     } catch (caught) {
+      // A failed load must not leave the previous mission on screen: the
+      // dashboard was asked for a new scenario and the refresh never
+      // completed, so the old plan and state no longer describe anything.
+      clearMission();
       setError(describeError(caught));
       return false;
     } finally {
       setLoading(false);
     }
-  }, [openLoaded]);
+  }, [openLoaded, clearMission]);
 
   const loadMission = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
     try { await openLoaded(await fetchScenario(id)); }
-    catch (caught) { setError(describeError(caught)); }
+    catch (caught) { clearMission(); setError(describeError(caught)); }
     finally { setLoading(false); }
-  }, [openLoaded]);
+  }, [openLoaded, clearMission]);
 
   const loadExample = useCallback(async (id: string) => {
     setLoading(true);
@@ -240,9 +268,9 @@ export function useMissionSession(): MissionSessionState {
     try {
       const example = await fetchExample(id);
       await openLoaded(await createScenario({ ...example, id: `${example.id}-${crypto.randomUUID()}` }));
-    } catch (caught) { setError(describeError(caught)); }
+    } catch (caught) { clearMission(); setError(describeError(caught)); }
     finally { setLoading(false); }
-  }, [openLoaded]);
+  }, [openLoaded, clearMission]);
 
   const loadDemoScenario = useCallback(async () => {
     try {

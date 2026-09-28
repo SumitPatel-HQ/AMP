@@ -1,8 +1,7 @@
 """Unit tests for check_satellite_availability.
 
-No MVP event produces an unavailable satellite yet, so this test
-builds the unavailable state by hand rather than driving it through
-an event.
+Drives the check through the Wave 3 payload-outage path (an
+`SATELLITE_UNAVAILABLE` span) as well as the base availability flag.
 """
 
 from amis.constraints import check_satellite_availability

@@ -7,16 +7,43 @@ import { fakeMap } from "../test/fakeMapEngine";
 import { missionState, plan, scenario } from "../test/mapFixtures";
 import type { MissionEventSchema } from "../api/client";
 
-const api = vi.hoisted(() => ({
-  createPlan: vi.fn(),
-  createScenario: vi.fn(),
-  fetchDemoScenario: vi.fn(),
-  fetchEvents: vi.fn(),
-  fetchMetrics: vi.fn(),
-  fetchRequests: vi.fn(),
-  fetchState: vi.fn(),
-  generateWindows: vi.fn(),
-}));
+const api = vi.hoisted(() => {
+  const list = () => {
+    const fn = vi.fn();
+    fn.mockResolvedValue([]);
+    return fn;
+  };
+  return {
+    comparePlans: vi.fn(),
+    createPlan: vi.fn(),
+    createScenario: vi.fn(),
+    fetchContacts: list(),
+    fetchDemoScenario: vi.fn(),
+    fetchEvents: vi.fn(),
+    fetchExample: vi.fn(),
+    fetchExamples: list(),
+    fetchGroundStations: list(),
+    fetchGroundTrack: list(),
+    fetchImpact: vi.fn(),
+    fetchMetrics: vi.fn(),
+    fetchMissionPlans: list(),
+    fetchMissions: list(),
+    fetchOrbitalElements: list(),
+    fetchPlan: vi.fn(),
+    fetchRequests: vi.fn(),
+    fetchSatellitePosition: vi.fn(),
+    fetchScenario: vi.fn(),
+    fetchState: vi.fn(),
+    fetchTraces: vi.fn(),
+    fetchWindows: vi.fn(),
+    generateWindows: vi.fn(),
+    injectEvent: vi.fn(),
+    parseTle: vi.fn(),
+    replan: vi.fn(),
+    stepSimulation: vi.fn(),
+    validateScenario: vi.fn(),
+  };
+});
 
 vi.mock("../api/amis", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/amis")>()),
@@ -137,6 +164,22 @@ describe("mission map", () => {
 async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
   api.fetchDemoScenario.mockResolvedValue(scenario);
   api.createScenario.mockResolvedValue(scenario);
+  api.fetchExample.mockResolvedValue(scenario);
+  api.fetchScenario.mockResolvedValue(scenario);
+  api.fetchMissionPlans.mockResolvedValue([]);
+  api.fetchWindows.mockResolvedValue([]);
+  api.fetchPlan.mockResolvedValue(plan);
+  api.fetchContacts.mockResolvedValue([]);
+  api.fetchGroundStations.mockResolvedValue([]);
+  api.fetchGroundTrack.mockResolvedValue([]);
+  api.fetchOrbitalElements.mockResolvedValue([]);
+  api.validateScenario.mockResolvedValue({
+    errors: [],
+    warnings: [],
+    windows: [],
+    window_counts: {},
+    ground_track: [],
+  });
   api.fetchState.mockResolvedValue(missionState);
   api.fetchEvents.mockResolvedValue([]);
   api.generateWindows.mockResolvedValue([]);

@@ -98,4 +98,7 @@ replan path.
 
 - Nothing that keys by request id sees a `None` key; each consumer filters by kind.
 - A mission with no stations behaves exactly as before: no contacts, no downlinks.
-- CP-SAT is weaker than greedy on storage-bound downlink missions until Wave 6.
+- CP-SAT matched greedy's linear storage sum at acceptance; it now models the
+  exact floored walk as a bucketed reservoir (`_add_downlink_storage_budget`),
+  so this consequence no longer holds. See `tests/test_wave4_downlink.py`
+  `test_cp_sat_counts_downlink_releases_in_its_storage_budget`.
