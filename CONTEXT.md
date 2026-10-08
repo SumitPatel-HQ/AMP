@@ -102,6 +102,10 @@ _Avoid_: Live weather, forecast feed, nowcast
 One normalized cloud-coverage fraction for one target at one time, derived from the weather archive. Samples inform the threshold rule only; the planner never sees them.
 _Avoid_: Forecast point, weather reading
 
+**Cue**:
+An archived external alert that enters the mission only as an emergency request arrival carrying evidence.
+_Avoid_: Trigger, feed, tip, adapter
+
 **Frozen**:
 The property of a scheduled action that has already started. Replanning may never move, drop, or recost a frozen action. An action is frozen when its start time is at or before the current simulated time.
 _Avoid_: Locked, committed, past, historical
