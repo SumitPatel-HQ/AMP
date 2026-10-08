@@ -1,6 +1,7 @@
 import type { ImpactSchema, MissionEventSchema, MissionPlanSchema } from "../api/client";
-import { eventSummary } from "../state/missionEvent";
+import { cueEvidence, eventSummary } from "../state/missionEvent";
 import { planLabel } from "../state/planContext";
+import { CueEvidenceDetails } from "./CueEvidence";
 import { clockTime, shortPlanId } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
@@ -92,6 +93,7 @@ export function ImpactPanel({
   const evaluatedPlan = plans.find((candidate) => candidate.id === impact.evaluated_plan_id);
   const event = events.find((candidate) => candidate.id === impact.event_id);
   const rows = impactRows(impact, evaluatedPlan);
+  const evidence = event === undefined ? null : cueEvidence(event);
   const evaluatedLabel = planLabel(impact.evaluated_plan_id, plans);
 
   return (
@@ -112,6 +114,7 @@ export function ImpactPanel({
             </>
           )}
         </p>
+        {evidence === null ? null : <CueEvidenceDetails evidence={evidence} />}
         {onSelectEvent === undefined ? null : (
           <button
             type="button"

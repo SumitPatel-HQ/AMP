@@ -5,8 +5,11 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
+import { cueEvent } from "../test/mapFixtures";
 import {
   buildEmergencyRequestEvent,
+  cueEvidence,
+  emergencyEvidence,
   emergencyRequestDefaults,
   eventSummary,
   introducedRequests,
@@ -227,5 +230,76 @@ describe("emergency request event", () => {
         "SAT-001",
       ),
     ).toBeNull();
+  });
+});
+
+describe("cue evidence", () => {
+  it("reads the recorded evidence and credits the U.S. Geological Survey", () => {
+    expect(cueEvidence(cueEvent)).toEqual({
+      eventId: "EVT-004",
+      requestId: "CUE-1",
+      source: "usgs",
+      sourceLabel: "U.S. Geological Survey",
+      sourceEventId: "us7000test",
+      alertLevel: "orange",
+      mag: 6.4,
+      sig: 650,
+    });
+    expect(eventSummary(cueEvent)).toBe(
+      "CUE-1 · P5 · 0 windows · orange alert us7000test (U.S. Geological Survey)",
+    );
+  });
+
+  it("leaves manual arrivals and other events without evidence", () => {
+    expect(cueEvidence(emergency)).toBeNull();
+    expect(cueEvidence(cloudBlock)).toBeNull();
+    const { mag: _mag, sig: _sig, ...withoutOptional } = cueEvent.payload;
+    expect(cueEvidence({ ...cueEvent, payload: withoutOptional })).toMatchObject({ mag: null, sig: null });
+  });
+});
+
+describe("cue evidence guard", () => {
+  it.each([
+    ["a partial group", { source: "usgs", source_event_id: undefined }],
+    ["a blank source", { source: "  " }],
+    ["a blank source event id", { source_event_id: "" }],
+    ["an unsupported alert level", { alert_level: "purple" }],
+    ["a non-finite magnitude", { mag: Number.POSITIVE_INFINITY }],
+  ])("refuses to display %s the backend would reject", (_label, change) => {
+    const payload = { ...cueEvent.payload, ...change } as unknown as typeof cueEvent.payload;
+    expect(cueEvidence({ ...cueEvent, payload })).toBeNull();
+  });
+});
+
+describe("emergency form evidence", () => {
+  const base = emergencyRequestDefaults("2026-09-21T10:05:00Z", []);
+  const filled = { ...base, targetLat: "38.3", targetLon: "142.4" };
+
+  it("keeps a manual arrival's payload free of evidence keys", () => {
+    const body = buildEmergencyRequestEvent(filled, "SAT-001");
+    expect(body?.event_type).toBe("EMERGENCY_TASK");
+    expect(Object.keys(body!.payload)).toEqual(["request", "windows"]);
+  });
+
+  it("attaches a complete evidence group, with optional magnitude and significance", () => {
+    const body = buildEmergencyRequestEvent(
+      { ...filled, source: "usgs", sourceEventId: "us7000test", alertLevel: "orange", mag: "6.4" },
+      "SAT-001",
+      true,
+    );
+    expect(body?.payload).toMatchObject({ source: "usgs", source_event_id: "us7000test", alert_level: "orange", mag: 6.4 });
+    expect(body?.payload).not.toHaveProperty("sig");
+  });
+
+  it.each([
+    ["a partial group", { source: "usgs" }, "together"],
+    ["magnitude without a group", { mag: "6" }, "need source"],
+    ["an unsupported alert level", { source: "usgs", sourceEventId: "us1", alertLevel: "RED" }, "must be one of"],
+    ["a non-numeric significance", { source: "usgs", sourceEventId: "us1", alertLevel: "red", sig: "high" }, "finite numbers"],
+  ])("refuses %s like the backend", (_label, change, problem) => {
+    const form = { ...filled, ...change };
+    expect(buildEmergencyRequestEvent(form, "SAT-001")).toBeNull();
+    const result = emergencyEvidence(form);
+    expect("problem" in result && result.problem).toContain(problem);
   });
 });

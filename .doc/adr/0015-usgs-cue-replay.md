@@ -1,8 +1,9 @@
 # USGS cue inputs and recorded emergency replay
 
-Status: accepted for ticket 01. Injection, response metrics, and feasibility
-behavior below define the agreed boundaries for later tickets; ticket 01
-implements only developer archiving and offline input generation.
+Status: accepted for tickets 01-02. Response metrics and feasibility behavior
+below define the agreed boundaries for later tickets; ticket 01 implements
+developer archiving and offline input generation, and ticket 02 implements
+evidence-bearing injection, persistence, replay, and dashboard/map inspection.
 
 ## Context
 
@@ -102,7 +103,14 @@ session data or identifiers and makes no scheduling promise.
 ## Consequences
 
 Existing manual emergency arrivals and application behavior remain unchanged.
-Ticket 01 does not extend event payloads, API schemas, persistence, Examples,
+Ticket 02 extends the `EMERGENCY_TASK` payload, API schema, frontend types,
+dashboard emergency form, and dashboard/map inspection with the optional
+evidence group. One domain validator owns the all-or-nothing rule and the API
+schema delegates to it; MissionSession applies it before computing orbital
+windows, so rejected evidence has no observable effect. An evidence-free
+payload keeps its previous serialized shape, and the payload refuses unknown
+keys such as a generated input's intended injection time. Ticket 01 does not
+extend event payloads, API schemas, persistence, Examples,
 metrics, feasibility, or dashboard UI. Tests use explicitly synthetic USGS-shaped
 records, not fabricated historical evidence. Selecting and bundling a verifiable
 real earthquake belongs to ticket 03.

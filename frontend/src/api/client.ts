@@ -21,6 +21,7 @@ export type MissionStateSchema = components["schemas"]["MissionStateSchema"];
 export type MissionEventSchema = components["schemas"]["MissionEventSchema"];
 export type MissionEventRequest = components["schemas"]["MissionEventRequest"];
 export type MissionEventType = MissionEventSchema["event_type"];
+export type EmergencyTaskPayloadSchema = components["schemas"]["EmergencyTaskPayloadSchema"];
 export type ImpactSchema = components["schemas"]["ImpactSchema"];
 export type PlanDiffSchema = components["schemas"]["PlanDiffSchema"];
 export type PlanDiffEntrySchema = components["schemas"]["PlanDiffEntrySchema"];

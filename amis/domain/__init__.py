@@ -9,6 +9,7 @@ from amis.domain.enums import (
     RequestStatus,
 )
 from amis.domain.event import (
+    AlertLevel,
     BatteryDropPayload,
     CloudBlockPayload,
     CommunicationOutagePayload,
@@ -16,6 +17,7 @@ from amis.domain.event import (
     EventPayload,
     MissionEvent,
     SatelliteOutagePayload,
+    emergency_evidence_error,
 )
 from amis.domain.impact import Impact
 from amis.domain.metrics import MetricsResult, SatelliteMetrics
@@ -39,7 +41,9 @@ __all__ = [
     "RequestStatus",
     "CloudBlockPayload",
     "BatteryDropPayload",
+    "AlertLevel",
     "EmergencyRequestPayload",
+    "emergency_evidence_error",
     "EventPayload",
     "MissionEvent",
     "SatelliteOutagePayload",

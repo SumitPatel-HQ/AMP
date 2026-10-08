@@ -22,6 +22,7 @@ import {
   STATUS_COLORS,
   STATUS_LABELS,
 } from "../map/palette";
+import { CueEvidenceDetails } from "./CueEvidence";
 import { clockTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
@@ -30,6 +31,7 @@ const LAYER_TOGGLES: { key: keyof LayerVisibility; label: string }[] = [
   { key: "sequence", label: "Plan sequence" },
   { key: "satellite", label: "Satellite" },
   { key: "events", label: "Event impact" },
+  { key: "cues", label: "Cue evidence" },
 ];
 
 const OVERLAY_BOX =
@@ -119,6 +121,10 @@ function Legend() {
         Event
       </li>
       <li className="flex items-center gap-1.5">
+        <Swatch color={cssColor(EVENT_COLOR)} ring />
+        Cue arrival
+      </li>
+      <li className="flex items-center gap-1.5">
         <Swatch color={cssColor(SATELLITE_COLOR)} ring />
         Satellite
       </li>
@@ -145,6 +151,17 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
             : `observing ${satellite.overRequestId}`}
         </p>
         <p className="text-neutral-600">{model.groundTrack?.length ? "computed from the stored orbit" : "position inferred from the plan"}</p>
+      </div>
+    );
+  }
+  if (hover.kind === "cue") {
+    const cue = model.cues?.find((candidate) => candidate.evidence.eventId === hover.id);
+    if (cue === undefined) return null;
+    return (
+      <div role="tooltip" style={style} className={`${OVERLAY_BOX} pointer-events-none absolute min-w-40 max-w-64 px-2 py-1.5`}>
+        <p className="font-semibold text-red-300">{`Cue arrival · ${cue.evidence.eventId}`}</p>
+        <CueEvidenceDetails evidence={cue.evidence} />
+        <p className="text-neutral-600">arrival point, not an acquisition</p>
       </div>
     );
   }
@@ -193,7 +210,9 @@ export function MissionMapPanel({
   contacts = [],
   satellitePosition = null,
   selectedRequestId,
+  selectedEventId = null,
   onSelectRequest,
+  onSelectEvent,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
@@ -206,7 +225,10 @@ export function MissionMapPanel({
   contacts?: readonly ContactWindowSchema[];
   satellitePosition?: GroundTrackPointSchema | null;
   selectedRequestId: string | null;
+  selectedEventId?: string | null;
   onSelectRequest: (requestId: string | null) => void;
+  /** Picking a cue marker follows its accepted event, and through it the request. */
+  onSelectEvent?: (eventId: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<MissionMapEngine | null>(null);
@@ -217,10 +239,10 @@ export function MissionMapPanel({
 
   // The engine outlives renders, so it reads selection through a ref rather
   // than capturing the values from the render that created it.
-  const selectionRef = useRef({ selectedRequestId, onSelectRequest });
+  const selectionRef = useRef({ selectedRequestId, selectedEventId, onSelectRequest, onSelectEvent });
   useEffect(() => {
-    selectionRef.current = { selectedRequestId, onSelectRequest };
-  }, [selectedRequestId, onSelectRequest]);
+    selectionRef.current = { selectedRequestId, selectedEventId, onSelectRequest, onSelectEvent };
+  }, [selectedRequestId, selectedEventId, onSelectRequest, onSelectEvent]);
 
   const model = useMemo(
     () =>
@@ -257,6 +279,10 @@ export function MissionMapPanel({
             const { selectedRequestId: current, onSelectRequest: select } = selectionRef.current;
             select(current === requestId ? null : requestId);
           },
+          onPickCue: (eventId) => {
+            const { selectedEventId: current, onSelectEvent: select } = selectionRef.current;
+            select?.(current === eventId ? null : eventId);
+          },
           onHover: setHover,
           onBasemap: setBasemap,
         });
@@ -279,8 +305,8 @@ export function MissionMapPanel({
 
   useEffect(() => {
     if (engine === null || model === null) return;
-    engine.render({ model, selectedRequestId, visibility });
-  }, [engine, model, selectedRequestId, visibility]);
+    engine.render({ model, selectedRequestId, selectedEventId, visibility });
+  }, [engine, model, selectedRequestId, selectedEventId, visibility]);
 
   const meta = [
     model === null ? null : `${model.targets.length} targets`,

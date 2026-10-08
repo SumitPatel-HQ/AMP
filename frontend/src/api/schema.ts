@@ -665,11 +665,24 @@ export interface components {
         /**
          * EmergencyTaskPayloadSchema
          * @description The emergency request and the explicit windows it arrives with.
+         *
+         *     A cue arrival (ADR-0015) also carries ``source``, ``source_event_id``
+         *     and ``alert_level`` together, with optional ``mag`` and ``sig``.
          */
         EmergencyTaskPayloadSchema: {
             request: components["schemas"]["ObservationRequestSchema"];
             /** Windows */
             windows?: components["schemas"]["ObservationWindowSchema"][] | null;
+            /** Source */
+            source?: string | null;
+            /** Source Event Id */
+            source_event_id?: string | null;
+            /** Alert Level */
+            alert_level?: ("red" | "orange" | "yellow" | "green" | "unknown") | null;
+            /** Mag */
+            mag?: number | null;
+            /** Sig */
+            sig?: number | null;
         };
         /** ErrorBody */
         ErrorBody: {

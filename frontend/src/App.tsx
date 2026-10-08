@@ -88,7 +88,9 @@ function MissionWorkspace({
         contacts={session.contacts}
         satellitePosition={session.satellitePosition}
         selectedRequestId={selection.requestId}
+        selectedEventId={selection.eventId}
         onSelectRequest={session.selectRequest}
+        onSelectEvent={session.selectEvent}
       />
       <StatePanel
         state={session.missionState}

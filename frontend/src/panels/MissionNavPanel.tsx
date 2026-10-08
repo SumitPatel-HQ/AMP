@@ -9,7 +9,8 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
-import { eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
+import { cueEvidence, eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
+import { CueEvidenceDetails } from "./CueEvidence";
 import { planLabel } from "../state/planContext";
 import { expiredRequestIds, requestStatus, type RequestState } from "../state/requestStatus";
 import type { MissionSelection, ReplanResult } from "../state/types";
@@ -204,6 +205,7 @@ function EventList({
     <ul aria-label="Mission events">
       {events.map((event) => {
         const selected = event.id === selectedEventId;
+        const evidence = cueEvidence(event);
         return (
           <li key={event.id}>
             <button
@@ -223,6 +225,11 @@ function EventList({
                 {activeIds.has(event.id) ? <span className="text-amber-400">active</span> : null}
               </span>
             </button>
+            {selected && evidence !== null ? (
+              <div className="px-2 pb-1">
+                <CueEvidenceDetails evidence={evidence} />
+              </div>
+            ) : null}
           </li>
         );
       })}

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Union
+from typing import Any, Literal, Union, get_args
 
 from amis.domain.enums import EventType
 from amis.domain.scenario import ObservationRequest
@@ -78,18 +79,90 @@ class BatteryDropPayload:
         )
 
 
+# Normalized cue alert levels (ADR-0015). ``unknown`` is the explicit value
+# for an absent source alert. The API schema and the frontend read this set.
+AlertLevel = Literal["red", "orange", "yellow", "green", "unknown"]
+CUE_ALERT_LEVELS: tuple[str, ...] = get_args(AlertLevel)
+EMERGENCY_EVIDENCE_FIELDS = ("source", "source_event_id", "alert_level")
+
+
+def emergency_evidence_error(
+    source: Any,
+    source_event_id: Any,
+    alert_level: Any,
+    mag: Any = None,
+    sig: Any = None,
+) -> str | None:
+    """Why an emergency evidence group is inconsistent, or None when valid.
+
+    The single owner of the all-or-nothing rule: the domain payload, the
+    session's pre-generation check, and the API schema all delegate here.
+    """
+    core = {"source": source, "source_event_id": source_event_id, "alert_level": alert_level}
+    missing = [field for field, value in core.items() if value is None]
+    if missing and len(missing) != len(core):
+        return (
+            "emergency evidence requires source, source_event_id, and alert_level together; "
+            f"missing {', '.join(missing)}"
+        )
+    if missing:
+        optional = [field for field, value in (("mag", mag), ("sig", sig)) if value is not None]
+        if optional:
+            return (
+                f"emergency evidence {', '.join(optional)} requires source, "
+                "source_event_id, and alert_level"
+            )
+        return None
+    for field in ("source", "source_event_id"):
+        value = core[field]
+        if not isinstance(value, str) or not value.strip():
+            return f"emergency evidence {field} must be a nonempty string"
+    if alert_level not in CUE_ALERT_LEVELS:
+        return (
+            f"emergency evidence alert_level must be one of {', '.join(CUE_ALERT_LEVELS)}; "
+            f"got {alert_level!r}"
+        )
+    for field, value in (("mag", mag), ("sig", sig)):
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            return f"emergency evidence {field} must be a finite number when present"
+    return None
+
+
 @dataclass(frozen=True)
 class EmergencyRequestPayload:
-    """The request and windows recorded by the ``EMERGENCY_TASK`` wire event."""
+    """The request and windows recorded by the ``EMERGENCY_TASK`` wire event.
+
+    A manual arrival carries no evidence. A cue arrival (ADR-0015) also
+    carries ``source``, ``source_event_id`` and ``alert_level`` together,
+    with optional ``mag`` (source-reported earthquake magnitude, unitless
+    USGS ``mag``) and ``sig`` (USGS significance score, 0-1000+, unitless);
+    the planner never reads them.
+    """
 
     request: ObservationRequest
     windows: tuple[ObservationWindow, ...]
+    source: str | None = None
+    source_event_id: str | None = None
+    alert_level: AlertLevel | None = None
+    mag: float | None = None
+    sig: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        # Evidence keys are omitted when absent, so evidence-free payloads
+        # keep their exact serialized shape.
+        result: dict[str, Any] = {
             "request": self.request.to_dict(),
             "windows": [window.to_dict() for window in self.windows],
         }
+        for field in ("source", "source_event_id", "alert_level", "mag", "sig"):
+            value = getattr(self, field)
+            if value is not None:
+                result[field] = value
+        return result
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "EmergencyRequestPayload":
@@ -98,6 +171,26 @@ class EmergencyRequestPayload:
             windows=tuple(
                 ObservationWindow.from_dict(window) for window in data["windows"]
             ),
+            source=data.get("source"),
+            source_event_id=data.get("source_event_id"),
+            alert_level=data.get("alert_level"),
+            mag=data.get("mag"),
+            sig=data.get("sig"),
+        )
+
+    @property
+    def has_evidence(self) -> bool:
+        """True only for a complete, valid evidence group.
+
+        A partial or malformed group is not evidence: ``evidence_error()``
+        rejects it, and this property reports False for it.
+        """
+        return self.source is not None and self.evidence_error() is None
+
+    def evidence_error(self) -> str | None:
+        """Why the evidence group is inconsistent, or None when it is valid."""
+        return emergency_evidence_error(
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig
         )
 
 

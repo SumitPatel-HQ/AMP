@@ -1,7 +1,7 @@
 import type { Layer } from "@deck.gl/core";
 import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { MapContactTrack, MapStationFootprint } from "./contactTracks";
-import type { Coordinate, MapStation, MapTarget, MissionMapModel, SatellitePlacement } from "./missionMapModel";
+import type { Coordinate, MapCue, MapStation, MapTarget, MissionMapModel, SatellitePlacement } from "./missionMapModel";
 import {
   EVENT_COLOR,
   type LayerVisibility,
@@ -13,11 +13,14 @@ import {
 
 export const TARGETS_LAYER_ID = "amis-targets";
 export const SATELLITE_LAYER_ID = "amis-satellite";
+export const CUES_LAYER_ID = "amis-cues";
 
 /** Everything one frame of the mission map depends on. */
 export interface MissionMapScene {
   model: MissionMapModel;
   selectedRequestId: string | null;
+  /** The event the reviewer is following, so its cue marker can highlight. */
+  selectedEventId?: string | null;
   visibility: LayerVisibility;
 }
 
@@ -30,7 +33,12 @@ export function targetRadius(target: MapTarget): number {
  * The deck.gl layers for one scene, bottom to top: plan sequence, event rings,
  * targets, labels, satellite. Pure: the same scene always builds the same stack.
  */
-export function buildMissionLayers({ model, selectedRequestId, visibility }: MissionMapScene): Layer[] {
+export function buildMissionLayers({
+  model,
+  selectedRequestId,
+  selectedEventId = null,
+  visibility,
+}: MissionMapScene): Layer[] {
   const layers: Layer[] = [];
 
   if (model.groundTrack?.length) {
@@ -118,6 +126,29 @@ export function buildMissionLayers({ model, selectedRequestId, visibility }: Mis
         getLineColor: [...EVENT_COLOR, 230],
         getLineWidth: 1.5,
         lineWidthUnits: "pixels",
+      }),
+    );
+  }
+
+  if (visibility.cues && model.cues?.length) {
+    // Drawn beneath the targets: the target keeps its own pick, the outer
+    // ring picks the cue event that introduced it.
+    layers.push(
+      new ScatterplotLayer<MapCue>({
+        id: CUES_LAYER_ID,
+        data: model.cues,
+        pickable: true,
+        getPosition: (cue) => [...cue.coordinate],
+        getRadius: 18,
+        radiusUnits: "pixels",
+        stroked: true,
+        filled: true,
+        getFillColor: [...EVENT_COLOR, 18],
+        getLineColor: (cue) =>
+          cue.evidence.eventId === selectedEventId ? [...SELECTED_COLOR, 255] : [...EVENT_COLOR, 200],
+        getLineWidth: (cue) => (cue.evidence.eventId === selectedEventId ? 3 : 1.5),
+        lineWidthUnits: "pixels",
+        updateTriggers: { getLineColor: selectedEventId, getLineWidth: selectedEventId },
       }),
     );
   }

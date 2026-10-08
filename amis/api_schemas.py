@@ -7,7 +7,16 @@ from typing import Annotated, Any, Literal, Self, Union
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
-from amis.domain import ActionKind, ActionStatus, EventType, PlanChangeType, ReasonCode, RequestStatus
+from amis.domain import (
+    ActionKind,
+    ActionStatus,
+    AlertLevel,
+    EventType,
+    PlanChangeType,
+    ReasonCode,
+    RequestStatus,
+    emergency_evidence_error,
+)
 from amis.errors import ErrorCode
 
 
@@ -342,10 +351,30 @@ class CommunicationOutagePayloadSchema(ApiModel):
 
 
 class EmergencyTaskPayloadSchema(ApiModel):
-    """The emergency request and the explicit windows it arrives with."""
+    """The emergency request and the explicit windows it arrives with.
+
+    A cue arrival (ADR-0015) also carries ``source``, ``source_event_id``
+    and ``alert_level`` together, with optional ``mag`` and ``sig``.
+    """
 
     request: ObservationRequestSchema
     windows: list[ObservationWindowSchema] | None = None
+    source: str | None = Field(default=None, min_length=1)
+    source_event_id: str | None = Field(default=None, min_length=1)
+    alert_level: AlertLevel | None = None
+    # Source-reported USGS magnitude and significance score, both unitless.
+    mag: float | None = Field(default=None, allow_inf_nan=False, strict=True)
+    sig: float | None = Field(default=None, allow_inf_nan=False, strict=True)
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> Self:
+        # The domain owns the all-or-nothing rule; the schema only delegates.
+        error = emergency_evidence_error(
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig
+        )
+        if error is not None:
+            raise ValueError(error)
+        return self
 
 
 class CloudBlockEventRequest(ApiModel):

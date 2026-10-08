@@ -1,4 +1,4 @@
-import type { MissionPlanSchema, MissionStateSchema, ScenarioSchema } from "../api/client";
+import type { MissionEventSchema, MissionPlanSchema, MissionStateSchema, ScenarioSchema } from "../api/client";
 
 /** Two targets on different continents and a plan that visits both. */
 export const scenario = {
@@ -90,3 +90,31 @@ export const missionState = {
   completed_request_ids: [],
   mission_complete: false,
 } satisfies MissionStateSchema;
+
+/** An accepted USGS cue arrival, as the event route returns it. */
+export const cueEvent = {
+  id: "EVT-004",
+  scenario_id: scenario.id,
+  event_time: "2026-09-21T10:30:00Z",
+  event_type: "EMERGENCY_TASK",
+  payload: {
+    request: {
+      id: "CUE-1",
+      target_lat: 38.3,
+      target_lon: 142.4,
+      priority: 5,
+      duration_s: 600,
+      deadline: "2026-09-22T10:30:00Z",
+      energy_cost_wh: 40,
+      storage_cost_mb: 100,
+      status: "pending",
+      target_name: "off the east coast of Honshu",
+    },
+    windows: [],
+    source: "usgs",
+    source_event_id: "us7000test",
+    alert_level: "orange",
+    mag: 6.4,
+    sig: 650,
+  },
+} satisfies MissionEventSchema;

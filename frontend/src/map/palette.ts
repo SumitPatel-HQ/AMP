@@ -34,6 +34,7 @@ export interface LayerVisibility {
   sequence: boolean;
   satellite: boolean;
   events: boolean;
+  cues: boolean;
 }
 
 export const DEFAULT_VISIBILITY: LayerVisibility = {
@@ -41,4 +42,5 @@ export const DEFAULT_VISIBILITY: LayerVisibility = {
   sequence: true,
   satellite: true,
   events: true,
+  cues: true,
 };

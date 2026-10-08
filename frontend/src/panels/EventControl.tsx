@@ -10,6 +10,9 @@ import type {
 } from "../api/client";
 import {
   buildEmergencyRequestEvent,
+  CUE_ALERT_LEVELS,
+  CUE_POLICY_NOTICE,
+  emergencyEvidence,
   emergencyRequestDefaults,
   emergencyWindowId,
   missionRequestPool,
@@ -271,6 +274,14 @@ const EMERGENCY_FIELDS: { key: keyof EmergencyRequestForm; label: string; type: 
   { key: "windowEnd", label: "Window end (UTC)", type: "datetime-local" },
 ];
 
+/** Optional cue evidence; blank for a manual arrival. */
+const EVIDENCE_FIELDS: { key: keyof EmergencyRequestForm; label: string; type: "text" | "number" }[] = [
+  { key: "source", label: "Evidence source", type: "text" },
+  { key: "sourceEventId", label: "Source event id", type: "text" },
+  { key: "mag", label: "Magnitude", type: "number" },
+  { key: "sig", label: "Significance", type: "number" },
+];
+
 /** The new request and its one explicit window, as the EMERGENCY_TASK payload carries them. */
 function EmergencyRequestFields({
   initial,
@@ -285,6 +296,12 @@ function EmergencyRequestFields({
 }) {
   const [form, setForm] = useState(initial);
   const windowId = emergencyWindowId(form.requestId.trim() || "…");
+  const update = (key: keyof EmergencyRequestForm, value: string) => {
+    const next = { ...form, [key]: value };
+    setForm(next);
+    onChange(buildEmergencyRequestEvent(next, satelliteId, orbital));
+  };
+  const evidence = emergencyEvidence(form);
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
@@ -294,17 +311,39 @@ function EmergencyRequestFields({
               aria-label={label}
               type={type}
               step={type === "number" ? "any" : undefined}
-              value={form[key]}
-              onChange={(event) => {
-                const next = { ...form, [key]: event.target.value };
-                setForm(next);
-                onChange(buildEmergencyRequestEvent(next, satelliteId, orbital));
-              }}
+              value={form[key] ?? ""}
+              onChange={(event) => update(key, event.target.value)}
               className={CONTROL_INPUT}
             />
           </Field>
         ))}
       </div>
+      <fieldset className="grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-[var(--amis-border)] pt-1.5">
+        <legend className="text-[10px] uppercase tracking-wide text-neutral-500">Cue evidence (optional)</legend>
+        {EVIDENCE_FIELDS.slice(0, 2).map(({ key, label, type }) => (
+          <Field key={key} label={label}>
+            <input aria-label={label} type={type} value={form[key] ?? ""} onChange={(event) => update(key, event.target.value)} className={CONTROL_INPUT} />
+          </Field>
+        ))}
+        <Field label="Alert level">
+          <select aria-label="Alert level" value={form.alertLevel ?? ""} onChange={(event) => update("alertLevel", event.target.value)} className={CONTROL_INPUT}>
+            <option value="">none</option>
+            {CUE_ALERT_LEVELS.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+        </Field>
+        {EVIDENCE_FIELDS.slice(2).map(({ key, label, type }) => (
+          <Field key={key} label={label}>
+            <input aria-label={label} type={type} step="any" value={form[key] ?? ""} onChange={(event) => update(key, event.target.value)} className={CONTROL_INPUT} />
+          </Field>
+        ))}
+      </fieldset>
+      <p className={`text-[10px] ${"problem" in evidence ? "text-amber-300" : "text-neutral-500"}`}>
+        {"problem" in evidence
+          ? evidence.problem
+          : "Leave blank for a manual arrival. With evidence: " + CUE_POLICY_NOTICE}
+      </p>
       <p className="text-[10px] text-neutral-500">
         {orbital ? "Observation windows are computed from the stored orbit before the event is recorded." : `Enters through the event log with window ${windowId} on ${satelliteId}; the scenario itself stays unchanged.`}
       </p>

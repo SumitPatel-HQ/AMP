@@ -9,21 +9,37 @@ import { BASEMAPS, tuneBasemap } from "./basemap";
 import {
   buildMissionLayers,
   type MissionMapScene,
+  CUES_LAYER_ID,
   SATELLITE_LAYER_ID,
   TARGETS_LAYER_ID,
 } from "./missionLayers";
-import type { MapTarget } from "./missionMapModel";
+import type { MapCue, MapTarget } from "./missionMapModel";
 
 /** What the pointer is over, in pixels relative to the map container. */
 export interface MapHover {
-  kind: "target" | "satellite";
+  kind: "target" | "satellite" | "cue";
   id: string;
   x: number;
   y: number;
 }
 
+/** Pickable layers and how each names the object under the pointer. */
+const PICKABLE_LAYERS: Record<string, (object: unknown) => Pick<MapHover, "kind" | "id">> = {
+  [TARGETS_LAYER_ID]: (object) => ({ kind: "target", id: (object as MapTarget).requestId }),
+  [CUES_LAYER_ID]: (object) => ({ kind: "cue", id: (object as MapCue).evidence.eventId }),
+  [SATELLITE_LAYER_ID]: () => ({ kind: "satellite", id: "satellite" }),
+};
+
+/** What a pick landed on, shared by click and hover, or null for nothing pickable. */
+function pickedObject(info: PickingInfo): Pick<MapHover, "kind" | "id"> | null {
+  const name = info.layer === null || info.layer === undefined ? undefined : PICKABLE_LAYERS[info.layer.id];
+  return name === undefined || info.object === undefined ? null : name(info.object);
+}
+
 export interface MissionMapHandlers {
   onPickTarget: (requestId: string) => void;
+  /** A cue marker, named by the accepted event that recorded it. */
+  onPickCue?: (eventId: string) => void;
   onPickCoordinate?: (longitude: number, latitude: number) => void;
   onHover: (hover: MapHover | null) => void;
   onBasemap: (name: string) => void;
@@ -107,8 +123,11 @@ export function createMissionMapEngine(
     layers: [],
     pickingRadius: 8,
     onClick: (info: PickingInfo) => {
-      if (info.layer?.id === TARGETS_LAYER_ID && info.object !== undefined) {
-        handlers.onPickTarget((info.object as MapTarget).requestId);
+      const picked = pickedObject(info);
+      if (picked?.kind === "target") {
+        handlers.onPickTarget(picked.id);
+      } else if (picked?.kind === "cue" && handlers.onPickCue) {
+        handlers.onPickCue(picked.id);
       } else if (handlers.onPickCoordinate) {
         const point = map.unproject([info.x, info.y]);
         handlers.onPickCoordinate(point.lng, point.lat);
@@ -119,15 +138,9 @@ export function createMissionMapEngine(
         handlers.onHover(null);
         return;
       }
-      if (info.layer.id === TARGETS_LAYER_ID) {
-        handlers.onHover({
-          kind: "target",
-          id: (info.object as MapTarget).requestId,
-          x: info.x,
-          y: info.y,
-        });
-      } else if (info.layer.id === SATELLITE_LAYER_ID) {
-        handlers.onHover({ kind: "satellite", id: "satellite", x: info.x, y: info.y });
+      const picked = pickedObject(info);
+      if (picked !== null) {
+        handlers.onHover({ ...picked, x: info.x, y: info.y });
       }
     },
     getCursor: ({ isHovering }) => (isHovering ? "pointer" : "grab"),

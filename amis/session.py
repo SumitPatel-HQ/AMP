@@ -42,6 +42,7 @@ from amis.domain import (
     SatelliteState,
     Scenario,
     ScheduledAction,
+    emergency_evidence_error,
 )
 from amis.errors import (
     InvalidEventError,
@@ -62,6 +63,11 @@ from amis.metrics import compute_metrics
 from amis.planning import GreedyPlanner, Planner
 from amis.trace import build_traces
 from amis.windows import SyntheticWindowProvider, WindowProvider
+
+
+_EMERGENCY_PAYLOAD_FIELDS = frozenset(
+    {"request", "windows", "source", "source_event_id", "alert_level", "mag", "sig"}
+)
 
 
 class MissionSession:
@@ -320,6 +326,11 @@ class MissionSession:
             event_payload = self._parse_battery_drop_payload(payload)
             self._validate_battery_drop(event_payload)
         elif parsed_event_type is EventType.EMERGENCY_TASK:
+            if isinstance(payload, dict):
+                # Refuse stray keys and inconsistent evidence before the
+                # provider runs, so a rejected cue has no observable effect.
+                self._reject_unknown_emergency_fields(payload)
+                self._reject_invalid_emergency_evidence(payload)
             if isinstance(payload, dict) and payload.get("windows") is None and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
                 try:
                     request = ObservationRequest.from_dict(payload["request"])
@@ -1051,10 +1062,44 @@ class MissionSession:
                 "emergency request payload requires a request and explicit windows"
             ) from error
 
+    @staticmethod
+    def _reject_unknown_emergency_fields(payload: dict[str, Any]) -> None:
+        # The accepted event takes the current simulated clock, so a
+        # generated developer input's intended time (or any other stray
+        # key) is refused rather than silently ignored.
+        unknown = sorted(set(payload) - _EMERGENCY_PAYLOAD_FIELDS)
+        if unknown:
+            raise InvalidEventError(
+                "emergency request payload has unsupported fields; "
+                "the event time is the session's simulated clock",
+                details={"fields": unknown},
+            )
+
+    @staticmethod
+    def _reject_invalid_emergency_evidence(payload: dict[str, Any]) -> None:
+        error = emergency_evidence_error(
+            payload.get("source"),
+            payload.get("source_event_id"),
+            payload.get("alert_level"),
+            payload.get("mag"),
+            payload.get("sig"),
+        )
+        if error is not None:
+            request = payload.get("request")
+            request_id = request.get("id") if isinstance(request, dict) else None
+            raise InvalidEventError(error, details={"request_id": request_id})
+
     def _validate_emergency_request(self, payload: EmergencyRequestPayload) -> None:
         scenario = self._require_scenario()
         request = payload.request
         windows = payload.windows
+
+        evidence_error = payload.evidence_error()
+        if evidence_error is not None:
+            raise InvalidEventError(
+                evidence_error,
+                details={"request_id": request.id},
+            )
 
         if request.id in {item.id for item in self._request_pool}:
             raise InvalidEventError(
