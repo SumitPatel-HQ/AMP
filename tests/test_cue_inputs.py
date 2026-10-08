@@ -162,6 +162,24 @@ def test_equal_normalized_records_collapse_and_conflicts_fail():
         normalize_usgs(response(first, duplicate), selected_event_ids=["synthetic-a"])
 
 
+def test_whitespace_padded_event_ids_normalize_and_collapse():
+    expected = normalize_usgs(response(feature("a")))
+    assert normalize_usgs(response(feature(" a "))) == expected
+    assert expected[0].source_event_id == "a"
+    for selection in (None, ["a"], [" a "], ["a", " a "]):
+        assert normalize_usgs(
+            response(feature(" a "), feature("a")), selected_event_ids=selection
+        ) == expected
+
+
+def test_whitespace_padded_event_ids_do_not_hide_conflicting_records():
+    with pytest.raises(ValueError, match="conflicting normalized records for usgs:a"):
+        normalize_usgs(
+            response(feature(" a ", mag=5), feature("a", mag=6)),
+            selected_event_ids=[" a "],
+        )
+
+
 def test_selection_skips_unselected_invalid_records_and_reports_missing_ids():
     good = feature("selected")
     bad = feature("unselected", alert="invalid")
@@ -212,6 +230,20 @@ def test_imaging_profile_never_guesses_missing_values(missing):
     del values[missing]
     with pytest.raises(ValueError, match=f"missing explicit values: {missing}"):
         ImagingProfile.from_dict(values)
+
+
+@pytest.mark.parametrize("field", ["duration_s", "energy_cost_wh", "storage_cost_mb"])
+@pytest.mark.parametrize("value", ["60", True, None, float("nan"), float("inf"), 10**400])
+def test_imaging_profile_rejects_invalid_numbers_at_parsing(field, value):
+    with pytest.raises(ValueError, match=field):
+        ImagingProfile.from_dict({**PROFILE.to_dict(), field: value})
+
+
+@pytest.mark.parametrize("field", ["satellite_id", "target_name"])
+@pytest.mark.parametrize("value", [123, True, None])
+def test_imaging_profile_rejects_nonstring_optional_fields_at_parsing(field, value):
+    with pytest.raises(ValueError, match=field):
+        ImagingProfile.from_dict({**PROFILE.to_dict(), field: value})
 
 
 @pytest.mark.parametrize("changes", [

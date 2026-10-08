@@ -42,6 +42,7 @@ def _normalize_feature(feature: Any) -> CueSample:
     event_id = feature.get("id")
     if not isinstance(event_id, str) or not event_id.strip():
         raise ValueError("source event identifier must be a nonempty string")
+    event_id = event_id.strip()
     geometry = feature.get("geometry")
     if not isinstance(geometry, dict) or geometry.get("type") != "Point":
         raise ValueError("geometry must be a GeoJSON Point")
@@ -109,12 +110,14 @@ def normalize_usgs(
         not selected or any(not isinstance(item, str) or not item.strip() for item in selected)
     ):
         raise ValueError("selection must contain nonempty source event identifiers")
+    if selected is not None:
+        selected = {item.strip() for item in selected}
     records: dict[tuple[str, str], CueSample] = {}
     found: set[str] = set()
     for index, feature in enumerate(response["features"]):
         if selected is not None and (
             not isinstance(feature, dict) or not isinstance(feature.get("id"), str)
-            or feature["id"] not in selected
+            or feature["id"].strip() not in selected
         ):
             continue
         try:

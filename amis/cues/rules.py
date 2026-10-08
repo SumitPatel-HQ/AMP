@@ -14,7 +14,7 @@ from typing import Any
 
 from amis.api_schemas import ObservationRequestSchema
 from amis.cues.archive import CueArchive
-from amis.cues.normalize import normalize_usgs
+from amis.cues.normalize import _finite_number, normalize_usgs
 from amis.domain import ObservationRequest, Scenario
 
 POLICY_VERSION = "usgs-earthquake-v1"
@@ -47,6 +47,11 @@ class ImagingProfile:
         extra = data.keys() - allowed
         if extra:
             raise ValueError(f"unknown imaging profile fields: {', '.join(sorted(extra))}")
+        for field in sorted(required):
+            _finite_number(data[field], field)
+        for field in ("satellite_id", "target_name"):
+            if field in data and not isinstance(data[field], str):
+                raise ValueError(f"{field} must be a string")
         return ImagingProfile(**data)
 
     def to_dict(self) -> dict[str, Any]:
