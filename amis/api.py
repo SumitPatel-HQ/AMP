@@ -35,7 +35,7 @@ from amis.api_schemas import (
     GroundStationSchema,
     GroundTrackPointSchema,
 )
-from amis.examples import cloud_example, examples
+from amis.examples import cloud_example, example_briefings, examples
 from amis.domain import Scenario
 from amis.orbital.elements import catalogue, from_tle
 from amis.orbital.track import ground_track
@@ -161,9 +161,11 @@ def create_app(
 
     @app.get("/examples", response_model=list[ScenarioSummarySchema])
     def list_examples() -> list[dict[str, Any]]:
+        briefings = example_briefings()
         return [
             {"id": key, "name": item.name, "start_time": item.start_time,
-             "end_time": item.end_time, "provider": item.window_policy.provider if item.window_policy else "legacy"}
+             "end_time": item.end_time, "provider": item.window_policy.provider if item.window_policy else "legacy",
+             "briefing": briefings.get(key)}
             for key, item in examples().items()
         ]
 

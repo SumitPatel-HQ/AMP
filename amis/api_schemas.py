@@ -559,6 +559,9 @@ class ScenarioSummarySchema(ApiModel):
     start_time: datetime
     end_time: datetime
     provider: str
+    # Ticket 03: only bundled Examples with a committed briefing set this;
+    # saved missions and other Examples omit it.
+    briefing: str | None = None
 
 
 class ScenarioPreviewSchema(ApiModel):

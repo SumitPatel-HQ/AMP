@@ -1,0 +1,129 @@
+{
+  "end_time": "2026-10-08T22:30:00+00:00",
+  "id": "SCN-EX-USGS-VANUATU",
+  "name": "USGS M6.3 Vanuatu earthquake replay (2026-10-08)",
+  "requests": [
+    {
+      "deadline": "2026-10-08T22:30:00+00:00",
+      "duration_s": 30,
+      "energy_cost_wh": 20,
+      "id": "OBS-SUVA",
+      "priority": 2,
+      "status": "pending",
+      "storage_cost_mb": 100,
+      "target_lat": -18.1416,
+      "target_lon": 178.4419,
+      "target_name": "Suva"
+    },
+    {
+      "deadline": "2026-10-08T22:30:00+00:00",
+      "duration_s": 30,
+      "energy_cost_wh": 20,
+      "id": "OBS-HONIARA",
+      "priority": 3,
+      "status": "pending",
+      "storage_cost_mb": 100,
+      "target_lat": -9.428,
+      "target_lon": 159.9498,
+      "target_name": "Honiara"
+    },
+    {
+      "deadline": "2026-10-08T22:30:00+00:00",
+      "duration_s": 30,
+      "energy_cost_wh": 20,
+      "id": "OBS-NOUMEA",
+      "priority": 2,
+      "status": "pending",
+      "storage_cost_mb": 100,
+      "target_lat": -22.2758,
+      "target_lon": 166.458,
+      "target_name": "Noumea"
+    }
+  ],
+  "satellite": {
+    "available": true,
+    "battery_capacity_wh": 1000,
+    "battery_charge_wh": 1000,
+    "id": "SAT-EO",
+    "orbit": {
+      "epoch": "2026-09-24T22:32:47.552064+00:00",
+      "international_designator": "2013-008A",
+      "name": "LANDSAT 8",
+      "norad_id": 39084,
+      "omm": {
+        "ARG_OF_PERICENTER": 95.0724,
+        "BSTAR": 5.8137796e-05,
+        "CLASSIFICATION_TYPE": "U",
+        "ECCENTRICITY": 0.0001313,
+        "ELEMENT_SET_NO": 999,
+        "EPHEMERIS_TYPE": 0,
+        "EPOCH": "2026-09-24T22:32:47.552064",
+        "INCLINATION": 98.221,
+        "MEAN_ANOMALY": 265.0625,
+        "MEAN_MOTION": 14.57103974,
+        "MEAN_MOTION_DDOT": 0,
+        "MEAN_MOTION_DOT": 2.17e-06,
+        "NORAD_CAT_ID": 39084,
+        "OBJECT_ID": "2013-008A",
+        "OBJECT_NAME": "LANDSAT 8",
+        "RA_OF_ASC_NODE": 336.8402,
+        "REV_AT_EPOCH": 71242
+      },
+      "retrieved_at": "2026-09-25T19:14:40.093638+00:00",
+      "sha256": "a3f152801d9d4e70c28fa361c6921a9c49c3f9a0db1745029e3f6b51bac23589",
+      "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=39084&FORMAT=json"
+    },
+    "storage_capacity_mb": 4000,
+    "storage_usage_mb": 0
+  },
+  "satellites": [
+    {
+      "available": true,
+      "battery_capacity_wh": 1000,
+      "battery_charge_wh": 1000,
+      "id": "SAT-EO",
+      "orbit": {
+        "epoch": "2026-09-24T22:32:47.552064+00:00",
+        "international_designator": "2013-008A",
+        "name": "LANDSAT 8",
+        "norad_id": 39084,
+        "omm": {
+          "ARG_OF_PERICENTER": 95.0724,
+          "BSTAR": 5.8137796e-05,
+          "CLASSIFICATION_TYPE": "U",
+          "ECCENTRICITY": 0.0001313,
+          "ELEMENT_SET_NO": 999,
+          "EPHEMERIS_TYPE": 0,
+          "EPOCH": "2026-09-24T22:32:47.552064",
+          "INCLINATION": 98.221,
+          "MEAN_ANOMALY": 265.0625,
+          "MEAN_MOTION": 14.57103974,
+          "MEAN_MOTION_DDOT": 0,
+          "MEAN_MOTION_DOT": 2.17e-06,
+          "NORAD_CAT_ID": 39084,
+          "OBJECT_ID": "2013-008A",
+          "OBJECT_NAME": "LANDSAT 8",
+          "RA_OF_ASC_NODE": 336.8402,
+          "REV_AT_EPOCH": 71242
+        },
+        "retrieved_at": "2026-09-25T19:14:40.093638+00:00",
+        "sha256": "a3f152801d9d4e70c28fa361c6921a9c49c3f9a0db1745029e3f6b51bac23589",
+        "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=39084&FORMAT=json"
+      },
+      "storage_capacity_mb": 4000,
+      "storage_usage_mb": 0
+    }
+  ],
+  "start_time": "2026-10-07T12:00:00+00:00",
+  "window_policy": {
+    "culmination_placement": false,
+    "downlink_rate_mb_s": 0.0,
+    "ground_station_ids": [],
+    "max_off_nadir_deg": 60,
+    "min_sun_elevation_deg": 10,
+    "provider": "orbital",
+    "recharge_rate_w": 0.0,
+    "settling_time_s": 0.0,
+    "slew_rate_deg_s": 0.0
+  }
+}

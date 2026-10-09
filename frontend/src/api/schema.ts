@@ -1122,6 +1122,8 @@ export interface components {
             end_time: string;
             /** Provider */
             provider: string;
+            /** Briefing */
+            briefing?: string | null;
         };
         /** ScheduledActionSchema */
         ScheduledActionSchema: {

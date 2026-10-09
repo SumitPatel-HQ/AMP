@@ -1,9 +1,10 @@
 # USGS cue inputs and recorded emergency replay
 
-Status: accepted for tickets 01-02. Response metrics and feasibility behavior
+Status: accepted for tickets 01-03. Response metrics and feasibility behavior
 below define the agreed boundaries for later tickets; ticket 01 implements
-developer archiving and offline input generation, and ticket 02 implements
-evidence-bearing injection, persistence, replay, and dashboard/map inspection.
+developer archiving and offline input generation, ticket 02 implements
+evidence-bearing injection, persistence, replay, and dashboard/map inspection,
+and ticket 03 bundles a real, independently verifiable earthquake Example.
 
 ## Context
 
@@ -81,6 +82,46 @@ ADR-0002 replay remains the pristine Scenario plus accepted ordered events,
 without the archive or network. ADR-0008 stored orbital inputs and ADR-0012's
 archive-then-replay boundary remain intact. No new EventType, Planner input,
 runtime archive lookup, or changes to frozen actions are introduced.
+
+### Ticket 03: bundled Example
+
+The bundled Example replays USGS event `us6000u0xi`, M6.3, "102 km NE of
+Norsup, Vanuatu", 2026-10-08T09:00:07.768Z, archived from
+`https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson`
+at `amis/data/cues/vanuatu-us6000u0xi-20261008/` (manifest and raw bytes
+committed). `amis/examples.usgs_vanuatu_example()` builds a dated Scenario
+(2026-10-07T12:00Z-2026-10-08T22:30Z, bounded by the stored Landsat-8
+element epoch's 14-day validity window) with routine baseline demand; it
+carries no emergency request. The committed developer cue input at
+`amis/data/examples/usgs-vanuatu-2026-10-08/cue-inputs.json` (built by the
+ticket 01 CLI from the committed archive and an explicit imaging profile)
+supplies the request actually injected. `scripts/run_usgs_vanuatu_replay.py`
+creates the baseline plan, advances the clock to the cue's exact recorded
+time, checks the clock reached exactly that instant before injecting, and
+optionally performs the separate explicit replan. The Example appears in the
+`/examples` library; loading it creates a new Scenario, matching every other
+Example. `ScenarioSummarySchema.briefing` carries the trainee-facing text
+(from `amis/data/examples/usgs-vanuatu-2026-10-08/briefing.md`) that names
+the real earthquake and separates it from this Example's hypothetical
+satellite, imaging-resource, and point-target choices; it is null for every
+Example without a bundled briefing.
+
+The request's policy deadline (2026-10-10T09:00:07.768Z, the `green`-alert
+48-hour offset) outlives the Scenario's end (2026-10-08T22:30:00Z, capped
+by the stored Landsat 8 element's 14-day validity, not an authoring
+choice); the Scenario end is the real binding constraint. A real daylight
+pass over the epicenter under the Scenario's 60-degree off-nadir policy
+opens at 2026-10-08T21:58:41Z, inside that horizon, so the request is
+still demonstrably servable; `tests/test_usgs_vanuatu_bundle.py` asserts
+the replan schedules it with `HIGHER_PRIORITY_TASK_INSERTED` and no
+unscheduled requests, so this cannot regress silently.
+
+`examples()` guards `orbital_example()` and `usgs_vanuatu_example()` with
+independent `try/except ModuleNotFoundError` blocks: one Example's
+builder failing (missing skyfield/sgp4) must not withhold the other.
+`tests/test_usgs_vanuatu_bundle.py` also asserts `usgs_vanuatu_example()`
+stays byte-identical to the committed `scenario.json` that generated
+`cue-inputs.json`, so the two cannot silently drift apart.
 
 ### Planned and achieved response, and window-only feasibility
 
