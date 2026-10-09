@@ -5,7 +5,7 @@ Each folder below is one ranked slice from that report, so the folder name tells
 
 ## Slices
 
-- `a1-usgs-plus-b-latency/` — first build. A1 USGS earthquake cue replay plus B response-latency metric and feasibility query. Status: tickets 01-03 implemented; tickets 04-05 remain pending.
+- `a1-usgs-plus-b-latency/` — first build. A1 USGS earthquake cue replay plus B response-latency metric and feasibility query. Status: tickets 01-04 implemented; ticket 05 remains pending.
 - `a3-cems/` — second build. CEMS activation cue replay with centroid-only area rule. Status: planned.
 - `e-conjunction/` — SOCRATES conjunction outage as satellite outage. Status: planned.
 - `c-fair-requester/` — fair multi-requester tasking. Status: planned.

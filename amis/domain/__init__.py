@@ -20,7 +20,7 @@ from amis.domain.event import (
     emergency_evidence_error,
 )
 from amis.domain.impact import Impact
-from amis.domain.metrics import MetricsResult, SatelliteMetrics
+from amis.domain.metrics import EmergencyResponse, MetricsResult, SatelliteMetrics
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry, imaging_actions
 from amis.domain.orbit import OrbitalElements, WindowPolicy
 from amis.domain.scenario import ObservationRequest, Satellite, Scenario
@@ -48,6 +48,7 @@ __all__ = [
     "MissionEvent",
     "SatelliteOutagePayload",
     "Impact",
+    "EmergencyResponse",
     "MetricsResult",
     "SatelliteMetrics",
     "MissionPlan",

@@ -1,4 +1,5 @@
 import type { MetricsSchema, PlanDiffSchema } from "../api/client";
+import { responseSummary } from "./emergencyResponse";
 
 /**
  * A share as a whole percentage. Null is an empty denominator and reads N/A,
@@ -57,7 +58,9 @@ export type MetricKey =
   | "violations"
   | "churn"
   | "coverage"
-  | "planning-time";
+  | "planning-time"
+  | "planned-response"
+  | "achieved-response";
 
 export type MetricTrend = "better" | "worse" | "same";
 
@@ -183,6 +186,22 @@ const ROWS: RowSpec[] = [
     format: (metrics) => formatPercent(metrics.explanation_coverage),
     warn: (metrics) =>
       metrics.explanation_coverage !== null && metrics.explanation_coverage < 1,
+  },
+  {
+    // Each plan's own planned imaging for its own emergency arrivals: a mean
+    // over planned requests only, shown with that denominator and the total.
+    key: "planned-response",
+    label: "Planned response",
+    hint: "Mean time from emergency arrival to planned imaging start; unplanned requests are counted in the total, never as zero",
+    format: (metrics) => responseSummary(metrics, "planned"),
+  },
+  {
+    // Read from the mission's executed history, so it never borrows a plan's
+    // proposed start as proof that imaging began.
+    key: "achieved-response",
+    label: "Achieved response",
+    hint: "Mean time from emergency arrival to imaging that has actually started; acquisition means imaging started, not finished or downlinked",
+    format: (metrics) => responseSummary(metrics, "achieved"),
   },
   {
     key: "planning-time",

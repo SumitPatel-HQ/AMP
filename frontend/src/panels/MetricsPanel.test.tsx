@@ -18,6 +18,12 @@ const metricsBefore = {
   explanation_coverage: null,
   downlink_action_count: 0,
   downlink_volume_mb: 0,
+  emergency_response: [],
+  time_to_first_acquisition_s: null,
+  achieved_time_to_first_acquisition_s: null,
+  emergency_request_count: 0,
+  planned_emergency_request_count: 0,
+  achieved_emergency_request_count: 0,
 } satisfies MetricsSchema;
 
 const metricsAfter = {
@@ -29,6 +35,12 @@ const metricsAfter = {
   explanation_coverage: 1.0,
   downlink_action_count: 0,
   downlink_volume_mb: 0,
+  emergency_response: [],
+  time_to_first_acquisition_s: null,
+  achieved_time_to_first_acquisition_s: null,
+  emergency_request_count: 0,
+  planned_emergency_request_count: 0,
+  achieved_emergency_request_count: 0,
 } satisfies MetricsSchema;
 
 const diff = {
@@ -174,5 +186,64 @@ describe("metrics panel", () => {
 
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
     expect(headers).toEqual(["Metric", "V3"]);
+  });
+
+  it("shows planned and achieved response means separately with counts and per-request attribution", () => {
+    const responding = {
+      ...metricsBefore,
+      time_to_first_acquisition_s: 2100,
+      achieved_time_to_first_acquisition_s: null,
+      emergency_request_count: 2,
+      planned_emergency_request_count: 1,
+      achieved_emergency_request_count: 0,
+      emergency_response: [
+        {
+          request_id: "OBS-EMG",
+          event_id: "EVT-001",
+          arrival_time: "2026-09-21T10:05:00Z",
+          request_status: "scheduled" as const,
+          planned_start_time: "2026-09-21T10:40:00Z",
+          planned_latency_s: 2100,
+          planned_satellite_id: "SAT-001",
+          achieved_start_time: null,
+          achieved_latency_s: null,
+          achieved_satellite_id: null,
+        },
+        {
+          request_id: "OBS-LATE",
+          event_id: "EVT-002",
+          arrival_time: "2026-09-21T10:06:00Z",
+          request_status: "expired" as const,
+          planned_start_time: null,
+          planned_latency_s: null,
+          planned_satellite_id: null,
+          achieved_start_time: null,
+          achieved_latency_s: null,
+          achieved_satellite_id: null,
+        },
+      ],
+    } satisfies MetricsSchema;
+    render(<MetricsPanel currentPlanId="PLAN-1" metrics={responding} diff={null} plans={plans} />);
+
+    expect(metricRow("Planned response").textContent).toContain("35 min · 1 of 2 planned");
+    expect(metricRow("Achieved response").textContent).toContain("N/A · 0 of 2 started");
+    const list = screen.getByRole("region", { name: "Emergency response" });
+    expect(list.textContent).toContain("imaging has started, not finished or downlinked");
+    const items = within(list).getAllByRole("listitem");
+    expect(items.map((item) => item.getAttribute("data-response-state"))).toEqual([
+      "planned",
+      "expired",
+    ]);
+    expect(items[0].textContent).toContain("V1 planned: 10:40 UTC on SAT-001 · 35 min");
+    expect(items[0].textContent).toContain("Achieved: not started");
+    expect(items[1].textContent).toContain("expired · no acquisition");
+    expect(items[1].textContent).toContain("no planned acquisition");
+  });
+
+  it("omits the per-request list when no emergency arrived", () => {
+    render(<MetricsPanel currentPlanId="PLAN-1" metrics={metricsBefore} diff={null} plans={plans} />);
+
+    expect(screen.queryByRole("region", { name: "Emergency response" })).toBeNull();
+    expect(metricRow("Planned response").textContent).toContain("N/A · 0 of 0 planned");
   });
 });

@@ -241,6 +241,12 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
     explanation_coverage: null,
     downlink_action_count: 0,
     downlink_volume_mb: 0,
+    emergency_response: [],
+    time_to_first_acquisition_s: null,
+    achieved_time_to_first_acquisition_s: null,
+    emergency_request_count: 0,
+    planned_emergency_request_count: 0,
+    achieved_emergency_request_count: 0,
   });
   const rendered = render(<App />);
 

@@ -1,4 +1,13 @@
-import type { MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
+import type { EmergencyResponseSchema, MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
+import {
+  ACQUISITION_MEANING,
+  emergencyResponseRows,
+  emergencyResponseState,
+  formatLatency,
+  plannedDiffersFromAchieved,
+  RESPONSE_STATE_LABEL,
+  type EmergencyResponseState,
+} from "../state/emergencyResponse";
 import {
   metricsSubject,
   metricsView,
@@ -52,6 +61,73 @@ function PoolMismatch({ view, label }: { view: MetricsView; label: (planId: stri
       {differences.length === 0 ? ")" : `: ${differences.join(", ")})`}
       . Utility and completion changes are not like for like.
     </p>
+  );
+}
+
+const RESPONSE_STATE_STYLE: Record<EmergencyResponseState, string> = {
+  achieved: "text-emerald-300",
+  planned: "text-sky-300",
+  expired: "text-red-400",
+  unserved: "text-amber-300",
+};
+
+function plannedText(row: EmergencyResponseSchema, planLabel: string): string {
+  if (row.planned_start_time === null) {
+    return `${planLabel} planned: no planned acquisition`;
+  }
+  return `${planLabel} planned: ${clockTime(row.planned_start_time)} UTC on ${row.planned_satellite_id} · ${formatLatency(row.planned_latency_s)}`;
+}
+
+function achievedText(row: EmergencyResponseSchema, state: EmergencyResponseState): string {
+  if (row.achieved_start_time === null) {
+    return state === "planned" ? "Achieved: not started" : "Achieved: no acquisition";
+  }
+  return `Achieved: ${clockTime(row.achieved_start_time)} UTC on ${row.achieved_satellite_id} · ${formatLatency(row.achieved_latency_s)}`;
+}
+
+/**
+ * One line per emergency arrival the measured plan's request pool holds,
+ * unserved and expired ones included. Planned values belong to that plan;
+ * achieved values are the backend's record of imaging that actually began.
+ */
+function EmergencyResponseList({ metrics, planLabel }: { metrics: MetricsSchema; planLabel: string }) {
+  const rows = emergencyResponseRows(metrics);
+  if (rows.length === 0) {
+    return null;
+  }
+  return (
+    <section
+      aria-label="Emergency response"
+      className="mt-1 border-t border-white/[0.04] pt-1 text-[11px]"
+    >
+      <p className="text-neutral-500">{`Emergency response for ${planLabel}. ${ACQUISITION_MEANING}`}</p>
+      <ul className="flex flex-col gap-0.5">
+        {rows.map((row) => {
+          const state = emergencyResponseState(row);
+          return (
+            <li
+              key={row.request_id}
+              data-request-id={row.request_id}
+              data-event-id={row.event_id}
+              data-response-state={state}
+              title={`${row.request_id} arrived with ${row.event_id} at ${fullTime(row.arrival_time)}; request ${row.request_status}`}
+              className="tabular-nums text-neutral-300"
+            >
+              <span className="text-neutral-100">{row.request_id}</span>
+              {` · arrived ${clockTime(row.arrival_time)} UTC · `}
+              <span className={RESPONSE_STATE_STYLE[state]}>{RESPONSE_STATE_LABEL[state]}</span>
+              <br />
+              <span className="text-neutral-400">{plannedText(row, planLabel)}</span>
+              {" · "}
+              <span className="text-neutral-400">{achievedText(row, state)}</span>
+              {plannedDiffersFromAchieved(row) ? (
+                <span className="ml-1 text-amber-300/80">(planned differs from achieved)</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -152,6 +228,7 @@ export function MetricsPanel({
           ? `Request pool: ${view.pool.after} requests`
           : `Request pool: ${view.pool.before} → ${view.pool.after} requests`}
       </p>
+      <EmergencyResponseList metrics={subject.after} planLabel={label(view.afterPlanId)} />
     </PanelFrame>
   );
 }

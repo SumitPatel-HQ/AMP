@@ -183,6 +183,16 @@ body,
   background: var(--timeline-event);
 }
 
+.amis-legend-response-planned {
+  border: 1px dashed var(--timeline-planned-border);
+  background: transparent;
+}
+
+.amis-legend-response-achieved {
+  border: 1px solid var(--timeline-completed-border);
+  background: rgba(16, 185, 129, 0.25);
+}
+
 .amis-legend-mission-time {
   width: 2px;
   background: var(--timeline-now);
@@ -374,4 +384,35 @@ body,
 .amis-vis-timeline .vis-item.amis-action-downlink {
   background-color: rgb(14 165 233 / 0.85);
   border-color: rgb(125 211 252);
+}
+
+/* Emergency response (ADR-0015): arrival to imaging start, from backend metrics. */
+.amis-vis-timeline .vis-item.amis-response {
+  z-index: 3;
+  height: 14px;
+  color: #e5e7eb;
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.amis-vis-timeline .vis-item.amis-response-planned {
+  border: 1px dashed var(--timeline-planned-border);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.amis-vis-timeline .vis-item.amis-response-achieved {
+  border: 1px solid var(--timeline-completed-border);
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.amis-vis-timeline .vis-item.amis-response-unserved,
+.amis-vis-timeline .vis-item.amis-response-expired {
+  border: 0;
+  background: transparent;
+  color: #fcd34d;
+  font-weight: 700;
+}
+
+.amis-vis-timeline .vis-item.amis-response-expired {
+  color: #f87171;
 }

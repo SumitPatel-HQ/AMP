@@ -1,10 +1,11 @@
 # USGS cue inputs and recorded emergency replay
 
-Status: accepted for tickets 01-03. Response metrics and feasibility behavior
-below define the agreed boundaries for later tickets; ticket 01 implements
-developer archiving and offline input generation, ticket 02 implements
-evidence-bearing injection, persistence, replay, and dashboard/map inspection,
-and ticket 03 bundles a real, independently verifiable earthquake Example.
+Status: accepted for tickets 01-04. Feasibility behavior below defines the
+agreed boundary for ticket 05; ticket 01 implements developer archiving and
+offline input generation, ticket 02 implements evidence-bearing injection,
+persistence, replay, and dashboard/map inspection, ticket 03 bundles a real,
+independently verifiable earthquake Example, and ticket 04 reports planned and
+achieved emergency response.
 
 ## Context
 
@@ -125,13 +126,38 @@ stays byte-identical to the committed `scenario.json` that generated
 
 ### Planned and achieved response, and window-only feasibility
 
-Ticket 04 will measure latency from accepted event time to imaging start,
+Ticket 04 measures latency from accepted event time to imaging start,
 excluding downlinks. Planned values come from the selected plan; achieved values
 come from authoritative execution/frozen history once imaging actually starts,
 and remain stable across replans and reconstruction. Unserved and expired arrivals
 remain visible with null acquisition fields. Planned and achieved means use
 their own non-null denominators and expose counts. Negative latency is an error.
 Historical-plan membership and current `measured_at` semantics remain explicit.
+
+Implementation: `amis.metrics.compute_emergency_response` builds one
+`EmergencyResponse` row per accepted `EMERGENCY_TASK` event whose request is in
+the measured plan's RequestPool, ordered by arrival time then request id.
+`MissionSession._executed_actions` supplies the authoritative history: the
+current plan's frozen actions (start at or before the clock, carried forward
+unchanged by every replan under ADR-0003) plus any recorded-plan action the
+clock marked started. A historical plan's proposed start is never treated as
+execution, and `compute_metrics` without that history reports nothing
+achieved. A plan with no recorded RequestPool snapshot rebuilds its membership
+from the event log and impacts, never the live pool. The
+`time_to_first_acquisition_s` wire names follow the spec but hold mean
+latencies over their own denominators. Because the history lives in persisted plans and the event log, the
+existing reconstruction path restores it with no new table; resetting the
+session clears it with the plans. A negative latency raises
+`SimulationStateError` naming the request, event, and action. The plan-metrics
+route, `MetricsResult.to_dict`, and frontend `MetricsSchema` expose
+`emergency_response`, `time_to_first_acquisition_s`,
+`achieved_time_to_first_acquisition_s`, and the three counts. The dashboard
+shows each mean with its denominator and the total, per-request planned and
+achieved attribution, and the note that acquisition means imaging started. The
+mission timeline draws arrival-to-planned and arrival-to-achieved segments from
+the selected plan's own metrics (an earlier version's when selected, labelled
+with that version), keeps both when they differ, and marks
+unserved or expired arrivals at arrival rather than as zero-width successes.
 
 Ticket 05 will provide a read-only, scenario-wide orbital window query starting
 at Scenario start. Duration, deadline, Scenario horizon, geometry, daylight,

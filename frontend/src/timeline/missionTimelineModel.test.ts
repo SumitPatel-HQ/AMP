@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  EmergencyResponseSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -388,5 +389,173 @@ describe("mission timeline model", () => {
 
     const marker = model.items.find((item) => item.kind === "event");
     expect(marker).toMatchObject({ group: MISSION_EVENTS_GROUP_ID });
+  });
+
+  describe("emergency response segments", () => {
+    const arrival = {
+      id: "EVENT-EMG",
+      scenario_id: scenario.id,
+      event_time: "2026-09-21T10:05:00Z",
+      event_type: "EMERGENCY_TASK",
+      payload: {
+        request: {
+          id: "OBS-EMG",
+          target_lat: 19,
+          target_lon: 73,
+          priority: 5,
+          duration_s: 600,
+          deadline: "2026-09-21T14:00:00Z",
+          energy_cost_wh: 40,
+          storage_cost_mb: 100,
+          status: "pending",
+        },
+        windows: [],
+      },
+    } satisfies MissionEventSchema;
+
+    const row = {
+      request_id: "OBS-EMG",
+      event_id: "EVENT-EMG",
+      arrival_time: "2026-09-21T10:05:00Z",
+      request_status: "scheduled",
+      planned_start_time: "2026-09-21T10:40:00Z",
+      planned_latency_s: 2100,
+      planned_satellite_id: "SAT-1",
+      achieved_start_time: null,
+      achieved_latency_s: null,
+      achieved_satellite_id: null,
+    } satisfies EmergencyResponseSchema;
+
+    function responses(rows: EmergencyResponseSchema[], missionState: MissionStateSchema = state) {
+      return buildMissionTimelineModel({
+        scenario,
+        windows,
+        plan,
+        missionState,
+        events: [arrival],
+        impact,
+        selectedRequestId: null,
+        selectedWindowId: null,
+        selectedEventId: null,
+        changeByRequestId: {},
+        emergencyResponse: rows,
+      }).items.filter((item) => item.kind === "response");
+    }
+
+    it("draws a planned segment from backend arrival to planned imaging start", () => {
+      const items = responses([row]);
+
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        id: "response:planned:OBS-EMG",
+        group: "OBS-EMG",
+        "request-id": "OBS-EMG",
+        "event-id": "EVENT-EMG",
+        start: row.arrival_time,
+        end: row.planned_start_time,
+        type: "range",
+        content: "planned · 35 min · SAT-1",
+      });
+    });
+
+    it("relabels the segment achieved only when the backend reports imaging start", () => {
+      const items = responses([
+        {
+          ...row,
+          achieved_start_time: row.planned_start_time,
+          achieved_latency_s: 2100,
+          achieved_satellite_id: "SAT-1",
+        },
+      ]);
+
+      expect(items.map((item) => item.id)).toEqual(["response:achieved:OBS-EMG"]);
+      expect(items[0].content).toBe("achieved · 35 min · SAT-1");
+      expect(String(items[0].title)).toContain("imaging has started");
+    });
+
+    it("keeps both segments when the plan's proposal differs from what actually started", () => {
+      const items = responses([
+        {
+          ...row,
+          planned_start_time: "2026-09-21T11:00:00Z",
+          planned_latency_s: 3300,
+          planned_satellite_id: "SAT-2",
+          achieved_start_time: "2026-09-21T10:40:00Z",
+          achieved_latency_s: 2100,
+          achieved_satellite_id: "SAT-1",
+        },
+      ]);
+
+      expect(items.map((item) => item.id)).toEqual([
+        "response:planned:OBS-EMG",
+        "response:achieved:OBS-EMG",
+      ]);
+    });
+
+    it("marks unserved and expired arrivals at arrival, never as a zero-width success", () => {
+      const unplanned = {
+        ...row,
+        planned_start_time: null,
+        planned_latency_s: null,
+        planned_satellite_id: null,
+      };
+
+      const [unserved] = responses([unplanned]);
+      const [expired] = responses([{ ...unplanned, request_status: "expired" }]);
+
+      expect(unserved).toMatchObject({ type: "point", content: "unserved · no acquisition" });
+      expect(unserved.end).toBeUndefined();
+      expect(expired).toMatchObject({ type: "point", content: "expired · no acquisition" });
+    });
+
+    it("does not infer achievement from the mission clock passing a planned start", () => {
+      const items = responses([row], { ...state, simulated_time: "2026-09-21T11:00:00Z" });
+
+      expect(items.map((item) => item.id)).toEqual(["response:planned:OBS-EMG"]);
+    });
+
+    it("labels a historical plan's planned attribution and takes achieved from authoritative fields", () => {
+      const items = buildMissionTimelineModel({
+        scenario,
+        windows,
+        plan,
+        missionState: state,
+        events: [arrival],
+        impact,
+        selectedRequestId: null,
+        selectedWindowId: null,
+        selectedEventId: null,
+        changeByRequestId: {},
+        responsePlanLabel: "V1",
+        emergencyResponse: [
+          {
+            ...row,
+            planned_start_time: "2026-09-21T11:00:00Z",
+            planned_latency_s: 3300,
+            planned_satellite_id: "SAT-2",
+            achieved_start_time: "2026-09-21T10:40:00Z",
+            achieved_latency_s: 2100,
+            achieved_satellite_id: "SAT-1",
+          },
+        ],
+      }).items.filter((item) => item.kind === "response");
+
+      expect(items.map((item) => item.content)).toEqual([
+        "V1 planned · 55 min · SAT-2",
+        "achieved · 35 min · SAT-1",
+      ]);
+    });
+
+    it("draws nothing for an arrival the selected plan's backend rows exclude", () => {
+      expect(responses([])).toEqual([]);
+    });
+
+    it("produces stable ids so a rebuild does not duplicate segments", () => {
+      const first = responses([row]).map((item) => item.id);
+      const second = responses([row]).map((item) => item.id);
+
+      expect(second).toEqual(first);
+      expect(new Set(first).size).toBe(first.length);
+    });
   });
 });

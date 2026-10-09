@@ -294,7 +294,34 @@ class MissionSession:
             previous_plan=parent_plan,
             diff=self._compare(parent_plan, plan) if parent_plan else None,
             traces=self.get_traces(plan.id),
+            events=self._events,
+            executed_actions=self._executed_actions(),
         )
+
+    def _executed_actions(self) -> tuple[ScheduledAction, ...]:
+        """Every action that has actually started, whichever plan measured.
+
+        The current plan's frozen actions are the authoritative record:
+        replanning carries them forward unchanged (ADR-0003), so an
+        acquisition that began keeps its start and satellite across later
+        plans and reconstruction. Recorded plans add any action the clock
+        marked started. A historical plan's proposed start alone is never
+        treated as execution.
+        """
+
+        if not self._plans:
+            return ()
+        clock = self.get_state().simulated_time
+        executed = {
+            action.id: action
+            for action in self._plans[-1].actions
+            if action.start <= clock
+        }
+        for plan in self._plans:
+            for action in plan.actions:
+                if action.status is not ActionStatus.PLANNED:
+                    executed.setdefault(action.id, action)
+        return tuple(executed.values())
 
     def inject_event(
         self,
@@ -576,29 +603,8 @@ class MissionSession:
         }
         introduced_requests = tuple(introduced_by_event_id.values())
         self._request_pool = scenario.requests + introduced_requests
-
-        base_request_ids = {request.id for request in scenario.requests}
-        plan_by_id = {plan.id: plan for plan in plans}
-        introduced_at_version = [
-            (evaluated_plan.version, introduced_request.id)
-            for impact in impacts
-            if (evaluated_plan := plan_by_id.get(impact.evaluated_plan_id))
-            is not None
-            and (
-                introduced_request := introduced_by_event_id.get(impact.event_id)
-            )
-            is not None
-        ]
         self._request_pool_ids_by_plan_id = {
-            plan.id: frozenset(
-                base_request_ids
-                | {
-                    request_id
-                    for version, request_id in introduced_at_version
-                    if version < plan.version
-                }
-            )
-            for plan in plans
+            plan.id: self._request_pool_ids_from_log(plan) for plan in plans
         }
 
         if self._plans:
@@ -787,10 +793,35 @@ class MissionSession:
     ) -> tuple[ObservationRequest, ...]:
         request_ids = self._request_pool_ids_by_plan_id.get(plan.id)
         if request_ids is None:
-            return self._request_pool
+            # Fail closed: never the live pool, which would leak arrivals
+            # introduced after this plan into its metrics.
+            request_ids = self._request_pool_ids_from_log(plan)
         return tuple(
             request for request in self._request_pool if request.id in request_ids
         )
+
+    def _request_pool_ids_from_log(self, plan: MissionPlan) -> frozenset[str]:
+        """The plan's RequestPool membership rebuilt from the event log.
+
+        A request an event introduced belongs to a plan only when that
+        event's impact was evaluated against an earlier plan version.
+        """
+
+        scenario = self._require_scenario()
+        introduced_by_event_id = {
+            event.id: request
+            for event in self._events
+            if isinstance(request := getattr(event.payload, "request", None), ObservationRequest)
+        }
+        version_by_plan_id = {item.id: item.version for item in self._plans}
+        introduced = {
+            request.id
+            for impact in self._impacts
+            if (version := version_by_plan_id.get(impact.evaluated_plan_id)) is not None
+            and version < plan.version
+            and (request := introduced_by_event_id.get(impact.event_id)) is not None
+        }
+        return frozenset({request.id for request in scenario.requests} | introduced)
 
     def _next_plan_id(self) -> str:
         return next_id(self._plan_id_prefix, [plan.id for plan in self._plans])

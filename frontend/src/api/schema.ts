@@ -635,6 +635,39 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * EmergencyResponseSchema
+         * @description One emergency arrival's planned and achieved imaging (ADR-0015).
+         *
+         *     Latencies are seconds from arrival to imaging start. Null means no
+         *     imaging action, never zero latency. Achieved fields stay null until
+         *     imaging has actually started; acquisition is imaging start, not
+         *     completion or downlink.
+         */
+        EmergencyResponseSchema: {
+            /** Request Id */
+            request_id: string;
+            /** Event Id */
+            event_id: string;
+            /**
+             * Arrival Time
+             * Format: date-time
+             */
+            arrival_time: string;
+            request_status: components["schemas"]["RequestStatus"];
+            /** Planned Start Time */
+            planned_start_time: string | null;
+            /** Planned Latency S */
+            planned_latency_s: number | null;
+            /** Planned Satellite Id */
+            planned_satellite_id: string | null;
+            /** Achieved Start Time */
+            achieved_start_time: string | null;
+            /** Achieved Latency S */
+            achieved_latency_s: number | null;
+            /** Achieved Satellite Id */
+            achieved_satellite_id: string | null;
+        };
         /** EmergencyTaskEventRequest */
         EmergencyTaskEventRequest: {
             /**
@@ -795,6 +828,27 @@ export interface components {
              * @default 0
              */
             downlink_volume_mb: number;
+            /** Emergency Response */
+            emergency_response?: components["schemas"]["EmergencyResponseSchema"][];
+            /** Time To First Acquisition S */
+            time_to_first_acquisition_s?: number | null;
+            /** Achieved Time To First Acquisition S */
+            achieved_time_to_first_acquisition_s?: number | null;
+            /**
+             * Emergency Request Count
+             * @default 0
+             */
+            emergency_request_count: number;
+            /**
+             * Planned Emergency Request Count
+             * @default 0
+             */
+            planned_emergency_request_count: number;
+            /**
+             * Achieved Emergency Request Count
+             * @default 0
+             */
+            achieved_emergency_request_count: number;
         };
         /**
          * MissionEventRequest

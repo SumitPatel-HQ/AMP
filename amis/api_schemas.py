@@ -485,6 +485,27 @@ class SatelliteMetricsSchema(ApiModel):
     downlink_volume_mb: float = 0.0
 
 
+class EmergencyResponseSchema(ApiModel):
+    """One emergency arrival's planned and achieved imaging (ADR-0015).
+
+    Latencies are seconds from arrival to imaging start. Null means no
+    imaging action, never zero latency. Achieved fields stay null until
+    imaging has actually started; acquisition is imaging start, not
+    completion or downlink.
+    """
+
+    request_id: str
+    event_id: str
+    arrival_time: datetime
+    request_status: RequestStatus
+    planned_start_time: datetime | None
+    planned_latency_s: float | None
+    planned_satellite_id: str | None
+    achieved_start_time: datetime | None
+    achieved_latency_s: float | None
+    achieved_satellite_id: str | None
+
+
 class MetricsSchema(ApiModel):
     plan_id: str
     mission_utility: float
@@ -502,6 +523,16 @@ class MetricsSchema(ApiModel):
     downlink_volume_mb: float = 0
     # Wave 7 (ADR-0014): per-satellite breakdown alongside mission totals.
     per_satellite: list[SatelliteMetricsSchema] = Field(default_factory=list)
+    # Emergency response (ADR-0015): planned and achieved means stay
+    # separate, each with its own denominator; null over an empty one.
+    # Defaults keep metrics payloads recorded before ticket 04 valid. Each
+    # "time_to_first_acquisition" field is a mean latency, not a minimum.
+    emergency_response: list[EmergencyResponseSchema] = Field(default_factory=list)
+    time_to_first_acquisition_s: float | None = None
+    achieved_time_to_first_acquisition_s: float | None = None
+    emergency_request_count: int = 0
+    planned_emergency_request_count: int = 0
+    achieved_emergency_request_count: int = 0
 
 
 class PlanDiffEntrySchema(ApiModel):

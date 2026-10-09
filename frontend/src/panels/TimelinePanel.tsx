@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchMetrics } from "../api/amis";
 import type {
   ContactWindowSchema,
   ImpactSchema,
+  MetricsSchema,
   MissionEventSchema,
   MissionPlanSchema,
   MissionStateSchema,
@@ -10,12 +12,54 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
+import { planLabel } from "../state/planContext";
 import { StorageProfileChart } from "./StorageProfileChart";
 import type { ReplanResult } from "../state/types";
 import { PanelFrame } from "./PanelFrame";
 import { PlanTimeline } from "./PlanTimeline";
 
 const NO_CHANGES: Record<string, PlanChangeType> = {};
+const NO_RESPONSE: NonNullable<MetricsSchema["emergency_response"]> = [];
+
+/**
+ * The metrics whose emergency response the timeline draws: the selected
+ * plan's own when an earlier version is selected (its RequestPool excludes
+ * later arrivals and its planned attribution is its own), otherwise the
+ * displayed plan's. Refetched whenever the displayed plan's metrics change,
+ * which happens after every injection, replan, clock step, and reload.
+ */
+function useResponseMetrics(
+  plan: MissionPlanSchema | null,
+  metrics: MetricsSchema | null,
+  selectedPlanId: string | null,
+  loadPlanMetrics: (planId: string) => Promise<MetricsSchema>,
+): MetricsSchema | null {
+  const historicalPlanId =
+    selectedPlanId !== null && plan !== null && selectedPlanId !== plan.id ? selectedPlanId : null;
+  const [fetched, setFetched] = useState<MetricsSchema | null>(null);
+  useEffect(() => {
+    if (historicalPlanId === null) {
+      return;
+    }
+    let cancelled = false;
+    loadPlanMetrics(historicalPlanId).then(
+      (next) => {
+        if (!cancelled) setFetched(next);
+      },
+      () => {
+        if (!cancelled) setFetched(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [historicalPlanId, metrics, loadPlanMetrics]);
+  if (historicalPlanId !== null) {
+    return fetched?.plan_id === historicalPlanId ? fetched : null;
+  }
+  // Metrics fetched for another plan describe nothing drawn here.
+  return metrics !== null && plan !== null && metrics.plan_id === plan.id ? metrics : null;
+}
 
 /**
  * The change types a replan caused. UNCHANGED is not a change, and COMPLETED
@@ -56,6 +100,8 @@ function TimelineLegend() {
     { label: "Frozen", className: "amis-legend-frozen" },
     { label: "Impacted", className: "amis-legend-impacted" },
     { label: "Event", className: "amis-legend-event" },
+    { label: "Planned response", className: "amis-legend-response-planned" },
+    { label: "Achieved response", className: "amis-legend-response-achieved" },
     { label: "Mission time", className: "amis-legend-mission-time" },
   ];
   return (
@@ -79,6 +125,10 @@ export function TimelinePanel({
   contacts,
   events,
   impact,
+  metrics = null,
+  plans = [],
+  selectedPlanId = null,
+  loadPlanMetrics = fetchMetrics,
   selectedRequestId,
   selectedWindowId,
   selectedEventId,
@@ -95,6 +145,12 @@ export function TimelinePanel({
   contacts?: ContactWindowSchema[];
   events: MissionEventSchema[];
   impact: ImpactSchema | null;
+  /** The displayed plan's metrics; their emergency response draws the response segments. */
+  metrics?: MetricsSchema | null;
+  plans?: readonly MissionPlanSchema[];
+  /** A selected earlier plan whose emergency response the segments show instead. */
+  selectedPlanId?: string | null;
+  loadPlanMetrics?: (planId: string) => Promise<MetricsSchema>;
   selectedRequestId: string | null;
   selectedWindowId: string | null;
   selectedEventId: string | null;
@@ -104,10 +160,22 @@ export function TimelinePanel({
   className?: string;
 }) {
   const changeByRequestId = useMemo(() => currentPlanChanges(plan, replanResult), [plan, replanResult]);
+  const responseMetrics = useResponseMetrics(plan, metrics, selectedPlanId, loadPlanMetrics);
+  const emergencyResponse = responseMetrics?.emergency_response ?? NO_RESPONSE;
+  const responsePlanLabel =
+    responseMetrics !== null && plan !== null && responseMetrics.plan_id !== plan.id
+      ? planLabel(responseMetrics.plan_id, plans)
+      : undefined;
   return (
     <PanelFrame
       title="Mission timeline"
-      meta={plan === null ? undefined : `V${plan.version}`}
+      meta={
+        plan === null
+          ? undefined
+          : responsePlanLabel === undefined
+            ? `V${plan.version}`
+            : `V${plan.version} · emergency response for ${responsePlanLabel}`
+      }
       actions={plan === null ? undefined : <TimelineLegend />}
       className={className}
     >
@@ -130,6 +198,8 @@ export function TimelinePanel({
             impact={impact}
             changeByRequestId={changeByRequestId}
             contacts={contacts}
+            emergencyResponse={emergencyResponse}
+            responsePlanLabel={responsePlanLabel}
             selectedRequestId={selectedRequestId}
             selectedWindowId={selectedWindowId}
             selectedEventId={selectedEventId}

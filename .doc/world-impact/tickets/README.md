@@ -1,6 +1,6 @@
 # A1 USGS replay and B response tickets
 
-Status: tickets 01-03 implemented; tickets 04-05 remain `ready-for-agent`. An implementer may start only when its blockers are complete.
+Status: tickets 01-04 implemented; ticket 05 remains `ready-for-agent`. An implementer may start only when its blockers are complete.
 
 Source of implementation requirements: [A1+B specification](../a1-usgs-plus-b-latency/spec.md). Source of feature rationale: [world-impact research](../../reference/amis-world-impact-research.md), sections A1 and B. The specification governs detailed behavior and scope.
 

@@ -1,6 +1,6 @@
 # A1 USGS cue replay plus B response latency and feasibility
 
-Status: five-ticket breakdown approved. Tickets 01-03 are implemented; tickets 04-05 remain pending.
+Status: five-ticket breakdown approved. Tickets 01-04 are implemented; ticket 05 remains pending.
 Source research: `.doc/reference/amis-world-impact-research.md`, sections A1 and B.
 Scope confirmation: the requester approved A1+B first, A3 next, the priority/deadline policy, evidence-bearing emergency arrivals, and the full frontend/backend slice.
 
