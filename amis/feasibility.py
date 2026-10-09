@@ -36,8 +36,13 @@ def policy_start(
     duration = timedelta(seconds=duration_s)
     culmination = bool(scenario.window_policy and scenario.window_policy.culmination_placement)
     if culmination and window.peak_time is not None:
+        # greedy._culmination_start bounds the centered action to the window;
+        # cp_sat._ModelBuilder._prefer_culmination rounds and clamps its preference.
+        # Feasibility instead requires containment through latest_finish.
         start = window.peak_time - duration / 2
     else:
+        # Mirrors greedy._culmination_start's window-start fallback when no peak exists.
+        # The Scenario start remains the lower bound for this read-only search.
         start = lower_bound
     if start < lower_bound or start + duration > latest_finish:
         return None

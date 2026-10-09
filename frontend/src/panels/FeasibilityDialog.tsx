@@ -7,8 +7,8 @@ import {
   FEASIBILITY_PROMISE,
   FEASIBILITY_STATE_LABEL,
   feasibilityQuery,
-  feasibilityRowState,
-  resultFor,
+  rowStateForSatellite,
+  resultForScenario,
   toUtcInput,
   type FeasibilityForm,
   type FeasibilityRowState,
@@ -30,11 +30,12 @@ const STATE_STYLE: Record<FeasibilityRowState, string> = {
  * generated Scenario type predates the list, so it is read defensively here.
  */
 function satelliteIds(scenario: ScenarioSchema): string[] {
+  // Wave-7 payloads carry the canonical satellites list beside the legacy satellite.
   const listed = (scenario as ScenarioSchema & { satellites?: { id: string }[] | null }).satellites;
   return listed?.map((item) => item.id) ?? [scenario.satellite.id];
 }
 
-function time(value: string | null): string {
+function formatTime(value: string | null): string {
   return value === null ? "—" : `${new Date(value).toISOString().slice(0, 19).replace("T", " ")} UTC`;
 }
 
@@ -42,11 +43,11 @@ function Results({ result }: { result: FeasibilitySchema }) {
   return (
     <div aria-label="Feasibility results" className="mt-3 space-y-2 text-xs">
       <p className="text-neutral-400">
-        {`Candidate ${result.target_lat}, ${result.target_lon} · ${result.duration_s} s · deadline ${time(result.deadline)}`}
+        {`Candidate ${result.target_lat}, ${result.target_lon} · ${result.duration_s} s · deadline ${formatTime(result.deadline)}`}
         {result.satellite_id === null ? " · all satellites" : ` · ${result.satellite_id} only`}
       </p>
       <p aria-label="Time basis" className="text-neutral-400">
-        {`Searched ${time(result.search_start)} to ${time(result.search_end)}: from the Scenario start, independent of the mission clock, to the earlier of Scenario end and deadline.`}
+        {`Searched ${formatTime(result.search_start)} to ${formatTime(result.search_end)}: from the Scenario start, independent of the mission clock, to the earlier of Scenario end and deadline.`}
       </p>
       <p className="font-medium text-neutral-200">
         {result.earliest_satellite_id === null
@@ -65,7 +66,7 @@ function Results({ result }: { result: FeasibilitySchema }) {
         </thead>
         <tbody>
           {result.results.map((row) => {
-            const state = feasibilityRowState(row, result.earliest_satellite_id);
+            const state = rowStateForSatellite(row, result.earliest_satellite_id);
             return (
               <tr key={row.satellite_id} data-state={state} className="border-t border-neutral-800 align-top">
                 <td className="py-1 pr-2 font-mono text-neutral-100">{row.satellite_id}</td>
@@ -74,12 +75,12 @@ function Results({ result }: { result: FeasibilitySchema }) {
                   {row.window_id === null ? "—" : (
                     <>
                       <span className="block font-mono">{row.window_id}</span>
-                      <span className="text-[10px] text-neutral-500">{`${time(row.window_start)} – ${time(row.window_end)}`}</span>
+                      <span className="text-[10px] text-neutral-500">{`${formatTime(row.window_start)} – ${formatTime(row.window_end)}`}</span>
                     </>
                   )}
                 </td>
-                <td className="py-1 pr-2 tabular-nums text-neutral-200">{time(row.earliest_start)}</td>
-                <td className="py-1 tabular-nums text-neutral-200">{time(row.latest_finish)}</td>
+                <td className="py-1 pr-2 tabular-nums text-neutral-200">{formatTime(row.earliest_start)}</td>
+                <td className="py-1 tabular-nums text-neutral-200">{formatTime(row.latest_finish)}</td>
               </tr>
             );
           })}
@@ -101,10 +102,10 @@ export function FeasibilityDialog({
   scenario: ScenarioSchema;
   onClose: () => void;
 }) {
-  return <CandidateComparison key={JSON.stringify(scenario)} scenario={scenario} onClose={onClose} />;
+  return <CandidateWindowComparison key={JSON.stringify(scenario)} scenario={scenario} onClose={onClose} />;
 }
 
-function CandidateComparison({ scenario, onClose }: { scenario: ScenarioSchema; onClose: () => void }) {
+function CandidateWindowComparison({ scenario, onClose }: { scenario: ScenarioSchema; onClose: () => void }) {
   const [form, setForm] = useState<FeasibilityForm>(() => ({
     lat: "",
     lon: "",
@@ -117,9 +118,9 @@ function CandidateComparison({ scenario, onClose }: { scenario: ScenarioSchema; 
   const [busy, setBusy] = useState(false);
   // Only the latest query may answer; an earlier one resolving late is dropped.
   const latest = useRef(0);
-  const shown = resultFor(result, scenario.id);
+  const shown = resultForScenario(result, scenario.id);
 
-  const update = (key: keyof FeasibilityForm) => (event: { target: { value: string } }) => {
+  const updateField = (key: keyof FeasibilityForm) => (event: { target: { value: string } }) => {
     latest.current += 1;
     setBusy(false);
     setResult(null);
@@ -169,19 +170,19 @@ function CandidateComparison({ scenario, onClose }: { scenario: ScenarioSchema; 
           }}
         >
           <label className="flex flex-col gap-0.5">Latitude
-            <input aria-label="Latitude" type="number" step="any" value={form.lat} onChange={update("lat")} className={`${CONTROL_INPUT} w-24`} />
+            <input aria-label="Latitude" type="number" step="any" value={form.lat} onChange={updateField("lat")} className={`${CONTROL_INPUT} w-24`} />
           </label>
           <label className="flex flex-col gap-0.5">Longitude
-            <input aria-label="Longitude" type="number" step="any" value={form.lon} onChange={update("lon")} className={`${CONTROL_INPUT} w-24`} />
+            <input aria-label="Longitude" type="number" step="any" value={form.lon} onChange={updateField("lon")} className={`${CONTROL_INPUT} w-24`} />
           </label>
           <label className="flex flex-col gap-0.5">Duration (s)
-            <input aria-label="Duration (s)" type="number" step="any" value={form.durationS} onChange={update("durationS")} className={`${CONTROL_INPUT} w-20`} />
+            <input aria-label="Duration (s)" type="number" step="any" value={form.durationS} onChange={updateField("durationS")} className={`${CONTROL_INPUT} w-20`} />
           </label>
           <label className="flex flex-col gap-0.5">Deadline (UTC)
-            <input aria-label="Deadline (UTC)" type="datetime-local" step="1" value={form.deadlineUtc} onChange={update("deadlineUtc")} className={CONTROL_INPUT} />
+            <input aria-label="Deadline (UTC)" type="datetime-local" step="1" value={form.deadlineUtc} onChange={updateField("deadlineUtc")} className={CONTROL_INPUT} />
           </label>
           <label className="flex flex-col gap-0.5">Satellite
-            <select aria-label="Satellite" value={form.satelliteId} onChange={update("satelliteId")} className={CONTROL_INPUT}>
+            <select aria-label="Satellite" value={form.satelliteId} onChange={updateField("satelliteId")} className={CONTROL_INPUT}>
               <option value="">All satellites</option>
               {satelliteIds(scenario).map((id) => (
                 <option key={id} value={id}>{id}</option>

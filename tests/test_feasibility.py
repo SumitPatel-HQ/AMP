@@ -25,6 +25,14 @@ from amis.domain import (
 )
 from amis.errors import InvalidScenarioError
 from amis.examples import orbital_example
+from amis.ids import (
+    ACTION_ID_PREFIX,
+    EVENT_ID_PREFIX,
+    IMPACT_ID_PREFIX,
+    PLAN_ID_PREFIX,
+    TRACE_ID_PREFIX,
+    next_id,
+)
 from amis.repositories import MissionSessionStore, Repositories
 from amis.session import FEASIBILITY_REQUEST_ID, MissionSession
 from amis.windows.orbital import OrbitalWindowProvider
@@ -212,6 +220,22 @@ def test_culmination_start_must_also_finish_before_the_deadline():
     assert row.reason is FeasibilityReason.NO_SUITABLE_WINDOW
 
 
+def test_culmination_without_a_peak_uses_window_start_only_when_the_action_fits():
+    scenario = _scenario(
+        satellites=(_satellite("SAT-A"),),
+        policy=WindowPolicy("orbital", culmination_placement=True),
+    )
+    session, _ = _session(scenario, (_window("W-A-1", "SAT-A", 10, 30),))
+
+    suitable = session.get_feasibility(10.0, 20.0, 600.0, DEADLINE).results[0]
+    unsuitable = session.get_feasibility(10.0, 20.0, 1800.0, DEADLINE).results[0]
+
+    assert suitable.reason is None
+    assert suitable.earliest_start == suitable.window_start == _at(10)
+    assert unsuitable.reason is FeasibilityReason.NO_SUITABLE_WINDOW
+    assert unsuitable.earliest_start is None
+
+
 def test_unsuitable_and_unavailable_satellites_are_listed_with_null_fields():
     satellites = (_satellite("SAT-C", available=False), _satellite("SAT-B"), _satellite("SAT-A"))
     windows = (_window("W-B-1", "SAT-B", 20, 40), _window("W-C-1", "SAT-C", 5, 40))
@@ -291,6 +315,28 @@ def test_queries_change_no_session_state_and_ignore_clock_and_replan():
     session.step(45 * 60)
     session.replan(session.get_plan().id)
     assert session.get_feasibility(10.0, 20.0, 300.0, DEADLINE) == before_clock
+
+
+def test_all_satellite_and_filtered_queries_preserve_the_next_identifier_sequence():
+    session, _ = _session()
+    session.generate_windows()
+    session.plan()
+
+    def next_identifiers():
+        plans = session.get_plans()
+        return (
+            next_id(PLAN_ID_PREFIX, [plan.id for plan in plans]),
+            next_id(ACTION_ID_PREFIX, [action.id for plan in plans for action in plan.actions]),
+            next_id(EVENT_ID_PREFIX, [event.id for event in session.get_events()]),
+            next_id(IMPACT_ID_PREFIX, [impact.id for impact in session.get_impacts()]),
+            next_id(TRACE_ID_PREFIX, [trace.id for trace in session.get_traces()]),
+        )
+
+    before = next_identifiers()
+    session.get_feasibility(10.0, 20.0, 300.0, DEADLINE)
+    session.get_feasibility(10.0, 20.0, 300.0, DEADLINE, satellite_id="SAT-B")
+
+    assert next_identifiers() == before
 
 
 # --- validation ------------------------------------------------------------

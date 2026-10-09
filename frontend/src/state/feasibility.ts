@@ -14,6 +14,11 @@ export const FEASIBILITY_PROMISE =
 
 export type FeasibilityRowState = "earliest" | "suitable" | "no_suitable_window" | "satellite_unavailable";
 
+const ROW_STATE_BY_REASON: Record<NonNullable<SatelliteFeasibilitySchema["reason"]>, FeasibilityRowState> = {
+  no_suitable_window: "no_suitable_window",
+  satellite_unavailable: "satellite_unavailable",
+};
+
 export const FEASIBILITY_STATE_LABEL: Record<FeasibilityRowState, string> = {
   earliest: "Earliest",
   suitable: "Suitable",
@@ -21,12 +26,13 @@ export const FEASIBILITY_STATE_LABEL: Record<FeasibilityRowState, string> = {
   satellite_unavailable: "Satellite unavailable",
 };
 
-export function feasibilityRowState(
+export function rowStateForSatellite(
   row: SatelliteFeasibilitySchema,
   earliestSatelliteId: string | null,
 ): FeasibilityRowState {
-  if (row.reason !== null) return row.reason;
-  return row.satellite_id === earliestSatelliteId ? "earliest" : "suitable";
+  return row.reason === null
+    ? row.satellite_id === earliestSatelliteId ? "earliest" : "suitable"
+    : ROW_STATE_BY_REASON[row.reason];
 }
 
 /** The form exactly as typed, before the backend validates it. */
@@ -45,7 +51,7 @@ export function toUtcInput(isoTime: string): string {
   return new Date(isoTime).toISOString().slice(0, 19);
 }
 
-function number(text: string): number {
+function parseCandidateNumber(text: string): number {
   return text.trim() === "" ? Number.NaN : Number(text);
 }
 
@@ -61,16 +67,16 @@ export function feasibilityQuery(form: FeasibilityForm): FeasibilityQuery | stri
     return "Enter a deadline in UTC.";
   }
   return {
-    lat: number(form.lat),
-    lon: number(form.lon),
-    duration: number(form.durationS),
+    lat: parseCandidateNumber(form.lat),
+    lon: parseCandidateNumber(form.lon),
+    duration: parseCandidateNumber(form.durationS),
     deadline: deadline.toISOString(),
     satelliteId: form.satelliteId === "" ? null : form.satelliteId,
   };
 }
 
 /** A result belongs to the open mission only if the backend answered for it. */
-export function resultFor(
+export function resultForScenario(
   result: FeasibilitySchema | null,
   scenarioId: string | null,
 ): FeasibilitySchema | null {
