@@ -535,6 +535,41 @@ class MetricsSchema(ApiModel):
     achieved_emergency_request_count: int = 0
 
 
+class SatelliteFeasibilitySchema(ApiModel):
+    """One satellite's earliest suitable window for a candidate (ADR-0015).
+
+    Window and acquisition fields are null exactly when ``reason`` names
+    why the satellite has no suitable window.
+    """
+
+    satellite_id: str
+    window_id: str | None
+    window_start: datetime | None
+    window_end: datetime | None
+    earliest_start: datetime | None
+    latest_finish: datetime | None
+    reason: Literal["no_suitable_window", "satellite_unavailable"] | None
+
+
+class FeasibilitySchema(ApiModel):
+    """Window-only feasibility: orbital geometry, daylight and pointing
+    policy, duration, deadline, and Scenario availability only. It excludes
+    the current plan, resources, pairwise slew, active outages, and
+    reservations, and it submits or reserves nothing."""
+
+    scenario_id: str
+    scope: Literal["window_only"]
+    target_lat: float
+    target_lon: float
+    duration_s: float
+    deadline: datetime
+    satellite_id: str | None
+    search_start: datetime
+    search_end: datetime
+    earliest_satellite_id: str | None
+    results: list[SatelliteFeasibilitySchema]
+
+
 class PlanDiffEntrySchema(ApiModel):
     request_id: str
     change_type: PlanChangeType

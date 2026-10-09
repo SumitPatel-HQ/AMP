@@ -31,6 +31,8 @@ export type ReasonCode = components["schemas"]["ReasonCode"];
 export type MetricsSchema = components["schemas"]["MetricsSchema"];
 export type EmergencyResponseSchema = components["schemas"]["EmergencyResponseSchema"];
 export type DecisionTraceSchema = components["schemas"]["DecisionTraceSchema"];
+export type FeasibilitySchema = components["schemas"]["FeasibilitySchema"];
+export type SatelliteFeasibilitySchema = components["schemas"]["SatelliteFeasibilitySchema"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type ApiErrorCode = ErrorEnvelope["error"]["code"];
 

@@ -1,6 +1,6 @@
 # A1 USGS replay and B response tickets
 
-Status: tickets 01-04 implemented; ticket 05 remains `ready-for-agent`. An implementer may start only when its blockers are complete.
+Status: tickets 01-05 implemented. The batch covers A1+B only.
 
 Source of implementation requirements: [A1+B specification](../a1-usgs-plus-b-latency/spec.md). Source of feature rationale: [world-impact research](../../reference/amis-world-impact-research.md), sections A1 and B. The specification governs detailed behavior and scope.
 
@@ -28,7 +28,7 @@ These five tickets implement only **A1: USGS earthquake cue replay** and **B: re
 | I: Benchmark alignment | Deferred, with no fixed implementation stage. |
 | H: Cloud-probability-aware planning | Rejected for now; not a committed later stage. |
 
-The later features are not acceptance criteria or blockers for these five tickets. A1+B tickets 01-03 are implemented; the remaining two tickets are pending.
+The later features are not acceptance criteria or blockers for these five tickets. A1+B tickets 01-05 are implemented.
 
 ## Dependency rationale
 

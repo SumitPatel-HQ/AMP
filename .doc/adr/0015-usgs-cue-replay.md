@@ -159,7 +159,7 @@ the selected plan's own metrics (an earlier version's when selected, labelled
 with that version), keeps both when they differ, and marks
 unserved or expired arrivals at arrival rather than as zero-width successes.
 
-Ticket 05 will provide a read-only, scenario-wide orbital window query starting
+Ticket 05 provides a read-only, scenario-wide orbital window query starting
 at Scenario start. Duration, deadline, Scenario horizon, geometry, daylight,
 pointing policy, culmination placement, and satellite availability constrain the
 result. Each satellite appears, including those without a suitable window, with

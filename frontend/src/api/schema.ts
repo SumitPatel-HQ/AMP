@@ -229,6 +229,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenario_id}/feasibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Feasibility
+         * @description Each satellite's earliest suitable window for a candidate, window-only.
+         *
+         *     Read-only: the session is loaded but never saved, so nothing is
+         *     submitted, reserved, or recorded.
+         */
+        get: operations["get_feasibility_scenarios__scenario_id__feasibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scenarios/{scenario_id}/requests": {
         parameters: {
             query?: never;
@@ -736,6 +759,49 @@ export interface components {
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * FeasibilitySchema
+         * @description Window-only feasibility: orbital geometry, daylight and pointing
+         *     policy, duration, deadline, and Scenario availability only. It excludes
+         *     the current plan, resources, pairwise slew, active outages, and
+         *     reservations, and it submits or reserves nothing.
+         */
+        FeasibilitySchema: {
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "window_only";
+            /** Target Lat */
+            target_lat: number;
+            /** Target Lon */
+            target_lon: number;
+            /** Duration S */
+            duration_s: number;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Satellite Id */
+            satellite_id: string | null;
+            /**
+             * Search Start
+             * Format: date-time
+             */
+            search_start: string;
+            /**
+             * Search End
+             * Format: date-time
+             */
+            search_end: string;
+            /** Earliest Satellite Id */
+            earliest_satellite_id: string | null;
+            /** Results */
+            results: components["schemas"]["SatelliteFeasibilitySchema"][];
+        };
         /** GroundStationSchema */
         GroundStationSchema: {
             /** Id */
@@ -1058,6 +1124,29 @@ export interface components {
          * @enum {string}
          */
         RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired";
+        /**
+         * SatelliteFeasibilitySchema
+         * @description One satellite's earliest suitable window for a candidate (ADR-0015).
+         *
+         *     Window and acquisition fields are null exactly when ``reason`` names
+         *     why the satellite has no suitable window.
+         */
+        SatelliteFeasibilitySchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Window Id */
+            window_id: string | null;
+            /** Window Start */
+            window_start: string | null;
+            /** Window End */
+            window_end: string | null;
+            /** Earliest Start */
+            earliest_start: string | null;
+            /** Latest Finish */
+            latest_finish: string | null;
+            /** Reason */
+            reason: ("no_suitable_window" | "satellite_unavailable") | null;
+        };
         /** SatelliteOutageEventRequest */
         SatelliteOutageEventRequest: {
             /**
@@ -1700,6 +1789,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_feasibility_scenarios__scenario_id__feasibility_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                /** @description Imaging duration in seconds */
+                duration: number;
+                deadline: string;
+                satellite_id?: string | null;
+            };
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilitySchema"];
+                };
+            };
+            /** @description Invalid scenario or event */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };

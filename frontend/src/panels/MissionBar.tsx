@@ -118,6 +118,7 @@ export function MissionBar({
   onNewMission,
   onLoadMission,
   onExamples,
+  onFeasibility,
   onGeneratePlan,
   onStep,
   onInjectEvent,
@@ -141,6 +142,8 @@ export function MissionBar({
   onNewMission: () => void;
   onLoadMission: () => void;
   onExamples: () => void;
+  /** Opens the read-only, window-only feasibility comparison. */
+  onFeasibility: () => void;
   onGeneratePlan: () => void;
   onStep: (seconds: number) => void;
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
@@ -218,6 +221,18 @@ export function MissionBar({
           className={CONTROL_BUTTON}
         >
           Generate plan
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEventOpen(false);
+            onFeasibility();
+          }}
+          disabled={scenario === null}
+          title="Compare each satellite's earliest suitable window; nothing is submitted or reserved"
+          className={CONTROL_BUTTON}
+        >
+          Feasibility
         </button>
         <Divider />
         <label className="text-[10px] uppercase text-neutral-500" htmlFor="step-seconds">

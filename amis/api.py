@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Literal, Annotated, Any
 
 from fastapi import FastAPI, Path, Query, Request, status
-from pydantic import ValidationError
+from pydantic import AwareDatetime, ValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from amis.api_schemas import (
     DecisionTraceSchema,
     ErrorEnvelope,
+    FeasibilitySchema,
     ImpactSchema,
     MetricsSchema,
     MissionEventRequest,
@@ -279,6 +280,27 @@ def create_app(
         if (end - start).total_seconds() / step_s > 10000:
             raise InvalidScenarioError("ground-track range exceeds 10000 samples")
         return ground_track(scenario, start, end, step_s, satellite_id=satellite.id)
+
+    @app.get(
+        "/scenarios/{scenario_id}/feasibility",
+        response_model=FeasibilitySchema,
+        responses=_documented_errors(400, 404, 422),
+    )
+    def get_feasibility(
+        scenario_id: ScenarioId,
+        lat: Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)],
+        lon: Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)],
+        duration: Annotated[float, Query(gt=0, allow_inf_nan=False, description="Imaging duration in seconds")],
+        deadline: AwareDatetime,
+        satellite_id: Annotated[str | None, Query(min_length=1)] = None,
+    ) -> dict[str, Any]:
+        """Each satellite's earliest suitable window for a candidate, window-only.
+
+        Read-only: the session is loaded but never saved, so nothing is
+        submitted, reserved, or recorded.
+        """
+        session = store.load(scenario_id)
+        return session.get_feasibility(lat, lon, duration, deadline, satellite_id).to_dict()
 
     @app.get(
         "/scenarios/{scenario_id}/requests",

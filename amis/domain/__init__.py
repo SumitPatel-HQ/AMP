@@ -19,6 +19,12 @@ from amis.domain.event import (
     SatelliteOutagePayload,
     emergency_evidence_error,
 )
+from amis.domain.feasibility import (
+    FEASIBILITY_SCOPE,
+    FeasibilityReason,
+    FeasibilityResult,
+    SatelliteFeasibility,
+)
 from amis.domain.impact import Impact
 from amis.domain.metrics import EmergencyResponse, MetricsResult, SatelliteMetrics
 from amis.domain.plan import MissionPlan, ScheduledAction, UnscheduledEntry, imaging_actions
@@ -47,6 +53,10 @@ __all__ = [
     "EventPayload",
     "MissionEvent",
     "SatelliteOutagePayload",
+    "FEASIBILITY_SCOPE",
+    "FeasibilityReason",
+    "FeasibilityResult",
+    "SatelliteFeasibility",
     "Impact",
     "EmergencyResponse",
     "MetricsResult",

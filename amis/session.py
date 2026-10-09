@@ -26,6 +26,7 @@ from amis.domain import (
     GroundStation,
     EmergencyRequestPayload,
     EventPayload,
+    FeasibilityResult,
     EventType,
     Impact,
     MetricsResult,
@@ -46,6 +47,7 @@ from amis.domain import (
 )
 from amis.errors import (
     InvalidEventError,
+    InvalidScenarioError,
     PlanVersionConflictError,
     SimulationStateError,
 )
@@ -58,12 +60,17 @@ from amis.ids import (
     next_id,
     next_number,
 )
+from amis.feasibility import assess_feasibility
 from amis.impact import analyze_impact
 from amis.metrics import compute_metrics
 from amis.planning import GreedyPlanner, Planner
 from amis.trace import build_traces
 from amis.windows import SyntheticWindowProvider, WindowProvider
 
+
+# The hypothetical candidate a feasibility query asks about. It never enters
+# the RequestPool or any record, so it consumes no session identifier.
+FEASIBILITY_REQUEST_ID = "FEASIBILITY-CANDIDATE"
 
 _EMERGENCY_PAYLOAD_FIELDS = frozenset(
     {"request", "windows", "source", "source_event_id", "alert_level", "mag", "sig"}
@@ -323,6 +330,96 @@ class MissionSession:
                     executed.setdefault(action.id, action)
         return tuple(executed.values())
 
+    def request_windows(self, request: ObservationRequest) -> tuple[ObservationWindow, ...]:
+        """The provider's windows for one request, without recording them.
+
+        Read-only: the request does not enter the RequestPool and the
+        session's windows, events, and identifiers are untouched. Emergency
+        injection and window-only feasibility share this provider call.
+        """
+        return tuple(self._window_provider.generate(self._require_scenario(), (request,)))
+
+    def get_feasibility(
+        self,
+        target_lat: float,
+        target_lon: float,
+        duration_s: float,
+        deadline: datetime,
+        satellite_id: str | None = None,
+    ) -> FeasibilityResult:
+        """Each satellite's earliest suitable window for a hypothetical candidate.
+
+        Window-only (ADR-0015): the search starts at the Scenario start, not
+        the current clock, and ignores the current plan, resources, pairwise
+        slew, active outages, and reservations. Nothing is submitted,
+        reserved, or recorded.
+        """
+        scenario = self._require_scenario()
+        for name, value in (("lat", target_lat), ("lon", target_lon), ("duration", duration_s)):
+            if not math.isfinite(value):
+                raise InvalidScenarioError(f"feasibility {name} must be finite", details={name: value})
+        if not -90 <= target_lat <= 90 or not -180 <= target_lon <= 180:
+            raise InvalidScenarioError(
+                "feasibility coordinates are outside geographic bounds",
+                details={"lat": target_lat, "lon": target_lon},
+            )
+        if duration_s <= 0:
+            raise InvalidScenarioError(
+                "feasibility duration must be positive seconds",
+                details={"duration": duration_s},
+            )
+        if deadline.tzinfo is None:
+            raise InvalidScenarioError("feasibility deadline must include a timezone")
+        if deadline <= scenario.start_time:
+            raise InvalidScenarioError(
+                "feasibility deadline must be after the scenario start",
+                details={
+                    "deadline": deadline.isoformat(),
+                    "scenario_start": scenario.start_time.isoformat(),
+                },
+            )
+        if satellite_id is not None and satellite_id not in {item.id for item in scenario.satellites}:
+            raise InvalidScenarioError(
+                "scenario has no satellite with that id",
+                details={"satellite_id": satellite_id},
+            )
+        policy = scenario.window_policy
+        if policy is None or policy.provider != "orbital":
+            raise InvalidScenarioError(
+                "window-only feasibility supports orbital window policies only",
+                details={"provider": policy.provider if policy is not None else "legacy"},
+            )
+
+        windows: tuple[ObservationWindow, ...] = ()
+        if satellite_id is None or scenario.satellite_by_id(satellite_id).available:
+            candidate = ObservationRequest(
+                id=FEASIBILITY_REQUEST_ID,
+                target_lat=target_lat,
+                target_lon=target_lon,
+                priority=1,
+                duration_s=duration_s,
+                deadline=deadline,
+                energy_cost_wh=0.0,
+                storage_cost_mb=0.0,
+                satellite_id=satellite_id,
+            )
+            try:
+                windows = self.request_windows(candidate)
+            except ValueError as error:
+                raise InvalidScenarioError(
+                    "could not generate feasibility observation windows",
+                    details={"reason": str(error)},
+                ) from error
+        return assess_feasibility(
+            scenario,
+            windows,
+            target_lat=target_lat,
+            target_lon=target_lon,
+            duration_s=duration_s,
+            deadline=deadline,
+            satellite_id=satellite_id,
+        )
+
     def inject_event(
         self,
         event_type: EventType | str,
@@ -361,7 +458,7 @@ class MissionSession:
             if isinstance(payload, dict) and payload.get("windows") is None and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
                 try:
                     request = ObservationRequest.from_dict(payload["request"])
-                    payload = {**payload, "windows": [window.to_dict() for window in self._window_provider.generate(scenario, (request,))]}
+                    payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(request)]}
                 except (KeyError, TypeError, ValueError) as error:
                     raise InvalidEventError("could not generate emergency observation windows") from error
             event_payload = self._parse_emergency_request_payload(payload)

@@ -17,6 +17,7 @@ import type {
   GroundTrackPointSchema,
   GroundStationSchema,
   ContactWindowSchema,
+  FeasibilitySchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -119,6 +120,42 @@ export async function fetchState(scenarioId: string): Promise<MissionStateSchema
   return unwrap(
     await client.GET("/scenarios/{scenario_id}/state", {
       params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+/** A candidate for window-only feasibility: where, how long, and by when. */
+export interface FeasibilityQuery {
+  lat: number;
+  lon: number;
+  /** Imaging duration in seconds. */
+  duration: number;
+  /** Timezone-aware ISO 8601 deadline. */
+  deadline: string;
+  satelliteId: string | null;
+}
+
+/**
+ * Each satellite's earliest suitable window for a candidate. Read-only and
+ * window-only: nothing is submitted or reserved, and the backend searches from
+ * the Scenario start whatever the mission clock says.
+ */
+export async function fetchFeasibility(
+  scenarioId: string,
+  query: FeasibilityQuery,
+): Promise<FeasibilitySchema> {
+  return unwrap(
+    await client.GET("/scenarios/{scenario_id}/feasibility", {
+      params: {
+        path: { scenario_id: scenarioId },
+        query: {
+          lat: query.lat,
+          lon: query.lon,
+          duration: query.duration,
+          deadline: query.deadline,
+          ...(query.satelliteId === null ? {} : { satellite_id: query.satelliteId }),
+        },
+      },
     }),
   );
 }

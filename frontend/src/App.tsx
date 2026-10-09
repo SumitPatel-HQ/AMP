@@ -5,6 +5,7 @@ import { eventSummary } from "./state/missionEvent";
 import { planLabel } from "./state/planContext";
 import { clockTime } from "./panels/format";
 import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
+import { FeasibilityDialog } from "./panels/FeasibilityDialog";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
 import { MissionBar } from "./panels/MissionBar";
@@ -160,7 +161,7 @@ function MissionWorkspace({
 
 function App() {
   const session = useMissionSession();
-  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | null>(null);
+  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | "feasibility" | null>(null);
   const transition = missionTransition({
     scenario: session.scenario,
     plan: session.plan,
@@ -193,6 +194,7 @@ function App() {
         onNewMission={() => setDialog("builder")}
         onLoadMission={() => setDialog("load")}
         onExamples={() => setDialog("examples")}
+        onFeasibility={() => setDialog("feasibility")}
         onGeneratePlan={session.generatePlan}
         onStep={session.step}
         onInjectEvent={session.injectEvent}
@@ -209,6 +211,10 @@ function App() {
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />
       {dialog === "builder" && <MissionBuilder onClose={() => setDialog(null)} onCreate={session.createMission} />}
+      {/* Keyed by Scenario id: loading another mission drops the previous answer. */}
+      {dialog === "feasibility" && session.scenario !== null && (
+        <FeasibilityDialog key={session.scenario.id} scenario={session.scenario} onClose={() => setDialog(null)} />
+      )}
       {(dialog === "load" || dialog === "examples") && <MissionLibrary mode={dialog} onClose={() => setDialog(null)} onChoose={dialog === "load" ? session.loadMission : session.loadExample} />}
     </div>
   );
