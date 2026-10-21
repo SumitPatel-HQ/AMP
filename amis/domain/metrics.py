@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
@@ -70,6 +70,38 @@ def _isoformat(value: Optional[datetime]) -> Optional[str]:
 
 
 @dataclass(frozen=True)
+class RequesterServiceRow:
+    requester_id: str | None
+    request_count: int
+    demand_utility: int
+    served_request_count: int
+    served_utility: int
+    service_share: float | None
+    fulfillment_ratio: float | None
+
+
+@dataclass(frozen=True)
+class RequesterService:
+    requesters: tuple[RequesterServiceRow, ...] = ()
+    unattributed: RequesterServiceRow = field(default_factory=lambda: RequesterServiceRow(
+        None, 0, 0, 0, 0, None, None
+    ))
+    total_served_utility: int = 0
+    fairness_gap: int | None = None
+    zero_service_requester_count: int = 0
+    no_service: bool = True
+    metric_version: str = "requester-utility-v1"
+    scope: str = "Identified requesters in the selected plan's RequestPool; unattributed service included in service shares, excluded from gap."
+    limitations: str = "Unique completed or planned imaging priority, not delivered imagery. Absolute utility is not normalized by demand, capability, or entitlement. Expired and infeasible demand remain included."
+    measured_at_convention: str = "Selected-plan membership and planned imaging, with completed requests from current mission state at measured_at."
+
+    def to_dict(self) -> dict[str, Any]:
+        result = asdict(self)
+        result["requesters"] = [asdict(row) for row in self.requesters]
+        return result
+
+
+@dataclass(frozen=True)
 class MetricsResult:
     plan_id: str
     mission_utility: float
@@ -105,10 +137,12 @@ class MetricsResult:
     emergency_request_count: int = 0
     planned_emergency_request_count: int = 0
     achieved_emergency_request_count: int = 0
+    requester_service: RequesterService = field(default_factory=RequesterService)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "plan_id": self.plan_id,
+            "requester_service": self.requester_service.to_dict(),
             "mission_utility": self.mission_utility,
             "completion_rate": self.completion_rate,
             "violation_count": self.violation_count,

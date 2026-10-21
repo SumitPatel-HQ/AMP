@@ -263,6 +263,7 @@ function SatelliteOutageFields({
 
 const EMERGENCY_FIELDS: { key: keyof EmergencyRequestForm; label: string; type: "text" | "number" | "datetime-local" }[] = [
   { key: "requestId", label: "Request id", type: "text" },
+  { key: "requesterId", label: "Requester id (optional)", type: "text" },
   { key: "priority", label: "Priority (1–5)", type: "number" },
   { key: "targetLat", label: "Target lat", type: "number" },
   { key: "targetLon", label: "Target lon", type: "number" },

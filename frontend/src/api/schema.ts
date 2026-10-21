@@ -874,6 +874,7 @@ export interface components {
         };
         /** MetricsSchema */
         MetricsSchema: {
+            requester_service?: components["schemas"]["RequesterServiceSchema"] | null;
             /** Plan Id */
             plan_id: string;
             /** Mission Utility */
@@ -1033,6 +1034,8 @@ export interface components {
             target_name?: string | null;
             /** Satellite Id */
             satellite_id?: string | null;
+            /** Requester Id */
+            requester_id?: string | null;
         };
         /** ObservationWindowSchema */
         ObservationWindowSchema: {
@@ -1147,6 +1150,45 @@ export interface components {
          * @enum {string}
          */
         RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired";
+        /** RequesterServiceRowSchema */
+        RequesterServiceRowSchema: {
+            /** Requester Id */
+            requester_id: string | null;
+            /** Request Count */
+            request_count: number;
+            /** Demand Utility */
+            demand_utility: number;
+            /** Served Request Count */
+            served_request_count: number;
+            /** Served Utility */
+            served_utility: number;
+            /** Service Share */
+            service_share: number | null;
+            /** Fulfillment Ratio */
+            fulfillment_ratio: number | null;
+        };
+        /** RequesterServiceSchema */
+        RequesterServiceSchema: {
+            /** Requesters */
+            requesters: components["schemas"]["RequesterServiceRowSchema"][];
+            unattributed: components["schemas"]["RequesterServiceRowSchema"];
+            /** Total Served Utility */
+            total_served_utility: number;
+            /** Fairness Gap */
+            fairness_gap: number | null;
+            /** Zero Service Requester Count */
+            zero_service_requester_count: number;
+            /** No Service */
+            no_service: boolean;
+            /** Metric Version */
+            metric_version: string;
+            /** Scope */
+            scope: string;
+            /** Limitations */
+            limitations: string;
+            /** Measured At Convention */
+            measured_at_convention: string;
+        };
         /**
          * SatelliteFeasibilitySchema
          * @description One satellite's earliest suitable window for a candidate (ADR-0015).

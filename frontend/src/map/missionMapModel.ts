@@ -25,6 +25,7 @@ export type TargetPlanStatus = "completed" | "expired" | "scheduled" | "unschedu
 /** One observation target as the map draws it. */
 export interface MapTarget {
   requestId: string;
+  requesterId?: string | null;
   coordinate: Coordinate;
   priority: number;
   deadline: string;
@@ -208,6 +209,7 @@ export function buildMissionMapModel(
       plan?.unscheduled.find((entry) => entry.request_id === request.id)?.reason_code ?? null;
     return {
       requestId: request.id,
+      requesterId: request.requester_id,
       coordinate: targetCoordinate(request),
       priority: request.priority,
       deadline: request.deadline,

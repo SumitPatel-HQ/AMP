@@ -169,6 +169,7 @@ export function emergencyWindowId(requestId: string): string {
  */
 export interface EmergencyRequestForm {
   requestId: string;
+  requesterId?: string;
   targetLat: string;
   targetLon: string;
   priority: string;
@@ -296,6 +297,8 @@ export function buildEmergencyRequestEvent(
   orbital = false,
 ): MissionEventRequest | null {
   const requestId = form.requestId.trim();
+  const requesterId = form.requesterId ?? "";
+  if (requesterId !== requesterId.trim()) return null;
   const targetLat = numberField(form.targetLat);
   const targetLon = numberField(form.targetLon);
   const priority = numberField(form.priority);
@@ -326,6 +329,7 @@ export function buildEmergencyRequestEvent(
     payload: {
       request: {
         id: requestId,
+          ...(requesterId === "" ? {} : { requester_id: requesterId }),
         target_lat: targetLat,
         target_lon: targetLon,
         priority,

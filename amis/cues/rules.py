@@ -16,6 +16,7 @@ from amis.api_schemas import ObservationRequestSchema
 from amis.cues.archive import CueArchive
 from amis.cues.normalize import _finite_number, normalize_usgs
 from amis.domain import ObservationRequest, Scenario
+from amis.domain.scenario import validate_requester_id
 
 POLICY_VERSION = "usgs-earthquake-v1"
 ALERT_POLICY = {
@@ -34,13 +35,17 @@ class ImagingProfile:
     storage_cost_mb: float
     satellite_id: str | None = None
     target_name: str | None = None
+    requester_id: str | None = None
+
+    def __post_init__(self) -> None:
+        validate_requester_id(self.requester_id)
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> ImagingProfile:
         if not isinstance(data, dict):
             raise ValueError("imaging profile must be an object")
         required = {"duration_s", "energy_cost_wh", "storage_cost_mb"}
-        allowed = required | {"satellite_id", "target_name"}
+        allowed = required | {"satellite_id", "target_name", "requester_id"}
         missing = required - data.keys()
         if missing:
             raise ValueError(f"imaging profile is missing explicit values: {', '.join(sorted(missing))}")
@@ -64,6 +69,8 @@ class ImagingProfile:
             result["satellite_id"] = self.satellite_id
         if self.target_name is not None:
             result["target_name"] = self.target_name
+        if self.requester_id is not None:
+            result["requester_id"] = self.requester_id
         return result
 
 

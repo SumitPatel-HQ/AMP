@@ -173,6 +173,7 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
         <span className="font-semibold text-neutral-100">{target.requestId}</span>
         <span className="text-neutral-500">P{target.priority}</span>
       </p>
+      <p className="text-neutral-400">Requester: {target.requesterId ?? "Unattributed"}</p>
       <p style={{ color: cssColor(STATUS_COLORS[target.status]) }}>
         {STATUS_LABELS[target.status]}
         {target.action === null ? "" : ` · ${target.action.status}`}

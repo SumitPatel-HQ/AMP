@@ -64,6 +64,10 @@ class ObservationRequest:
     # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
     # means the planner assigns whichever satellite can serve it.
     satellite_id: str | None = None
+    requester_id: str | None = None
+
+    def __post_init__(self) -> None:
+        validate_requester_id(self.requester_id)
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -81,6 +85,8 @@ class ObservationRequest:
             result["target_name"] = self.target_name
         if self.satellite_id is not None:
             result["satellite_id"] = self.satellite_id
+        if self.requester_id is not None:
+            result["requester_id"] = self.requester_id
         return result
 
     @staticmethod
@@ -97,7 +103,15 @@ class ObservationRequest:
             status=RequestStatus(data["status"]),
             target_name=data.get("target_name"),
             satellite_id=data.get("satellite_id"),
+            requester_id=data.get("requester_id"),
         )
+
+
+def validate_requester_id(value: str | None) -> None:
+    if value is not None and (
+        not isinstance(value, str) or not value or value != value.strip()
+    ):
+        raise ValueError("requester_id must be a nonempty string without surrounding whitespace")
 
 
 @dataclass(frozen=True, init=False)

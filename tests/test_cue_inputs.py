@@ -63,6 +63,16 @@ def test_longitude_latitude_and_millisecond_utc_normalization_ignores_depth():
     assert normalize_usgs(response(record)) == (cue,)
 
 
+def test_explicit_requester_profile_flows_to_generated_inputs(archive, scenario):
+    captured = archive(feature())
+    profile = replace(PROFILE, requester_id="Agency")
+    artifact = build_cue_inputs(captured, scenario, profile)
+    assert artifact["metadata"]["imaging_profile"]["requester_id"] == "Agency"
+    assert artifact["inputs"][0]["payload"]["request"]["requester_id"] == "Agency"
+    legacy = build_cue_inputs(captured, scenario, PROFILE)
+    assert "requester_id" not in legacy["inputs"][0]["payload"]["request"]
+
+
 @pytest.mark.parametrize("milliseconds,expected", [
     (0, datetime(1970, 1, 1, tzinfo=timezone.utc)),
     (-1, datetime(1969, 12, 31, 23, 59, 59, 999000, tzinfo=timezone.utc)),

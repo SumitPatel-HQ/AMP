@@ -18,6 +18,7 @@ from amis.domain import (
     emergency_evidence_error,
 )
 from amis.errors import ErrorCode
+from amis.domain.scenario import validate_requester_id
 
 
 class ApiModel(BaseModel):
@@ -146,9 +147,11 @@ class ObservationRequestSchema(ApiModel):
     # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
     # means the planner assigns whichever satellite can serve it.
     satellite_id: str | None = None
+    requester_id: str | None = None
 
     @model_validator(mode="after")
     def validate_deadline_timezone(self) -> Self:
+        validate_requester_id(self.requester_id)
         # Checked here, not only when a request is embedded in
         # ScenarioSchema, so the emergency-event payload (which reuses
         # this schema directly, never nested in a scenario) cannot bypass
@@ -506,7 +509,31 @@ class EmergencyResponseSchema(ApiModel):
     achieved_satellite_id: str | None
 
 
+class RequesterServiceRowSchema(ApiModel):
+    requester_id: str | None
+    request_count: int
+    demand_utility: int
+    served_request_count: int
+    served_utility: int
+    service_share: float | None
+    fulfillment_ratio: float | None
+
+
+class RequesterServiceSchema(ApiModel):
+    requesters: list[RequesterServiceRowSchema]
+    unattributed: RequesterServiceRowSchema
+    total_served_utility: int
+    fairness_gap: int | None
+    zero_service_requester_count: int
+    no_service: bool
+    metric_version: str
+    scope: str
+    limitations: str
+    measured_at_convention: str
+
+
 class MetricsSchema(ApiModel):
+    requester_service: RequesterServiceSchema | None = None
     plan_id: str
     mission_utility: float
     completion_rate: float

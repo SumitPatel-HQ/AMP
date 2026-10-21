@@ -39,6 +39,7 @@ from amis.domain import (
     imaging_actions,
 )
 from amis.errors import SimulationStateError
+from amis.domain.metrics import RequesterService, RequesterServiceRow
 
 
 def compute_metrics(
@@ -60,9 +61,11 @@ def compute_metrics(
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
 
-    utility_request_ids = {action.request_id for action in imaging_actions(plan.actions)} | set(
+    utility_request_ids = {action.request_id for action in imaging_actions(plan.actions) if action.request_id is not None} | set(
         mission_state.completed_request_ids
     )
+    # Current completion may include arrivals outside a historical plan's pool.
+    utility_request_ids.intersection_update(priority_by_id)
     mission_utility = sum(priority_by_id[request_id] for request_id in utility_request_ids)
 
     pool_size = len(pool)
@@ -98,6 +101,7 @@ def compute_metrics(
 
     return MetricsResult(
         plan_id=plan.id,
+        requester_service=compute_requester_service(pool, utility_request_ids),
         mission_utility=mission_utility,
         completion_rate=completion_rate,
         violation_count=plan.violation_count,
@@ -118,6 +122,34 @@ def compute_metrics(
         emergency_request_count=len(responses),
         planned_emergency_request_count=planned_count,
         achieved_emergency_request_count=achieved_count,
+    )
+
+
+def compute_requester_service(
+    pool: tuple[ObservationRequest, ...], served_ids: set[str],
+) -> RequesterService:
+    groups: dict[str | None, list[ObservationRequest]] = {None: []}
+    for request in pool:
+        groups.setdefault(request.requester_id, []).append(request)
+    total = sum(request.priority for request in pool if request.id in served_ids)
+
+    def row(identity: str | None) -> RequesterServiceRow:
+        requests = groups[identity]
+        served = [request for request in requests if request.id in served_ids]
+        demand = sum(request.priority for request in requests)
+        utility = sum(request.priority for request in served)
+        return RequesterServiceRow(
+            identity, len(requests), demand, len(served), utility,
+            utility / total if total else None, utility / demand if demand else None,
+        )
+
+    rows = tuple(row(identity) for identity in sorted(key for key in groups if key is not None))
+    utilities = [item.served_utility for item in rows]
+    return RequesterService(
+        requesters=rows, unattributed=row(None), total_served_utility=total,
+        fairness_gap=max(utilities) - min(utilities) if len(rows) >= 2 else None,
+        zero_service_requester_count=sum(value == 0 for value in utilities),
+        no_service=total == 0,
     )
 
 
