@@ -1,18 +1,21 @@
-# AMIS mission dashboard
+# AMIS Mission Dashboard
 
-The dashboard creates orbital or synthetic missions, reopens saved missions with plan history, and offers copyable examples. The mission builder previews windows before creation and accepts catalogue elements or a pasted TLE pair. It uses Vite, React, TypeScript, Tailwind CSS, and a `vis-timeline` mission timeline.
+Web-based mission control console for the AMIS satellite planning simulator.
 
-The mission map draws on a MapLibre GL vector basemap with a deck.gl overlay for targets, the plan sequence, event rings, and a satellite marker. Orbital missions use the server's ground track and exact position at the simulated time. Synthetic missions retain plan-derived placement. The basemap loads OpenFreeMap's dark style, falls back to CARTO Dark Matter, and finally to an offline land outline bundled with the app. MapLibre and deck.gl load lazily when the map mounts. The map needs WebGL.
+## Tech Stack
 
-## Run locally
+- **Framework**: React 19, TypeScript, Vite 8
+- **Styling**: Tailwind CSS v4
+- **Visualization**: MapLibre GL + deck.gl (WebGL orbit tracking & targets)
+- **Timeline**: vis-timeline (Gantt-style satellite schedule)
+- **API Client**: openapi-fetch (auto-generated typed client from FastAPI backend)
+- **Testing & Quality**: Vitest, React Testing Library, Oxlint
 
-Start the API from the repository root:
+---
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn amis.main:app --reload
-```
+## Getting Started
 
-Then start the frontend:
+> **Prerequisite**: Start the backend first (`uvicorn amis.main:app`) so OpenAPI types can be generated.
 
 ```powershell
 cd frontend
@@ -20,24 +23,38 @@ npm install
 npm run dev
 ```
 
-The frontend uses `http://127.0.0.1:8000` by default. Copy `.env.example` to `.env` to set a different API URL. `npm run dev` regenerates the API types before Vite starts.
+Dashboard runs at: `http://localhost:5173`
 
-## Generate API types
+---
 
-With the API running, regenerate `src/api/schema.ts` from its live OpenAPI document:
+## Configuration (`.env`)
 
-```powershell
-npm run generate:api
+Copy `.env.example` to `.env` to customize the backend URL:
+
+```env
+VITE_AMIS_API_URL=http://127.0.0.1:8000
 ```
 
-Set `AMIS_API_URL` if the API is not running at the default address. `npm run build` also regenerates the file before typechecking. Application types come from the generated file. Do not edit it by hand.
+---
 
-## Checks
+## Available Scripts
+
+| Command | Action |
+| :--- | :--- |
+| `npm run dev` | Auto-generates API types and starts Vite dev server |
+| `npm run build` | Regenerates API types, typechecks, and builds to `/dist` |
+| `npm run generate:api` | Manually regenerates `src/api/schema.ts` from `/openapi.json` |
+| `npm test` | Runs unit/integration test suite with Vitest |
+| `npm run lint` | Runs fast code quality checks using Oxlint |
+| `npm run preview` | Locally previews production build |
+
+---
+
+## Docker
+
+Build and run with Nginx:
 
 ```powershell
-npm test
-npm run lint
-npm run build
+# Run just the frontend container (:8080)
+docker compose up --build web
 ```
-
-From the repository root, `docker compose up --build` starts PostgreSQL, the API at port 8000, and the dashboard at port 8080.
