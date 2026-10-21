@@ -11,6 +11,7 @@ from amis.domain import (
     ActionKind,
     ActionStatus,
     AlertLevel,
+    ObservationRequest,
     EventType,
     PlanChangeType,
     ReasonCode,
@@ -382,6 +383,10 @@ class EmergencyTaskPayloadSchema(ApiModel):
         )
         if error is not None:
             raise ValueError(error)
+        if self.source == "cems":
+            request_error = ObservationRequest(**self.request.model_dump()).validation_error()
+            if request_error is not None:
+                raise ValueError(request_error)
         return self
 
 

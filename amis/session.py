@@ -460,7 +460,10 @@ class MissionSession:
                 # Validate the whole arrival before the provider can observe it.
                 candidate = self._parse_emergency_request_payload({**payload, "windows": []})
                 self._validate_emergency_request(candidate)
-                payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(candidate.request)]}
+                try:
+                    payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(candidate.request)]}
+                except (KeyError, TypeError, ValueError) as error:
+                    raise InvalidEventError("could not generate emergency observation windows") from error
             event_payload = self._parse_emergency_request_payload(payload)
             self._validate_emergency_request(event_payload)
         elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
@@ -1231,16 +1234,9 @@ class MissionSession:
             )
 
         if payload.source == "cems":
-            from amis.api_schemas import ObservationRequestSchema
-
-            for field in ("target_lat", "target_lon", "priority", "duration_s", "energy_cost_wh", "storage_cost_mb"):
-                value = getattr(request, field)
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-                    raise InvalidEventError(f"CEMS {field} must be an explicit finite number")
-            try:
-                ObservationRequestSchema.model_validate(request.to_dict())
-            except (TypeError, ValueError) as error:
-                raise InvalidEventError("invalid CEMS coordinates or explicit imaging profile") from error
+            request_error = request.validation_error()
+            if request_error is not None:
+                raise InvalidEventError(f"invalid CEMS request: {request_error}")
             assert payload.activation_time is not None  # Guaranteed by evidence validation.
             activation = datetime.fromisoformat(payload.activation_time)
             if activation != self.get_state().simulated_time:

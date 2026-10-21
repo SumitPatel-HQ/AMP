@@ -54,6 +54,8 @@ def test_cems_exact_arrival_records_windows_impact_and_explicit_replan():
 
 
 @pytest.mark.parametrize("change", [
+    {"source_url": "https://localhost/"}, {"source_url": "https://127.0.0.1/"},
+    {"source_url": "https://192.168.1.1/"}, {"source_url": "https://[::1]/"},
     {"category": None}, {"activation_time": None}, {"source_url": "javascript:alert(1)"},
     {"centroid_policy_version": "other"}, {"alert_level": "red"}, {"mag": 6},
     {"activation_time": "2026-01-01T00:00:00"},
@@ -183,4 +185,27 @@ def test_duplicate_cems_identity_and_wrong_injection_time_fail_before_generation
     with pytest.raises(InvalidEventError, match="already exists"):
         session.inject_event(EventType.EMERGENCY_TASK, duplicate)
     assert provider.arrival_calls == 1
+    assert _snapshot(session) == before
+
+
+@pytest.mark.parametrize("source", [None, "usgs", "cems"])
+def test_orbital_provider_failure_keeps_the_structured_emergency_error(source):
+    class FailingProvider(_OrbitalStubProvider):
+        def generate(self, scenario, requests):
+            if tuple(requests) != scenario.requests:
+                raise ValueError("synthetic provider failure")
+            return super().generate(scenario, requests)
+
+    scenario, payload = _orbital_scenario()
+    session = _planned(scenario, FailingProvider())
+    if source == "cems":
+        body = cems_payload(payload, session.get_state().simulated_time)
+    else:
+        body = payload.to_dict()
+        if source:
+            body.update(source=source, source_event_id="synthetic-usgs", alert_level="unknown")
+    body.pop("windows")
+    before = _snapshot(session)
+    with pytest.raises(InvalidEventError, match="could not generate"):
+        session.inject_event(EventType.EMERGENCY_TASK, body)
     assert _snapshot(session) == before

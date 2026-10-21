@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from ipaddress import ip_address
 from typing import Any, Literal, Union, get_args
 from urllib.parse import urlsplit
 
@@ -135,7 +136,15 @@ def emergency_evidence_error(
             return "CEMS source event time must not follow activation time"
         try:
             url = urlsplit(source_url)
-            if url.scheme != "https" or not url.hostname or url.username or url.password:
+            host = (url.hostname or "").lower().rstrip(".")
+            try:
+                public_host = ip_address(host).is_global
+            except ValueError:
+                public_host = (
+                    "." in host and not any(character.isspace() for character in host)
+                    and not host.endswith((".localhost", ".local", ".internal", ".test", ".invalid", ".example"))
+                )
+            if url.scheme != "https" or not public_host or url.username or url.password:
                 return "CEMS source_url must be a public HTTPS source URL"
         except ValueError:
             return "CEMS source_url must be a public HTTPS source URL"
