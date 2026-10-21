@@ -42,7 +42,7 @@ export function eventSummary(event: MissionEventSchema): string {
 }
 
 /** Display names for evidence sources; any other source shows as recorded. */
-const SOURCE_LABELS: Record<string, string> = { usgs: "U.S. Geological Survey" };
+const SOURCE_LABELS: Record<string, string> = { usgs: "U.S. Geological Survey", cems: "Copernicus Emergency Management Service" };
 
 /** Shown beside cue evidence: the source reports the event, AMIS chose the rest. */
 export const CUE_POLICY_NOTICE =
@@ -74,6 +74,12 @@ export interface CueEvidence {
   mag: number | null;
   /** Source-reported USGS significance score (unitless), when the source gave one. */
   sig: number | null;
+  category?: string | null;
+  activationTime?: string | null;
+  sourceEventTime?: string | null;
+  sourceUrl?: string | null;
+  centroidPolicyVersion?: string | null;
+  arrivalTime?: string;
 }
 
 /**
@@ -105,6 +111,14 @@ export function cueEvidence(event: MissionEventSchema): CueEvidence | null {
     alertLevel,
     mag: event.payload.mag ?? null,
     sig: event.payload.sig ?? null,
+    ...(source === "cems" ? {
+      category: event.payload.category ?? null,
+      activationTime: event.payload.activation_time ?? null,
+      sourceEventTime: event.payload.source_event_time ?? null,
+      sourceUrl: event.payload.source_url ?? null,
+      centroidPolicyVersion: event.payload.centroid_policy_version ?? null,
+      arrivalTime: event.event_time,
+    } : {}),
   };
 }
 

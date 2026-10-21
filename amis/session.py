@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Union
 
+from amis.domain.event import CEMS_EVIDENCE_FIELDS
 from amis.diff import compare_plans
 from amis.dynamics.recharge import recharge_model
 from amis.domain import (
@@ -73,7 +74,7 @@ from amis.windows import SyntheticWindowProvider, WindowProvider
 FEASIBILITY_REQUEST_ID = "FEASIBILITY-CANDIDATE"
 
 _EMERGENCY_PAYLOAD_FIELDS = frozenset(
-    {"request", "windows", "source", "source_event_id", "alert_level", "mag", "sig"}
+    {"request", "windows", "source", "source_event_id", "alert_level", "mag", "sig", *CEMS_EVIDENCE_FIELDS}
 )
 
 
@@ -456,11 +457,10 @@ class MissionSession:
                 self._reject_unknown_emergency_fields(payload)
                 self._reject_invalid_emergency_evidence(payload)
             if isinstance(payload, dict) and payload.get("windows") is None and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
-                try:
-                    request = ObservationRequest.from_dict(payload["request"])
-                    payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(request)]}
-                except (KeyError, TypeError, ValueError) as error:
-                    raise InvalidEventError("could not generate emergency observation windows") from error
+                # Validate the whole arrival before the provider can observe it.
+                candidate = self._parse_emergency_request_payload({**payload, "windows": []})
+                self._validate_emergency_request(candidate)
+                payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(candidate.request)]}
             event_payload = self._parse_emergency_request_payload(payload)
             self._validate_emergency_request(event_payload)
         elif parsed_event_type is EventType.SATELLITE_UNAVAILABLE:
@@ -1211,6 +1211,7 @@ class MissionSession:
             payload.get("alert_level"),
             payload.get("mag"),
             payload.get("sig"),
+            **{field: payload.get(field) for field in CEMS_EVIDENCE_FIELDS},
         )
         if error is not None:
             request = payload.get("request")
@@ -1228,6 +1229,39 @@ class MissionSession:
                 evidence_error,
                 details={"request_id": request.id},
             )
+
+        if payload.source == "cems":
+            from amis.api_schemas import ObservationRequestSchema
+
+            for field in ("target_lat", "target_lon", "priority", "duration_s", "energy_cost_wh", "storage_cost_mb"):
+                value = getattr(request, field)
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise InvalidEventError(f"CEMS {field} must be an explicit finite number")
+            try:
+                ObservationRequestSchema.model_validate(request.to_dict())
+            except (TypeError, ValueError) as error:
+                raise InvalidEventError("invalid CEMS coordinates or explicit imaging profile") from error
+            assert payload.activation_time is not None  # Guaranteed by evidence validation.
+            activation = datetime.fromisoformat(payload.activation_time)
+            if activation != self.get_state().simulated_time:
+                raise InvalidEventError("CEMS activation time must equal the simulated injection time")
+            if not scenario.start_time <= activation < scenario.end_time:
+                raise InvalidEventError("CEMS activation must be inside the Scenario interval")
+            if request.deadline.utcoffset() != timedelta(0):
+                raise InvalidEventError("CEMS deadline must be UTC")
+            try:
+                policy_deadline = activation + timedelta(hours=24)
+            except OverflowError as error:
+                raise InvalidEventError("CEMS policy deadline is outside the supported datetime range") from error
+            if request.priority != 5 or request.deadline != policy_deadline:
+                raise InvalidEventError("CEMS request must follow cems-centroid-v1 priority/deadline policy")
+            if request.satellite_id is not None and request.satellite_id not in {sat.id for sat in scenario.satellites}:
+                raise InvalidEventError("CEMS imaging profile names an unknown satellite")
+            if any(isinstance(event.payload, EmergencyRequestPayload)
+                   and event.payload.source == "cems"
+                   and event.payload.source_event_id == payload.source_event_id
+                   for event in self._events):
+                raise InvalidEventError("CEMS activation already exists")
 
         if request.id in {item.id for item in self._request_pool}:
             raise InvalidEventError(

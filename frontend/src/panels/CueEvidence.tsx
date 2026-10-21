@@ -18,6 +18,21 @@ export function CueEvidenceDetails({ evidence }: { evidence: CueEvidence }) {
         {` · ${evidence.sourceEventId} · ${facts.join(" · ")}`}
       </p>
       <p className="text-neutral-500">{`Cue arrival for ${evidence.requestId} · ${evidence.eventId}`}</p>
+      {evidence.source === "cems" && (
+        <>
+          <p>{`Category: ${evidence.category}`}</p>
+          <p>{`Activation: ${evidence.activationTime}`}</p>
+          <p>{`Source event: ${evidence.sourceEventTime ?? "not supplied"}`}</p>
+          <p>{`Accepted arrival: ${evidence.arrivalTime}`}</p>
+          <p>activation centroid; point approximation. No area-coverage guarantee is modeled.</p>
+          <p>{`AMIS policy ${evidence.centroidPolicyVersion}: priority 5; deadline 24 hours after activation.`}</p>
+          {evidence.sourceUrl?.startsWith("https://") && (
+            <a href={evidence.sourceUrl} target="_blank" rel="noreferrer" className="underline">Copernicus EMS source</a>
+          )}
+          <p>{`Copernicus Emergency Management Service (\u00a9 ${evidence.activationTime?.slice(0, 4)} European Union), ${evidence.sourceEventId}`}</p>
+          {evidence.sourceEventId.startsWith("SYNTHETIC-") && <p>SYNTHETIC fixture; not historical Copernicus evidence.</p>}
+        </>
+      )}
       <p className="text-amber-300/80">{CUE_POLICY_NOTICE}</p>
     </div>
   );

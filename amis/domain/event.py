@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal, Union, get_args
+from urllib.parse import urlsplit
 
 from amis.domain.enums import EventType
 from amis.domain.scenario import ObservationRequest
@@ -83,6 +84,8 @@ class BatteryDropPayload:
 # for an absent source alert. The API schema and the frontend read this set.
 AlertLevel = Literal["red", "orange", "yellow", "green", "unknown"]
 CUE_ALERT_LEVELS: tuple[str, ...] = get_args(AlertLevel)
+CEMS_EVIDENCE_FIELDS = ("category", "activation_time", "source_event_time", "source_url", "centroid_policy_version")
+
 EMERGENCY_EVIDENCE_FIELDS = ("source", "source_event_id", "alert_level")
 
 
@@ -92,12 +95,50 @@ def emergency_evidence_error(
     alert_level: Any,
     mag: Any = None,
     sig: Any = None,
+    category: Any = None,
+    activation_time: Any = None,
+    source_event_time: Any = None,
+    source_url: Any = None,
+    centroid_policy_version: Any = None,
 ) -> str | None:
     """Why an emergency evidence group is inconsistent, or None when valid.
 
     The single owner of the all-or-nothing rule: the domain payload, the
     session's pre-generation check, and the API schema all delegate here.
     """
+    cems = dict(category=category, activation_time=activation_time,
+                source_event_time=source_event_time, source_url=source_url,
+                centroid_policy_version=centroid_policy_version)
+    if source != "cems" and any(value is not None for value in cems.values()):
+        return "CEMS evidence requires source cems"
+    if source == "cems":
+        for field in ("category", "activation_time", "source_url", "centroid_policy_version"):
+            if not isinstance(cems[field], str) or not cems[field].strip():
+                return f"CEMS evidence requires nonempty {field}"
+        if alert_level != "unknown" or mag is not None or sig is not None:
+            return "CEMS evidence requires unknown alert and no earthquake magnitude/significance"
+        if centroid_policy_version != "cems-centroid-v1":
+            return "unsupported CEMS centroid policy version"
+        moments = {}
+        for field in ("activation_time", "source_event_time"):
+            value = cems[field]
+            if value is None:
+                continue
+            try:
+                moment = datetime.fromisoformat(value)
+                if moment.utcoffset() != timedelta(0):
+                    return f"CEMS {field} must be a UTC timestamp"
+                moments[field] = moment
+            except (TypeError, ValueError):
+                return f"CEMS {field} must be a UTC timestamp"
+        if source_event_time is not None and moments["source_event_time"] > moments["activation_time"]:
+            return "CEMS source event time must not follow activation time"
+        try:
+            url = urlsplit(source_url)
+            if url.scheme != "https" or not url.hostname or url.username or url.password:
+                return "CEMS source_url must be a public HTTPS source URL"
+        except ValueError:
+            return "CEMS source_url must be a public HTTPS source URL"
     core = {"source": source, "source_event_id": source_event_id, "alert_level": alert_level}
     missing = [field for field, value in core.items() if value is None]
     if missing and len(missing) != len(core):
@@ -150,6 +191,11 @@ class EmergencyRequestPayload:
     alert_level: AlertLevel | None = None
     mag: float | None = None
     sig: float | None = None
+    category: str | None = None
+    activation_time: str | None = None
+    source_event_time: str | None = None
+    source_url: str | None = None
+    centroid_policy_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         # Evidence keys are omitted when absent, so evidence-free payloads
@@ -158,7 +204,7 @@ class EmergencyRequestPayload:
             "request": self.request.to_dict(),
             "windows": [window.to_dict() for window in self.windows],
         }
-        for field in ("source", "source_event_id", "alert_level", "mag", "sig"):
+        for field in ("source", "source_event_id", "alert_level", "mag", "sig", *CEMS_EVIDENCE_FIELDS):
             value = getattr(self, field)
             if value is not None:
                 result[field] = value
@@ -176,6 +222,7 @@ class EmergencyRequestPayload:
             alert_level=data.get("alert_level"),
             mag=data.get("mag"),
             sig=data.get("sig"),
+            **{field: data.get(field) for field in CEMS_EVIDENCE_FIELDS},
         )
 
     @property
@@ -190,7 +237,8 @@ class EmergencyRequestPayload:
     def evidence_error(self) -> str | None:
         """Why the evidence group is inconsistent, or None when it is valid."""
         return emergency_evidence_error(
-            self.source, self.source_event_id, self.alert_level, self.mag, self.sig
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig,
+            **{field: getattr(self, field) for field in CEMS_EVIDENCE_FIELDS},
         )
 
 
