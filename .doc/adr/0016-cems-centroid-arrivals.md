@@ -1,6 +1,6 @@
 # CEMS activation centroids as recorded emergency arrivals
 
-Status: accepted for A3 ticket 01. Historical archive conversion belongs to ticket 02.
+Status: accepted for A3 tickets 01 and 02.
 
 One CEMS activation becomes one point ObservationRequest using its supplied activation
 centroid. This preserves the existing point-target and utility model without implying
@@ -40,3 +40,14 @@ Attribution follows the owning service's [citation guidelines](https://mapping.e
 and [terms](https://mapping.emergency.copernicus.eu/terms-and-conditions/), checked
 2026-10-21: display the service name, activation year, European Union credit, activation
 code, and public source link beside the evidence. AMIS policy is identified separately.
+
+Ticket 02 adds the verified EMSR933 Crete flood Example. The developer fetch preserves
+the entire public detail response, only after requiring `sensitive` to be exactly false.
+The shared archive manifest records exact URL, retrieval time, filename and checksum;
+offline loading verifies bytes before parsing. Source timestamps without offsets are
+UTC under the documented API contract. Only two-dimensional geographic WKT POINT
+centroids are supported. Equal normalized identities collapse and conflicts fail;
+arrival times must remain inside the half-open Scenario interval. The shared atomic
+publisher writes deterministic inputs only after the whole selection validates.
+See [source verification](../world-impact/a3-cems/source-verification.md) and the
+[real Example briefing](../../amis/data/examples/cems-crete-2026-10-04/briefing.md).

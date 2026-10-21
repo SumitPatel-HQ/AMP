@@ -1,9 +1,12 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import type { MissionEventSchema } from "../api/client";
 import { cueEvidence } from "../state/missionEvent";
 import { cueMarkers } from "../map/missionMapModel";
 import { CueEvidenceDetails } from "./CueEvidence";
+import { readFileSync } from "node:fs";
+
+afterEach(cleanup);
 
 // Synthetic evidence only: this code identifies no historical activation.
 const event: MissionEventSchema = {
@@ -20,6 +23,26 @@ const event: MissionEventSchema = {
 };
 
 describe("CEMS event and map inspection", () => {
+  it("shows the bundled actual EMSR933 evidence and preserves its centroid after reload", () => {
+    const artifact = JSON.parse(readFileSync("../amis/data/examples/cems-crete-2026-10-04/cue-inputs.json", "utf8"));
+    const entry = artifact.inputs[0];
+    const actual: MissionEventSchema = {
+      id: "EVT-001", scenario_id: artifact.metadata.scenario_id,
+      event_type: entry.event_type, event_time: entry.injection_time,
+      payload: { ...entry.payload, windows: [] },
+    };
+    const reloaded = JSON.parse(JSON.stringify(actual));
+    const evidence = cueEvidence(reloaded);
+    render(<CueEvidenceDetails evidence={evidence!} />);
+    expect(screen.getByText(/European Union.*EMSR933/)).toBeTruthy();
+    expect(screen.getByText("Category: Flood")).toBeTruthy();
+    expect(screen.getByText(/Activation: 2026-10-04T11:02:00/)).toBeTruthy();
+    expect(screen.getByText(/activation centroid; point approximation/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Copernicus EMS source" }).getAttribute("href")).toContain("code=EMSR933");
+    const markers = cueMarkers([actual, reloaded]);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].coordinate).toEqual([24.978601792058495, 35.22506250241993]);
+  });
   it("shows activation evidence, credit and the point-policy limit", () => {
     const evidence = cueEvidence(event);
     expect(evidence).not.toBeNull();

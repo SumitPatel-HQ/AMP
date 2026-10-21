@@ -1,0 +1,7 @@
+{
+  "source": "cems",
+  "source_url": "https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR933",
+  "retrieved_at": "2026-10-21T16:22:05.220827+00:00",
+  "file": "response.json",
+  "sha256": "952c4378bc44eed1101006db234ee1b4a1be21007d930191ee6f848eb60de39b"
+}
