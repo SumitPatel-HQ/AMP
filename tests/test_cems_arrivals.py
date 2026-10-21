@@ -54,6 +54,8 @@ def test_cems_exact_arrival_records_windows_impact_and_explicit_replan():
 
 
 @pytest.mark.parametrize("change", [
+    {"source_url": "https://127.1/"}, {"source_url": "https://0x7f.0x1/"},
+    {"source_url": "https://0177.0.0.1/"}, {"source_url": "https://copernicus.eu:bad/"},
     {"source_url": "https://localhost/"}, {"source_url": "https://127.0.0.1/"},
     {"source_url": "https://192.168.1.1/"}, {"source_url": "https://[::1]/"},
     {"category": None}, {"activation_time": None}, {"source_url": "javascript:alert(1)"},

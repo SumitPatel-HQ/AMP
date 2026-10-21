@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -141,10 +142,14 @@ def emergency_evidence_error(
                 public_host = ip_address(host).is_global
             except ValueError:
                 public_host = (
-                    "." in host and not any(character.isspace() for character in host)
+                    "." in host
+                    and all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label) for label in host.split("."))
+                    # Browsers also interpret dotted decimal/octal/hex aliases
+                    # as IPv4. Do not mistake them for public DNS names.
+                    and not all(re.fullmatch(r"(?:0x[0-9a-f]+|[0-9]+)", label) for label in host.split("."))
                     and not host.endswith((".localhost", ".local", ".internal", ".test", ".invalid", ".example"))
                 )
-            if url.scheme != "https" or not public_host or url.username or url.password:
+            if url.scheme != "https" or not public_host or url.username or url.password or url.port == 0:
                 return "CEMS source_url must be a public HTTPS source URL"
         except ValueError:
             return "CEMS source_url must be a public HTTPS source URL"
