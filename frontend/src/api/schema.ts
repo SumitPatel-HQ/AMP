@@ -354,6 +354,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenario_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Mission */
+        post: operations["reset_mission_scenarios__scenario_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scenarios/{scenario_id}/events": {
         parameters: {
             query?: never;
@@ -894,6 +911,8 @@ export interface components {
              * @default 0
              */
             downlink_volume_mb: number;
+            /** Per Satellite */
+            per_satellite?: components["schemas"]["SatelliteMetricsSchema"][];
             /** Emergency Response */
             emergency_response?: components["schemas"]["EmergencyResponseSchema"][];
             /** Time To First Acquisition S */
@@ -970,18 +989,20 @@ export interface components {
              * Format: date-time
              */
             simulated_time: string;
+            /** Satellites */
+            satellites?: components["schemas"]["SatelliteStateSchema"][] | null;
             /** Satellite Id */
-            satellite_id: string;
+            satellite_id?: string | null;
             /** Battery Wh */
-            battery_wh: number;
+            battery_wh?: number | null;
             /** Storage Usage Mb */
-            storage_usage_mb: number;
+            storage_usage_mb?: number | null;
             /** Available */
-            available: boolean;
+            available?: boolean | null;
             /** Active Event Ids */
             active_event_ids: string[];
             /** Completed Request Ids */
-            completed_request_ids: string[];
+            completed_request_ids?: string[] | null;
             /** Mission Complete */
             mission_complete: boolean;
         };
@@ -1010,6 +1031,8 @@ export interface components {
             status: components["schemas"]["RequestStatus"];
             /** Target Name */
             target_name?: string | null;
+            /** Satellite Id */
+            satellite_id?: string | null;
         };
         /** ObservationWindowSchema */
         ObservationWindowSchema: {
@@ -1147,6 +1170,25 @@ export interface components {
             /** Reason */
             reason: ("no_suitable_window" | "satellite_unavailable") | null;
         };
+        /** SatelliteMetricsSchema */
+        SatelliteMetricsSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Battery Utilisation */
+            battery_utilisation: number;
+            /** Storage Utilisation */
+            storage_utilisation: number;
+            /**
+             * Downlink Action Count
+             * @default 0
+             */
+            downlink_action_count: number;
+            /**
+             * Downlink Volume Mb
+             * @default 0
+             */
+            downlink_volume_mb: number;
+        };
         /** SatelliteOutageEventRequest */
         SatelliteOutageEventRequest: {
             /**
@@ -1208,6 +1250,19 @@ export interface components {
             available: boolean;
             orbit?: components["schemas"]["OrbitalElementsSchema"] | null;
         };
+        /** SatelliteStateSchema */
+        SatelliteStateSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Battery Wh */
+            battery_wh: number;
+            /** Storage Usage Mb */
+            storage_usage_mb: number;
+            /** Available */
+            available: boolean;
+            /** Completed Request Ids */
+            completed_request_ids?: string[];
+        };
         /** ScenarioPreviewSchema */
         ScenarioPreviewSchema: {
             /** Errors */
@@ -1242,7 +1297,9 @@ export interface components {
              * Format: date-time
              */
             end_time: string;
-            satellite: components["schemas"]["SatelliteSchema"];
+            satellite?: components["schemas"]["SatelliteSchema"] | null;
+            /** Satellites */
+            satellites?: components["schemas"]["SatelliteSchema"][] | null;
             /** Requests */
             requests: components["schemas"]["ObservationRequestSchema"][];
             window_policy?: components["schemas"]["WindowPolicySchema"] | null;
@@ -1365,6 +1422,16 @@ export interface components {
              * @default 0
              */
             downlink_rate_mb_s: number;
+            /**
+             * Slew Rate Deg S
+             * @default 0
+             */
+            slew_rate_deg_s: number;
+            /**
+             * Recharge Rate W
+             * @default 0
+             */
+            recharge_rate_w: number;
         };
     };
     responses: never;
@@ -1764,6 +1831,7 @@ export interface operations {
                 start?: string | null;
                 end?: string | null;
                 step_s?: number;
+                satellite_id?: string | null;
             };
             header?: never;
             path: {
@@ -2095,6 +2163,46 @@ export interface operations {
             };
             /** @description Mission state conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reset_mission_scenarios__scenario_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionStateSchema"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

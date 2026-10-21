@@ -23,6 +23,7 @@ import {
   generateWindows,
   injectEvent as postEvent,
   replan as replanMission,
+  resetMission as resetMissionApi,
   stepSimulation,
 } from "../api/amis";
 import type {
@@ -85,6 +86,7 @@ export interface MissionSessionState {
   createMission: (draft: ScenarioSchema) => Promise<boolean>;
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
+  resetMission: () => Promise<void>;
   retryComparison: () => Promise<void>;
   retryMissionRefresh: () => Promise<void>;
   step: (seconds: number) => Promise<void>;
@@ -198,7 +200,8 @@ export function useMissionSession(): MissionSessionState {
     setSelection(EMPTY_SELECTION);
   }, []);
 
-  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
+  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {
+    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
       fetchMissionPlans(loaded.id), fetchWindows(loaded.id), fetchState(loaded.id),
       fetchEvents(loaded.id), fetchRequests(loaded.id),
       loaded.satellite.orbit ? fetchGroundTrack(loaded.id) : Promise.resolve([]),
@@ -509,6 +512,40 @@ export function useMissionSession(): MissionSessionState {
     [scenario, plan, stalePlan, refreshComparison, refetchPoolAndMetrics, rememberPlan],
   );
 
+  const resetMission = useCallback(async () => {
+    if (scenario === null) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await resetMissionApi(scenario.id);
+      setPlan(null);
+      setPlans([]);
+      setWindows([]);
+      setImpact(null);
+      setReplanResult(null);
+      setPlanConflict(null);
+      setStalePlan(false);
+      setMetrics(null);
+      setSelection((current) => ({ ...current, windowId: null, planId: null }));
+      const [pool] = await Promise.all([
+        fetchRequests(scenario.id),
+        refetchStateAndEvents(scenario.id),
+        scenario.satellite.orbit
+          ? fetchSatellitePosition(scenario.id, scenario.start_time)
+              .then((pos) => setSatellitePosition(pos))
+              .catch(() => {})
+          : Promise.resolve(),
+      ]);
+      setRequestPool(pool);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [scenario, refetchStateAndEvents]);
+
   const injectEvent = useCallback(
     async (event: MissionEventRequest): Promise<boolean> => {
       if (scenario === null || stalePlan) {
@@ -666,6 +703,7 @@ export function useMissionSession(): MissionSessionState {
     createMission,
     generatePlan,
     replan,
+    resetMission,
     retryComparison,
     retryMissionRefresh,
     step,

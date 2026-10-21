@@ -48,6 +48,7 @@ const api = vi.hoisted(() => {
     injectEvent: vi.fn(),
     parseTle: vi.fn(),
     replan: vi.fn(),
+    resetMission: vi.fn(),
     stepSimulation: vi.fn(),
     validateScenario: vi.fn(),
   };
@@ -316,6 +317,7 @@ function installSuccessfulApi(): void {
   api.comparePlans.mockResolvedValue(planDiff);
   api.fetchTraces.mockResolvedValue(traces);
   api.fetchRequests.mockResolvedValue(scenario.requests);
+  api.resetMission.mockResolvedValue(missionState);
   api.fetchMetrics.mockImplementation(async (planId: string) =>
     planId === revisedPlan.id
       ? planDiff.metrics_after
@@ -1609,5 +1611,76 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const plans = within(screen.getByRole("list", { name: "Mission plans" })).getAllByRole("button");
     expect(plans.map((row) => row.textContent?.slice(0, 2))).toEqual(["V1", "V2"]);
+  });
+  it("resets mission clock, plans, events and metrics when clicking Reset mission", async () => {
+    installSuccessfulApi();
+    const emergencyEvent = {
+      id: "EVT-EMERGENCY",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "EMERGENCY_TASK",
+      payload: {
+        request: {
+          id: "OBS-EMERGENCY",
+          target_lat: 34.05,
+          target_lon: -118.24,
+          priority: 5,
+          duration_s: 600,
+          deadline: "2026-09-21T10:25:00Z",
+          energy_cost_wh: 40,
+          storage_cost_mb: 100,
+          status: "pending",
+        },
+        windows: [],
+      },
+    } satisfies MissionEventSchema;
+
+    const metricsWithEmergency = {
+      ...planDiff.metrics_before,
+      emergency_request_count: 1,
+      planned_emergency_request_count: 1,
+      achieved_emergency_request_count: 1,
+      time_to_first_acquisition_s: 600,
+      achieved_time_to_first_acquisition_s: 600,
+      emergency_response: [
+        {
+          request_id: "OBS-EMERGENCY",
+          event_id: "EVT-EMERGENCY",
+          arrival_time: scenario.start_time,
+          request_status: "completed",
+          planned_start_time: "2026-09-21T10:10:00Z",
+          planned_latency_s: 600,
+          planned_satellite_id: "SAT-001",
+          achieved_start_time: "2026-09-21T10:10:00Z",
+          achieved_latency_s: 600,
+          achieved_satellite_id: "SAT-001",
+        },
+      ],
+    };
+
+    api.fetchMetrics.mockResolvedValue(metricsWithEmergency);
+    api.fetchEvents.mockResolvedValue([emergencyEvent]);
+
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    expect(screen.getByRole("region", { name: "Emergency response" })).toBeTruthy();
+    const resetButton = screen.getByRole("button", { name: "Reset mission" });
+    expect((resetButton as HTMLButtonElement).disabled).toBe(false);
+
+    // Mock reset return: empty plans, empty events, initial requests and state
+    api.fetchEvents.mockResolvedValue([]);
+    api.fetchMissionPlans.mockResolvedValue([]);
+    api.fetchWindows.mockResolvedValue([]);
+    api.fetchRequests.mockResolvedValue(scenario.requests);
+    api.fetchState.mockResolvedValue(missionState);
+
+    await user.click(resetButton);
+
+    expect(api.resetMission).toHaveBeenCalledWith(scenario.id);
+    expect(await screen.findByText("no plan")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Emergency response" })).toBeNull();
+    expect((resetButton as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -18,17 +18,17 @@ These five tickets implement only **A1: USGS earthquake cue replay** and **B: re
 
 | Research feature | Status outside this ticket batch |
 | --- | --- |
-| A3: CEMS activation replay | Pending, planned as the next slice; needs its own specification and tickets. |
-| E: Conjunction avoidance | Pending for a later slice; needs its own specification and tickets. |
-| C: Requester fairness | Pending for a later slice; needs its own specification and tickets. |
-| D: Archive-first imaging | Pending for a later slice; needs its own specification and tickets. |
-| A2 and A4-A7: Other cue adapters | Outside this batch, unscheduled; require separate scope and source/licensing decisions. |
-| F: Monitoring campaigns | Deferred, with no fixed implementation stage. |
-| G: Training packs | Deferred, with no fixed implementation stage. |
-| I: Benchmark alignment | Deferred, with no fixed implementation stage. |
+| A3: CEMS activation replay | Specification and two approved tickets ready in its own feature folder; implementation pending. |
+| E: Conjunction avoidance | Specification and two approved tickets ready in its own feature folder; implementation pending. |
+| C: Requester fairness | Specification and two approved tickets ready in its own feature folder; implementation pending. |
+| D: Archive-first imaging | Specification and two approved tickets ready in its own feature folder; implementation pending. |
+| A2 and A4-A7: Other cue adapters | Scheduled next for specification/ticket planning; require separate scope and source/licensing decisions. |
+| F: Monitoring campaigns | Scheduled next for specification/ticket planning. |
+| G: Training packs | Scheduled next for specification/ticket planning. |
+| I: Benchmark alignment | Scheduled next for specification/ticket planning. |
 | H: Cloud-probability-aware planning | Rejected for now; not a committed later stage. |
 
-The later features are not acceptance criteria or blockers for these five tickets. A1+B tickets 01-05 are implemented.
+The later features are not acceptance criteria or blockers for these five tickets. A1+B tickets 01-05 are implemented. A3, E, C, and D have no cross-feature blockers; the remaining eight candidates are the next planning batch, as recorded in the [world-impact roadmap](../README.md).
 
 ## Dependency rationale
 

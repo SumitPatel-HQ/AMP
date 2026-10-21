@@ -196,6 +196,7 @@ function App() {
         onExamples={() => setDialog("examples")}
         onFeasibility={() => setDialog("feasibility")}
         onGeneratePlan={session.generatePlan}
+        onResetMission={session.resetMission}
         onStep={session.step}
         onInjectEvent={session.injectEvent}
         onReplan={session.replan}

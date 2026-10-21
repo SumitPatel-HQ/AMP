@@ -120,6 +120,7 @@ export function MissionBar({
   onExamples,
   onFeasibility,
   onGeneratePlan,
+  onResetMission,
   onStep,
   onInjectEvent,
   onReplan,
@@ -145,6 +146,7 @@ export function MissionBar({
   /** Opens the read-only, window-only feasibility comparison. */
   onFeasibility: () => void;
   onGeneratePlan: () => void;
+  onResetMission: () => void;
   onStep: (seconds: number) => void;
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
   onReplan: () => void;
@@ -221,6 +223,24 @@ export function MissionBar({
           className={CONTROL_BUTTON}
         >
           Generate plan
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEventOpen(false);
+            onResetMission();
+          }}
+          disabled={
+            loading ||
+            scenario === null ||
+            (plan === null &&
+              events.length === 0 &&
+              missionState?.simulated_time === scenario?.start_time)
+          }
+          title="Reset mission clock, plans, and events back to the initial scenario"
+          className={CONTROL_BUTTON}
+        >
+          Reset mission
         </button>
         <button
           type="button"

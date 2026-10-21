@@ -18,7 +18,7 @@ function initialDraft(): ScenarioSchema {
   return {
     id: `SCN-${crypto.randomUUID()}`, name: "New Earth observation mission",
     start_time: start.toISOString(), end_time: end.toISOString(),
-    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10, settling_time_s: 0, culmination_placement: false, ground_station_ids: [], downlink_rate_mb_s: 0 },
+    window_policy: { provider: "orbital", max_off_nadir_deg: 30, min_sun_elevation_deg: 10, settling_time_s: 0, culmination_placement: false, ground_station_ids: [], downlink_rate_mb_s: 0, slew_rate_deg_s: 0, recharge_rate_w: 0 },
     satellite: { id: "SAT-EO", battery_capacity_wh: 1000, battery_charge_wh: 1000,
       storage_capacity_mb: 4000, storage_usage_mb: 0, available: true },
     requests: [],

@@ -372,6 +372,17 @@ def create_app(
         return state.to_dict()
 
     @app.post(
+        "/scenarios/{scenario_id}/reset",
+        response_model=MissionStateSchema,
+        responses=_documented_errors(404, 422),
+    )
+    def reset_mission(scenario_id: ScenarioId) -> dict[str, Any]:
+        session = store.load(scenario_id)
+        state = session.reset()
+        store.save(session)
+        return state.to_dict()
+
+    @app.post(
         "/scenarios/{scenario_id}/events",
         response_model=MissionEventSchema,
         response_model_exclude_unset=True,

@@ -192,6 +192,16 @@ export async function stepSimulation(
   );
 }
 
+export async function resetMission(
+  scenarioId: string,
+): Promise<MissionStateSchema> {
+  return unwrap(
+    await client.POST("/scenarios/{scenario_id}/reset", {
+      params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
 export async function fetchWindows(scenarioId: string): Promise<ObservationWindowSchema[]> {
   return unwrap(
     await client.GET("/scenarios/{scenario_id}/windows", {
