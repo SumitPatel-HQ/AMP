@@ -20,7 +20,7 @@ The hypothetical agile imager uses a stored Landsat 8 orbital snapshot, a
 training assumptions, not claims about Landsat 8 tasking capabilities.
 
 Load the Example, generate windows and create a baseline MissionPlan. Advance
-exactly 126120 seconds from Scenario start (2026-10-04 00:00 UTC), then inject
+exactly 39720 seconds from Scenario start (2026-10-04 00:00 UTC), then inject
 the event body in cue-inputs.json. Inspect impact before choosing Replan.
 The CLI performs this lifecycle offline:
 `python -m scripts.run_cems_crete_replay` (impact only), or

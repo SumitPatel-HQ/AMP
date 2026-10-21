@@ -21,7 +21,7 @@ To fetch a new archive deliberately (existing directories are refused):
 python -m scripts.fetch_cems_archive EMSR933 path/to/new-archive
 ```
 
-For dashboard use, load the Example, generate windows, plan, advance 126120
+For dashboard use, load the Example, generate windows, plan, advance 39720
 seconds, and submit the first input's event_type and payload through the existing
 emergency-arrival API. Developer metadata and injection_time are not API fields.
 Select Replan separately. See the briefing for limitations and credit.
