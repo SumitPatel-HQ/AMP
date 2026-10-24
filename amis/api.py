@@ -25,6 +25,7 @@ from amis.api_schemas import (
     ObservationRequestSchema,
     ObservationWindowSchema,
     PlanDiffSchema,
+    PlanRequest,
     ReplanRequest,
     ScenarioSchema,
     StepRequest,
@@ -343,9 +344,29 @@ def create_app(
         status_code=status.HTTP_201_CREATED,
         responses=_documented_errors(404, 409, 422),
     )
-    def create_plan(scenario_id: ScenarioId, planner: Literal["greedy", "cp_sat"] = "greedy") -> dict[str, Any]:
+    def create_plan(
+        scenario_id: ScenarioId,
+        request: PlanRequest | None = None,
+        planner: Literal["greedy", "cp_sat"] | None = None,
+        policy: Literal["utility", "utility_then_fairness"] | None = None,
+        planning_policy: Literal["utility", "utility_then_fairness"] | None = None,
+    ) -> dict[str, Any]:
         session = store.load(scenario_id)
-        session.select_planner(planner)
+        effective_planner = (
+            (request.planner if request and request.planner else None)
+            or planner
+            or "greedy"
+        )
+        effective_policy = (
+            (request.policy or request.planning_policy if request else None)
+            or policy
+            or planning_policy
+            or "utility"
+        )
+        try:
+            session.select_planner(effective_planner, policy=effective_policy)
+        except ValueError as err:
+            raise InvalidScenarioError(str(err)) from err
         plan = session.plan()
         store.save(session)
         return plan.to_dict()
@@ -427,10 +448,17 @@ def create_app(
         scenario_id: ScenarioId, request: ReplanRequest
     ) -> dict[str, Any]:
         session = store.load(scenario_id)
-        session.select_planner(request.planner or session.get_plan().planner_name)
-        plan = session.replan(request.expected_parent_plan_id)
+        current_plan = session.get_plan()
+        planner = request.planner or current_plan.planner_name
+        policy = request.policy or request.planning_policy or getattr(current_plan, "planning_policy", "utility")
+        try:
+            session.select_planner(planner, policy=policy)
+        except ValueError as err:
+            raise InvalidScenarioError(str(err)) from err
+        parent_id = request.expected_parent_plan_id or current_plan.id
+        plan = session.replan(parent_id)
         store.save(
-            session, expected_current_plan_id=request.expected_parent_plan_id
+            session, expected_current_plan_id=parent_id
         )
         return plan.to_dict()
 

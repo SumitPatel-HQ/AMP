@@ -259,6 +259,8 @@ class UnscheduledEntrySchema(ApiModel):
 
 class MissionPlanSchema(ApiModel):
     planner_name: str = "greedy"
+    planning_policy: str = "utility"
+    policy_version: str = "requester-utility-v1"
     solver_details: dict[str, Any] | None = None
     id: str
     scenario_id: str
@@ -631,9 +633,17 @@ class StepRequest(ApiModel):
     seconds: float = Field(gt=0, allow_inf_nan=False)
 
 
+class PlanRequest(ApiModel):
+    planner: Literal["greedy", "cp_sat"] | None = None
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
+
+
 class ReplanRequest(ApiModel):
     planner: Literal["greedy", "cp_sat"] | None = None
-    expected_parent_plan_id: str = Field(min_length=1)
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
+    expected_parent_plan_id: str | None = None
 
 
 class ErrorBody(ApiModel):

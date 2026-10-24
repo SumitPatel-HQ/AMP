@@ -77,6 +77,9 @@ def compare_plans(
     """
 
     reasons = dict(reasons_by_request or {})
+    if current.solver_details and current.solver_details.get("fairness_rebalanced_request_ids"):
+        for req_id in current.solver_details["fairness_rebalanced_request_ids"]:
+            reasons[req_id] = ReasonCode.REBALANCED_FOR_REQUESTER_SHARE
     # Request-scoped: downlink actions carry no request and never appear
     # as diff entries (ADR-0011).
     previous_actions = {action.request_id: action for action in imaging_actions(previous.actions)}

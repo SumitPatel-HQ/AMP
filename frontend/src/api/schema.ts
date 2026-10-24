@@ -953,6 +953,16 @@ export interface components {
              * @default greedy
              */
             planner_name: string;
+            /**
+             * Planning Policy
+             * @default utility
+             */
+            planning_policy: string;
+            /**
+             * Policy Version
+             * @default requester-utility-v1
+             */
+            policy_version: string;
             /** Solver Details */
             solver_details?: {
                 [key: string]: unknown;
@@ -1133,17 +1143,30 @@ export interface components {
              */
             request_pool_mismatch: boolean;
         };
+        /** PlanRequest */
+        PlanRequest: {
+            /** Planner */
+            planner?: ("greedy" | "cp_sat") | null;
+            /** Policy */
+            policy?: ("utility" | "utility_then_fairness") | null;
+            /** Planning Policy */
+            planning_policy?: ("utility" | "utility_then_fairness") | null;
+        };
         /**
          * ReasonCode
          * @enum {string}
          */
-        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED";
+        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
         /** ReplanRequest */
         ReplanRequest: {
             /** Planner */
             planner?: ("greedy" | "cp_sat") | null;
+            /** Policy */
+            policy?: ("utility" | "utility_then_fairness") | null;
+            /** Planning Policy */
+            planning_policy?: ("utility" | "utility_then_fairness") | null;
             /** Expected Parent Plan Id */
-            expected_parent_plan_id: string;
+            expected_parent_plan_id?: string | null;
         };
         /**
          * RequestStatus
@@ -2082,7 +2105,9 @@ export interface operations {
     create_plan_scenarios__scenario_id__plan_post: {
         parameters: {
             query?: {
-                planner?: "greedy" | "cp_sat";
+                planner?: ("greedy" | "cp_sat") | null;
+                policy?: ("utility" | "utility_then_fairness") | null;
+                planning_policy?: ("utility" | "utility_then_fairness") | null;
             };
             header?: never;
             path: {
@@ -2090,7 +2115,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {

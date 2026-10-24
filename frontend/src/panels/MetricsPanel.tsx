@@ -236,7 +236,7 @@ export function MetricsPanel({
           : `Request pool: ${view.pool.before} → ${view.pool.after} requests`}
       </p>
       <EmergencyResponseList metrics={subject.after} planLabel={label(view.afterPlanId)} />
-      <RequesterService metrics={subject.after} />
+      <RequesterService metrics={subject.after} plan={plans?.find((p) => p.id === view.afterPlanId) ?? null} />
     </PanelFrame>
   );
 }

@@ -108,10 +108,15 @@ export async function generateWindows(
   );
 }
 
-export async function createPlan(scenarioId: string): Promise<MissionPlanSchema> {
+export async function createPlan(
+  scenarioId: string,
+  planner: "greedy" | "cp_sat" = "greedy",
+  policy: "utility" | "utility_then_fairness" = "utility",
+): Promise<MissionPlanSchema> {
   return unwrap(
     await client.POST("/scenarios/{scenario_id}/plan", {
       params: { path: { scenario_id: scenarioId } },
+      body: { planner, policy },
     }),
   );
 }
@@ -242,11 +247,13 @@ export async function fetchPlan(planId: string): Promise<MissionPlanSchema> {
 export async function replan(
   scenarioId: string,
   expectedParentPlanId: string,
+  planner?: "greedy" | "cp_sat",
+  policy?: "utility" | "utility_then_fairness",
 ): Promise<MissionPlanSchema> {
   return unwrap(
     await client.POST("/scenarios/{scenario_id}/replan", {
       params: { path: { scenario_id: scenarioId } },
-      body: { expected_parent_plan_id: expectedParentPlanId },
+      body: { expected_parent_plan_id: expectedParentPlanId, planner, policy },
     }),
   );
 }

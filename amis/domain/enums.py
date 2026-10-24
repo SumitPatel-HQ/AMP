@@ -57,3 +57,4 @@ class ReasonCode(str, Enum):
     # honestly and fell back to ALTERNATIVE_WINDOW_AVAILABLE, which
     # asserts a cause (a freed window) that did not happen (GAP-10).
     HIGHER_PRIORITY_TASK_INSERTED = "HIGHER_PRIORITY_TASK_INSERTED"
+    REBALANCED_FOR_REQUESTER_SHARE = "REBALANCED_FOR_REQUESTER_SHARE"

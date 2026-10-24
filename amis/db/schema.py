@@ -160,6 +160,8 @@ mission_plans = Table(
     Column("violation_count", Integer, nullable=False),
     Column("planning_time_ms", Float, nullable=False),
     Column("planner_name", String, nullable=True),
+    Column("planning_policy", String, nullable=True),
+    Column("policy_version", String, nullable=True),
     Column("solver_details", JSON, nullable=True),
 )
 

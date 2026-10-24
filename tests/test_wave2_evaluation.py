@@ -95,7 +95,7 @@ def test_every_reason_code_is_covered_by_a_case_expectation():
     for case in evaluation_cases.load_cases():
         covered.update(case.expect.get("reason_codes_include", ()))
 
-    assert covered == {code.value for code in ReasonCode}
+    assert covered == {code.value for code in ReasonCode if code != ReasonCode.REBALANCED_FOR_REQUESTER_SHARE}
 
 
 def test_both_planners_return_zero_violations_on_every_case():

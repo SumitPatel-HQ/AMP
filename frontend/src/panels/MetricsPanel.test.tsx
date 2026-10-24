@@ -305,3 +305,36 @@ it("loads selected historical requester metrics and refreshes when live metrics 
   view.rerender(<MetricsPanel {...props} selectedPlanId={null} />);
   expect(screen.queryByRole("region", { name: "Requester service" })).toBeNull();
 });
+
+it("surfaces active policy, solver status, achieved gap, and rebalancing details in RequesterService", () => {
+  const fairPlan: MissionPlanSchema = {
+    ...plan("PLAN-1", 1),
+    planner_name: "cp_sat",
+    planning_policy: "utility_then_fairness",
+    policy_version: "requester-utility-v1",
+    solver_details: {
+      status: "OPTIMAL",
+      achieved_gap: 0,
+      achieved_gap_unit: "priority_utility",
+      skip_reason: null,
+      fallback_reason: null,
+      fairness_rebalanced_request_ids: ["OBS-B1", "OBS-A2"],
+    },
+  };
+
+  render(
+    <MetricsPanel
+      currentPlanId="PLAN-1"
+      metrics={requesterMetrics}
+      diff={null}
+      plans={[fairPlan]}
+    />,
+  );
+
+  const region = screen.getByRole("region", { name: "Requester service" });
+  expect(region.textContent).toContain("Policy: Utility-then-Fairness");
+  expect(region.textContent).toContain("CP-SAT");
+  expect(region.textContent).toContain("Solver status: OPTIMAL");
+  expect(region.textContent).toContain("Achieved gap: 0 priority units");
+  expect(region.textContent).toContain("Fairness rebalanced requests (2): OBS-B1, OBS-A2");
+});

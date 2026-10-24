@@ -96,6 +96,8 @@ class MissionSession:
         self._base_contacts: list[ContactWindow] | None = None
         self._window_provider = window_provider or SyntheticWindowProvider()
         self._planner = planner or GreedyPlanner()
+        self._planner_name = "cp_sat" if getattr(self._planner, "name", None) == "cp_sat" or type(self._planner).__name__ == "CpSatPlanner" else "greedy"
+        self._planning_policy = "utility"
         self._plan_id_prefix = plan_id_prefix
 
     def load_scenario(self, source: Union[Scenario, dict[str, Any], str, Path]) -> Scenario:
@@ -128,10 +130,15 @@ class MissionSession:
         self._require_scenario()
         return tuple(self._windows)
 
-    def select_planner(self, name: str) -> None:
+    def select_planner(self, name: str, *, policy: str = "utility") -> None:
         from amis.planning.selection import make_planner
 
-        self._planner = make_planner(name)
+        self._planner = make_planner(name, policy=policy)
+        self._planner_name = name
+        self._planning_policy = policy
+
+    def get_selected_policy(self) -> str:
+        return self._planning_policy
 
     def plan(self) -> MissionPlan:
         scenario = self._require_scenario()
@@ -165,7 +172,7 @@ class MissionSession:
         self._record_request_pool_for(plan)
         return plan
 
-    def replan(self, expected_parent_plan_id: str | None = None) -> MissionPlan:
+    def replan(self, expected_parent_plan_id: str | None = None, *, policy: str | None = None) -> MissionPlan:
         """Freeze what started, rebuild the rest, write the next version.
 
         The caller names the plan version it believes is current. A
@@ -173,6 +180,8 @@ class MissionSession:
         rebuilt per request and two concurrent replans would otherwise
         both read the same parent and both write the next version.
         """
+        if policy is not None:
+            self.select_planner(self._planner_name, policy=policy)
 
         scenario = self._require_scenario()
         previous_plan = self.get_plan()
@@ -705,6 +714,10 @@ class MissionSession:
         }
 
         if self._plans:
+            latest_plan = self._plans[-1]
+            planner_name = latest_plan.planner_name or "greedy"
+            planning_policy = getattr(latest_plan, "planning_policy", None) or getattr(latest_plan, "policy", None) or "utility"
+            self.select_planner(planner_name, policy=planning_policy)
             self._update_request_statuses_from_plan()
             self._update_request_statuses_after_step()
 

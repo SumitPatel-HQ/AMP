@@ -200,6 +200,10 @@ function App() {
         onStep={session.step}
         onInjectEvent={session.injectEvent}
         onReplan={session.replan}
+        planner={session.planner}
+        policy={session.policy}
+        onPlannerChange={session.setPlanner}
+        onPolicyChange={session.setPolicy}
       />
       <MissionTransitionStrip transition={transition} hasScenario={session.scenario !== null} />
       <MissionFocus session={session} />
