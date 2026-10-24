@@ -118,10 +118,16 @@ export function MissionBar({
   onNewMission,
   onLoadMission,
   onExamples,
+  onFeasibility,
   onGeneratePlan,
+  onResetMission,
   onStep,
   onInjectEvent,
   onReplan,
+  planner,
+  policy,
+  onPlannerChange,
+  onPolicyChange,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
@@ -141,9 +147,16 @@ export function MissionBar({
   onNewMission: () => void;
   onLoadMission: () => void;
   onExamples: () => void;
+  /** Opens the read-only, window-only feasibility comparison. */
+  onFeasibility: () => void;
   onGeneratePlan: () => void;
+  onResetMission: () => void;
   onStep: (seconds: number) => void;
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
+  planner?: "greedy" | "cp_sat";
+  policy?: "utility" | "utility_then_fairness";
+  onPlannerChange?: (planner: "greedy" | "cp_sat") => void;
+  onPolicyChange?: (policy: "utility" | "utility_then_fairness") => void;
   onReplan: () => void;
 }) {
   const [seconds, setSeconds] = useState(300);
@@ -206,6 +219,41 @@ export function MissionBar({
         >
           Load demo scenario
         </button>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="planner-select" className="text-[10px] uppercase text-neutral-500">
+            Planner
+          </label>
+          <select
+            id="planner-select"
+            aria-label="Planner selection"
+            value={planner ?? "greedy"}
+            onChange={(e) => onPlannerChange?.(e.target.value as "greedy" | "cp_sat")}
+            disabled={loading}
+            className={`${CONTROL_INPUT} text-xs py-0.5`}
+          >
+            <option value="greedy">Greedy</option>
+            <option value="cp_sat">CP-SAT</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="policy-select" className="text-[10px] uppercase text-neutral-500">
+            Policy
+          </label>
+          <select
+            id="policy-select"
+            aria-label="Planning policy"
+            value={policy ?? "utility"}
+            onChange={(e) => onPolicyChange?.(e.target.value as "utility" | "utility_then_fairness")}
+            disabled={loading}
+            title={planner === "greedy" ? "Fairness policy requires CP-SAT planner" : undefined}
+            className={`${CONTROL_INPUT} text-xs py-0.5`}
+          >
+            <option value="utility">Pure Utility</option>
+            <option value="utility_then_fairness" disabled={planner === "greedy"}>
+              Utility-then-Fairness
+            </option>
+          </select>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -218,6 +266,36 @@ export function MissionBar({
           className={CONTROL_BUTTON}
         >
           Generate plan
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEventOpen(false);
+            onResetMission();
+          }}
+          disabled={
+            loading ||
+            scenario === null ||
+            (plan === null &&
+              events.length === 0 &&
+              missionState?.simulated_time === scenario?.start_time)
+          }
+          title="Reset mission clock, plans, and events back to the initial scenario"
+          className={CONTROL_BUTTON}
+        >
+          Reset mission
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEventOpen(false);
+            onFeasibility();
+          }}
+          disabled={scenario === null}
+          title="Compare each satellite's earliest suitable window; nothing is submitted or reserved"
+          className={CONTROL_BUTTON}
+        >
+          Feasibility
         </button>
         <Divider />
         <label className="text-[10px] uppercase text-neutral-500" htmlFor="step-seconds">

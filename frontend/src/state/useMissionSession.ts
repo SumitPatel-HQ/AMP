@@ -23,6 +23,7 @@ import {
   generateWindows,
   injectEvent as postEvent,
   replan as replanMission,
+  resetMission as resetMissionApi,
   stepSimulation,
 } from "../api/amis";
 import type {
@@ -79,12 +80,17 @@ export interface MissionSessionState {
   /** True while the backend's current plan could not be loaded after a conflict. */
   stalePlan: boolean;
   error: MissionSessionError | null;
+  planner: "greedy" | "cp_sat";
+  policy: "utility" | "utility_then_fairness";
+  setPlanner: (planner: "greedy" | "cp_sat") => void;
+  setPolicy: (policy: "utility" | "utility_then_fairness") => void;
   loadDemoScenario: () => Promise<void>;
   loadExample: (id: string) => Promise<void>;
   loadMission: (id: string) => Promise<void>;
   createMission: (draft: ScenarioSchema) => Promise<boolean>;
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
+  resetMission: () => Promise<void>;
   retryComparison: () => Promise<void>;
   retryMissionRefresh: () => Promise<void>;
   step: (seconds: number) => Promise<void>;
@@ -142,12 +148,34 @@ export function useMissionSession(): MissionSessionState {
   const [planConflict, setPlanConflict] = useState<PlanConflict | null>(null);
   const [stalePlan, setStalePlan] = useState(false);
   const [error, setError] = useState<MissionSessionError | null>(null);
+  const [planner, setPlannerState] = useState<"greedy" | "cp_sat">("greedy");
+  const [policy, setPolicyState] = useState<"utility" | "utility_then_fairness">("utility");
+
+  const setPlanner = useCallback((nextPlanner: "greedy" | "cp_sat") => {
+    setPlannerState(nextPlanner);
+    if (nextPlanner === "greedy") {
+      setPolicyState("utility");
+    }
+  }, []);
+
+  const setPolicy = useCallback((nextPolicy: "utility" | "utility_then_fairness") => {
+    if (planner === "greedy" && nextPolicy !== "utility") {
+      return;
+    }
+    setPolicyState(nextPolicy);
+  }, [planner]);
 
   const rememberPlan = useCallback((next: MissionPlanSchema) => {
     setPlans((current) => {
       const previous = current.filter((candidate) => candidate.id !== next.id);
       return [...previous, next].sort((left, right) => left.version - right.version);
     });
+    if (next.planner_name === "greedy" || next.planner_name === "cp_sat") {
+      setPlannerState(next.planner_name);
+    }
+    if (next.planning_policy === "utility" || next.planning_policy === "utility_then_fairness") {
+      setPolicyState(next.planning_policy as "utility" | "utility_then_fairness");
+    }
   }, []);
 
   const refetchStateAndEvents = useCallback(async (scenarioId: string) => {
@@ -198,7 +226,8 @@ export function useMissionSession(): MissionSessionState {
     setSelection(EMPTY_SELECTION);
   }, []);
 
-  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
+  const openLoaded = useCallback(async (loaded: ScenarioSchema) => {
+    const [nextPlans, nextWindows, nextState, nextEvents, nextPool, nextTrack] = await Promise.all([
       fetchMissionPlans(loaded.id), fetchWindows(loaded.id), fetchState(loaded.id),
       fetchEvents(loaded.id), fetchRequests(loaded.id),
       loaded.satellite.orbit ? fetchGroundTrack(loaded.id) : Promise.resolve([]),
@@ -288,7 +317,10 @@ export function useMissionSession(): MissionSessionState {
     try {
       const nextWindows = await generateWindows(scenario.id);
       setWindows(nextWindows);
-      const nextPlan = await createPlan(scenario.id);
+      const nextPlan =
+        planner === "greedy" && policy === "utility"
+          ? await createPlan(scenario.id)
+          : await createPlan(scenario.id, planner, policy);
       setPlan(nextPlan);
       setPlans([nextPlan]);
       setImpact(null);
@@ -307,7 +339,7 @@ export function useMissionSession(): MissionSessionState {
     } finally {
       setLoading(false);
     }
-  }, [scenario, refetchStateAndEvents, refetchPoolAndMetrics]);
+  }, [scenario, planner, policy, refetchStateAndEvents, refetchPoolAndMetrics]);
 
   /**
    * A refused replan leaves the session pointing at a plan the backend has
@@ -402,7 +434,7 @@ export function useMissionSession(): MissionSessionState {
     // is the version the server must still hold for this replan to be safe.
     const initialPlan = plan;
     try {
-      const revisedPlan = await replanMission(scenario.id, initialPlan.id);
+      const revisedPlan = await replanMission(scenario.id, initialPlan.id, planner, policy);
       setPlanConflict(null);
       setStalePlan(false);
       // The server has already committed to the new version, so the local
@@ -453,7 +485,7 @@ export function useMissionSession(): MissionSessionState {
       setOperation(null);
       setLoading(false);
     }
-  }, [scenario, plan, stalePlan, refetchStateAndEvents, refetchPoolAndMetrics, refreshAfterConflict, rememberPlan]);
+  }, [scenario, plan, stalePlan, planner, policy, refetchStateAndEvents, refetchPoolAndMetrics, refreshAfterConflict, rememberPlan]);
 
   const retryComparison = useCallback(async () => {
     if (scenario === null || plan === null || plan.parent_plan_id === null) return;
@@ -508,6 +540,40 @@ export function useMissionSession(): MissionSessionState {
     },
     [scenario, plan, stalePlan, refreshComparison, refetchPoolAndMetrics, rememberPlan],
   );
+
+  const resetMission = useCallback(async () => {
+    if (scenario === null) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await resetMissionApi(scenario.id);
+      setPlan(null);
+      setPlans([]);
+      setWindows([]);
+      setImpact(null);
+      setReplanResult(null);
+      setPlanConflict(null);
+      setStalePlan(false);
+      setMetrics(null);
+      setSelection((current) => ({ ...current, windowId: null, planId: null }));
+      const [pool] = await Promise.all([
+        fetchRequests(scenario.id),
+        refetchStateAndEvents(scenario.id),
+        scenario.satellite.orbit
+          ? fetchSatellitePosition(scenario.id, scenario.start_time)
+              .then((pos) => setSatellitePosition(pos))
+              .catch(() => {})
+          : Promise.resolve(),
+      ]);
+      setRequestPool(pool);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [scenario, refetchStateAndEvents]);
 
   const injectEvent = useCallback(
     async (event: MissionEventRequest): Promise<boolean> => {
@@ -666,6 +732,7 @@ export function useMissionSession(): MissionSessionState {
     createMission,
     generatePlan,
     replan,
+    resetMission,
     retryComparison,
     retryMissionRefresh,
     step,
@@ -677,5 +744,9 @@ export function useMissionSession(): MissionSessionState {
     clearSelection,
     dismissError,
     dismissPlanConflict,
+    planner,
+    policy,
+    setPlanner,
+    setPolicy,
   };
 }

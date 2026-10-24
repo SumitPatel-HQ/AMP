@@ -5,6 +5,7 @@ import { eventSummary } from "./state/missionEvent";
 import { planLabel } from "./state/planContext";
 import { clockTime } from "./panels/format";
 import { ErrorBanner, PlanConflictBanner } from "./panels/ErrorBanner";
+import { FeasibilityDialog } from "./panels/FeasibilityDialog";
 import { ImpactPanel } from "./panels/ImpactPanel";
 import { MetricsPanel } from "./panels/MetricsPanel";
 import { MissionBar } from "./panels/MissionBar";
@@ -36,7 +37,7 @@ function MissionFocus({ session }: { session: Session }) {
       <span className="shrink-0 font-semibold uppercase tracking-wide text-fuchsia-300">Focus</span>
       <span className="min-w-0 flex-1 truncate text-neutral-200" title={parts.join(" · ")}>{parts.join(" · ")}</span>
       {selection.planId !== null && selection.planId !== session.plan?.id ? (
-        <span className="hidden shrink-0 text-neutral-500 lg:inline">Timeline shows current V{session.plan?.version}</span>
+        <span className="hidden shrink-0 text-neutral-500 lg:inline">{`Timeline shows current V${session.plan?.version} actions with ${planLabel(selection.planId, session.plans)} emergency response`}</span>
       ) : null}
       <button type="button" onClick={session.clearSelection} className="shrink-0 text-neutral-400 hover:text-neutral-100">Clear focus</button>
     </div>
@@ -88,7 +89,9 @@ function MissionWorkspace({
         contacts={session.contacts}
         satellitePosition={session.satellitePosition}
         selectedRequestId={selection.requestId}
+        selectedEventId={selection.eventId}
         onSelectRequest={session.selectRequest}
+        onSelectEvent={session.selectEvent}
       />
       <StatePanel
         state={session.missionState}
@@ -109,6 +112,9 @@ function MissionWorkspace({
         contacts={session.contacts}
         events={session.events}
         impact={session.impact}
+        metrics={session.metrics}
+        plans={session.plans}
+        selectedPlanId={selection.planId}
         selectedRequestId={selection.requestId}
         selectedWindowId={selection.windowId}
         selectedEventId={selection.eventId}
@@ -155,7 +161,7 @@ function MissionWorkspace({
 
 function App() {
   const session = useMissionSession();
-  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | null>(null);
+  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | "feasibility" | null>(null);
   const transition = missionTransition({
     scenario: session.scenario,
     plan: session.plan,
@@ -188,10 +194,16 @@ function App() {
         onNewMission={() => setDialog("builder")}
         onLoadMission={() => setDialog("load")}
         onExamples={() => setDialog("examples")}
+        onFeasibility={() => setDialog("feasibility")}
         onGeneratePlan={session.generatePlan}
+        onResetMission={session.resetMission}
         onStep={session.step}
         onInjectEvent={session.injectEvent}
         onReplan={session.replan}
+        planner={session.planner}
+        policy={session.policy}
+        onPlannerChange={session.setPlanner}
+        onPolicyChange={session.setPolicy}
       />
       <MissionTransitionStrip transition={transition} hasScenario={session.scenario !== null} />
       <MissionFocus session={session} />
@@ -204,6 +216,10 @@ function App() {
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />
       {dialog === "builder" && <MissionBuilder onClose={() => setDialog(null)} onCreate={session.createMission} />}
+      {/* Keyed by Scenario id: loading another mission drops the previous answer. */}
+      {dialog === "feasibility" && session.scenario !== null && (
+        <FeasibilityDialog key={session.scenario.id} scenario={session.scenario} onClose={() => setDialog(null)} />
+      )}
       {(dialog === "load" || dialog === "examples") && <MissionLibrary mode={dialog} onClose={() => setDialog(null)} onChoose={dialog === "load" ? session.loadMission : session.loadExample} />}
     </div>
   );

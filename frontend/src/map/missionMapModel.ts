@@ -10,7 +10,7 @@ import type {
   ScheduledActionSchema,
   GroundTrackPointSchema,
 } from "../api/client";
-import { missionRequestPool } from "../state/missionEvent";
+import { cueEvidence, missionRequestPool, type CueEvidence } from "../state/missionEvent";
 import { eventAnchorRequestId } from "../timeline/missionTimelineModel";
 
 /** Longitude then latitude, the order every map library here takes. */
@@ -25,6 +25,7 @@ export type TargetPlanStatus = "completed" | "expired" | "scheduled" | "unschedu
 /** One observation target as the map draws it. */
 export interface MapTarget {
   requestId: string;
+  requesterId?: string | null;
   coordinate: Coordinate;
   priority: number;
   deadline: string;
@@ -35,6 +36,16 @@ export interface MapTarget {
   unscheduledReason: string | null;
   /** Events whose payload names this request. */
   eventIds: string[];
+}
+
+/**
+ * Where an evidence-bearing emergency arrival was cued: the normalized request
+ * point, keyed by the accepted event and request it belongs to. It marks the
+ * cue's arrival, not an acquisition.
+ */
+export interface MapCue {
+  evidence: CueEvidence;
+  coordinate: Coordinate;
 }
 
 /** A ground station the mission downlinks through. */
@@ -56,6 +67,8 @@ export interface MissionMapModel {
   satellite: SatellitePlacement | null;
   /** Targets in the order the current plan visits them. */
   planSequence: Coordinate[];
+  /** One marker per accepted cue event, read from the event log. */
+  cues?: MapCue[];
   groundTrack?: Coordinate[][];
   /** The mission's ground stations (ADR-0011), drawn as downlink sites. */
   stations?: MapStation[];
@@ -157,6 +170,20 @@ function targetBounds(targets: MapTarget[]): [number, number, number, number] | 
 }
 
 /**
+ * One marker per accepted evidence-bearing arrival. Identity is the recorded
+ * event id, so rerendering or rereading the same log never duplicates one.
+ */
+export function cueMarkers(events: readonly MissionEventSchema[]): MapCue[] {
+  const byEventId = new Map<string, MapCue>();
+  for (const event of events) {
+    const evidence = cueEvidence(event);
+    if (evidence === null || event.event_type !== "EMERGENCY_TASK" || byEventId.has(event.id)) continue;
+    byEventId.set(event.id, { evidence, coordinate: targetCoordinate(event.payload.request) });
+  }
+  return [...byEventId.values()];
+}
+
+/**
  * Everything the map draws, derived only from data the session already holds.
  * Emergency requests arrive through the event log rather than the immutable
  * scenario, so the map draws the whole request pool, reading their targets
@@ -182,6 +209,7 @@ export function buildMissionMapModel(
       plan?.unscheduled.find((entry) => entry.request_id === request.id)?.reason_code ?? null;
     return {
       requestId: request.id,
+      requesterId: request.requester_id,
       coordinate: targetCoordinate(request),
       priority: request.priority,
       deadline: request.deadline,
@@ -218,6 +246,7 @@ export function buildMissionMapModel(
     satellite: (satellitePosition ?? nearest) === null ? satellitePlacement(scenario, plan, missionState?.simulated_time ?? null, requestPool)
       : { satelliteId: scenario.satellite.id, coordinate: [(satellitePosition ?? nearest)!.lon, (satellitePosition ?? nearest)!.lat], overRequestId: null },
     planSequence: scheduledActionPoints(requestPool, plan).map((point) => point.coordinate),
+    cues: cueMarkers(events),
     groundTrack: segments,
     stations: groundStations.map((station) => ({
       stationId: station.id,

@@ -1,0 +1,117 @@
+{
+  "id": "SCN-EX-CEMS-CRETE",
+  "name": "CEMS EMSR933 Crete flood replay (2026-10-04)",
+  "start_time": "2026-10-04T00:00:00+00:00",
+  "end_time": "2026-10-06T00:00:00+00:00",
+  "satellites": [
+    {
+      "id": "SAT-EO",
+      "battery_capacity_wh": 1000,
+      "battery_charge_wh": 1000,
+      "storage_capacity_mb": 4000,
+      "storage_usage_mb": 0,
+      "available": true,
+      "orbit": {
+        "norad_id": 39084,
+        "name": "LANDSAT 8",
+        "international_designator": "2013-008A",
+        "epoch": "2026-09-24T22:32:47.552064+00:00",
+        "omm": {
+          "OBJECT_NAME": "LANDSAT 8",
+          "OBJECT_ID": "2013-008A",
+          "EPOCH": "2026-09-24T22:32:47.552064",
+          "MEAN_MOTION": 14.57103974,
+          "ECCENTRICITY": 0.0001313,
+          "INCLINATION": 98.221,
+          "RA_OF_ASC_NODE": 336.8402,
+          "ARG_OF_PERICENTER": 95.0724,
+          "MEAN_ANOMALY": 265.0625,
+          "EPHEMERIS_TYPE": 0,
+          "CLASSIFICATION_TYPE": "U",
+          "NORAD_CAT_ID": 39084,
+          "ELEMENT_SET_NO": 999,
+          "REV_AT_EPOCH": 71242,
+          "BSTAR": 5.8137796e-05,
+          "MEAN_MOTION_DOT": 2.17e-06,
+          "MEAN_MOTION_DDOT": 0
+        },
+        "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=39084&FORMAT=json",
+        "retrieved_at": "2026-09-25T19:14:40.093638+00:00",
+        "sha256": "a3f152801d9d4e70c28fa361c6921a9c49c3f9a0db1745029e3f6b51bac23589"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "id": "OBS-ATHENS",
+      "target_lat": 37.98,
+      "target_lon": 23.73,
+      "priority": 2,
+      "duration_s": 30,
+      "deadline": "2026-10-06T00:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Athens"
+    },
+    {
+      "id": "OBS-HERAKLION",
+      "target_lat": 35.34,
+      "target_lon": 25.13,
+      "priority": 2,
+      "duration_s": 30,
+      "deadline": "2026-10-06T00:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Heraklion"
+    }
+  ],
+  "satellite": {
+    "id": "SAT-EO",
+    "battery_capacity_wh": 1000,
+    "battery_charge_wh": 1000,
+    "storage_capacity_mb": 4000,
+    "storage_usage_mb": 0,
+    "available": true,
+    "orbit": {
+      "norad_id": 39084,
+      "name": "LANDSAT 8",
+      "international_designator": "2013-008A",
+      "epoch": "2026-09-24T22:32:47.552064+00:00",
+      "omm": {
+        "OBJECT_NAME": "LANDSAT 8",
+        "OBJECT_ID": "2013-008A",
+        "EPOCH": "2026-09-24T22:32:47.552064",
+        "MEAN_MOTION": 14.57103974,
+        "ECCENTRICITY": 0.0001313,
+        "INCLINATION": 98.221,
+        "RA_OF_ASC_NODE": 336.8402,
+        "ARG_OF_PERICENTER": 95.0724,
+        "MEAN_ANOMALY": 265.0625,
+        "EPHEMERIS_TYPE": 0,
+        "CLASSIFICATION_TYPE": "U",
+        "NORAD_CAT_ID": 39084,
+        "ELEMENT_SET_NO": 999,
+        "REV_AT_EPOCH": 71242,
+        "BSTAR": 5.8137796e-05,
+        "MEAN_MOTION_DOT": 2.17e-06,
+        "MEAN_MOTION_DDOT": 0
+      },
+      "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=39084&FORMAT=json",
+      "retrieved_at": "2026-09-25T19:14:40.093638+00:00",
+      "sha256": "a3f152801d9d4e70c28fa361c6921a9c49c3f9a0db1745029e3f6b51bac23589"
+    }
+  },
+  "window_policy": {
+    "provider": "orbital",
+    "max_off_nadir_deg": 60,
+    "min_sun_elevation_deg": 10,
+    "settling_time_s": 0.0,
+    "culmination_placement": false,
+    "ground_station_ids": [],
+    "downlink_rate_mb_s": 0.0,
+    "slew_rate_deg_s": 0.0,
+    "recharge_rate_w": 0.0
+  }
+}

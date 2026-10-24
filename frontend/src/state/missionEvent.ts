@@ -1,4 +1,5 @@
 import type {
+  EmergencyTaskPayloadSchema,
   MissionEventRequest,
   MissionEventSchema,
   ObservationRequestSchema,
@@ -25,15 +26,100 @@ export function eventSummary(event: MissionEventSchema): string {
       return `${event.payload.satellite_id} battery → ${event.payload.new_battery_wh.toFixed(1)} Wh`;
     case "EMERGENCY_TASK": {
       const count = event.payload.windows?.length ?? 0;
-      return `${event.payload.request.id} · P${event.payload.request.priority} · ${count} window${
+      const base = `${event.payload.request.id} · P${event.payload.request.priority} · ${count} window${
         count === 1 ? "" : "s"
       }`;
+      const evidence = cueEvidence(event);
+      return evidence === null
+        ? base
+        : `${base} · ${evidence.alertLevel} alert ${evidence.sourceEventId} (${evidence.sourceLabel})`;
     }
     case "SATELLITE_UNAVAILABLE":
       return `${event.payload.satellite_id} payload outage`;
     case "COMMUNICATION_OUTAGE":
       return `${event.payload.station_id} comm outage`;
   }
+}
+
+/** Display names for evidence sources; any other source shows as recorded. */
+const SOURCE_LABELS: Record<string, string> = { usgs: "U.S. Geological Survey", cems: "Copernicus Emergency Management Service" };
+
+/** Shown beside cue evidence: the source reports the event, AMIS chose the rest. */
+export const CUE_POLICY_NOTICE =
+  "Priority and deadline are AMIS simulation policy, not source recommendations.";
+
+/** A normalized cue alert level, the backend's `AlertLevel` (ADR-0015). */
+export type CueAlertLevel = NonNullable<EmergencyTaskPayloadSchema["alert_level"]>;
+
+/** Every alert level the backend accepts; `unknown` marks an absent source alert. */
+export const CUE_ALERT_LEVELS: readonly CueAlertLevel[] = ["red", "orange", "yellow", "green", "unknown"];
+
+function isAlertLevel(value: unknown): value is CueAlertLevel {
+  return typeof value === "string" && (CUE_ALERT_LEVELS as readonly string[]).includes(value);
+}
+
+function isFiniteOrAbsent(value: unknown): boolean {
+  return value == null || (typeof value === "number" && Number.isFinite(value));
+}
+
+/** The source evidence an emergency arrival carries, as recorded in its accepted event. */
+export interface CueEvidence {
+  eventId: string;
+  requestId: string;
+  source: string;
+  sourceLabel: string;
+  sourceEventId: string;
+  alertLevel: CueAlertLevel;
+  /** Source-reported USGS magnitude (unitless), when the source gave one. */
+  mag: number | null;
+  /** Source-reported USGS significance score (unitless), when the source gave one. */
+  sig: number | null;
+  category?: string | null;
+  activationTime?: string | null;
+  sourceEventTime?: string | null;
+  sourceUrl?: string | null;
+  centroidPolicyVersion?: string | null;
+  arrivalTime?: string;
+}
+
+/**
+ * The evidence on an evidence-bearing EMERGENCY_TASK, or null for any other
+ * event. Mirrors the backend rule: only a complete group with non-blank
+ * source/id, a known alert level and finite optional numbers is evidence, so
+ * a shape the backend would reject is never displayed as a cue.
+ */
+export function cueEvidence(event: MissionEventSchema): CueEvidence | null {
+  if (event.event_type !== "EMERGENCY_TASK") return null;
+  const { source, source_event_id: sourceEventId, alert_level: alertLevel, mag, sig } = event.payload;
+  if (
+    typeof source !== "string" ||
+    source.trim() === "" ||
+    typeof sourceEventId !== "string" ||
+    sourceEventId.trim() === "" ||
+    !isAlertLevel(alertLevel) ||
+    !isFiniteOrAbsent(mag) ||
+    !isFiniteOrAbsent(sig)
+  ) {
+    return null;
+  }
+  return {
+    eventId: event.id,
+    requestId: event.payload.request.id,
+    source,
+    sourceLabel: SOURCE_LABELS[source] ?? source,
+    sourceEventId,
+    alertLevel,
+    mag: event.payload.mag ?? null,
+    sig: event.payload.sig ?? null,
+    ...(source === "cems" ? {
+      category: event.payload.category ?? null,
+      activationTime: event.payload.activation_time ?? null,
+      sourceEventTime: event.payload.source_event_time ?? null,
+      sourceUrl: event.payload.source_url ?? null,
+      centroidPolicyVersion: event.payload.centroid_policy_version ?? null,
+      arrivalTime: event.event_time,
+    } : {}),
+  };
 }
 
 /** An emergency request, which enters the mission through the event log, never the scenario. */
@@ -97,6 +183,7 @@ export function emergencyWindowId(requestId: string): string {
  */
 export interface EmergencyRequestForm {
   requestId: string;
+  requesterId?: string;
   targetLat: string;
   targetLon: string;
   priority: string;
@@ -106,6 +193,62 @@ export interface EmergencyRequestForm {
   storageCostMb: string;
   windowStart: string;
   windowEnd: string;
+  /**
+   * Optional cue evidence. Leave all blank for a manual arrival; otherwise
+   * source, source event id and alert level go together, and magnitude and
+   * significance (USGS, unitless) are optional numbers.
+   */
+  source?: string;
+  sourceEventId?: string;
+  alertLevel?: string;
+  mag?: string;
+  sig?: string;
+}
+
+type EmergencyEvidencePayload = Pick<
+  EmergencyTaskPayloadSchema,
+  "source" | "source_event_id" | "alert_level" | "mag" | "sig"
+>;
+
+/**
+ * The evidence the form carries, under the backend's all-or-nothing rule:
+ * `{}` when every evidence field is blank, the payload fields when the group
+ * is complete, or a message naming what is wrong.
+ */
+export function emergencyEvidence(
+  form: EmergencyRequestForm,
+): { evidence: EmergencyEvidencePayload } | { problem: string } {
+  const source = (form.source ?? "").trim();
+  const sourceEventId = (form.sourceEventId ?? "").trim();
+  const alertLevel = (form.alertLevel ?? "").trim();
+  const magText = (form.mag ?? "").trim();
+  const sigText = (form.sig ?? "").trim();
+  const core = [source, sourceEventId, alertLevel];
+  if (core.every((value) => value === "")) {
+    return magText === "" && sigText === ""
+      ? { evidence: {} }
+      : { problem: "Magnitude and significance need source, source event id and alert level." };
+  }
+  if (core.some((value) => value === "")) {
+    return { problem: "Fill source, source event id and alert level together, or leave all blank." };
+  }
+  if (!isAlertLevel(alertLevel)) {
+    return { problem: `Alert level must be one of ${CUE_ALERT_LEVELS.join(", ")}.` };
+  }
+  const mag = magText === "" ? undefined : numberField(magText);
+  const sig = sigText === "" ? undefined : numberField(sigText);
+  if (mag === null || sig === null) {
+    return { problem: "Magnitude and significance must be finite numbers when given." };
+  }
+  return {
+    evidence: {
+      source,
+      source_event_id: sourceEventId,
+      alert_level: alertLevel,
+      ...(mag === undefined ? {} : { mag }),
+      ...(sig === undefined ? {} : { sig }),
+    },
+  };
 }
 
 function toInputTime(epochMs: number): string {
@@ -168,6 +311,8 @@ export function buildEmergencyRequestEvent(
   orbital = false,
 ): MissionEventRequest | null {
   const requestId = form.requestId.trim();
+  const requesterId = form.requesterId ?? "";
+  if (requesterId !== requesterId.trim()) return null;
   const targetLat = numberField(form.targetLat);
   const targetLon = numberField(form.targetLon);
   const priority = numberField(form.priority);
@@ -177,7 +322,9 @@ export function buildEmergencyRequestEvent(
   const deadline = fromInputTime(form.deadline);
   const windowStart = fromInputTime(form.windowStart);
   const windowEnd = fromInputTime(form.windowEnd);
+  const evidence = emergencyEvidence(form);
   if (
+    "problem" in evidence ||
     requestId === "" ||
     targetLat === null ||
     targetLon === null ||
@@ -196,6 +343,7 @@ export function buildEmergencyRequestEvent(
     payload: {
       request: {
         id: requestId,
+          ...(requesterId === "" ? {} : { requester_id: requesterId }),
         target_lat: targetLat,
         target_lon: targetLon,
         priority,
@@ -216,6 +364,7 @@ export function buildEmergencyRequestEvent(
           invalid_reason: null,
         },
       ],
+      ...evidence.evidence,
     },
   };
 }

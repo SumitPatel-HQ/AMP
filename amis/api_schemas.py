@@ -7,8 +7,19 @@ from typing import Annotated, Any, Literal, Self, Union
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
-from amis.domain import ActionKind, ActionStatus, EventType, PlanChangeType, ReasonCode, RequestStatus
+from amis.domain import (
+    ActionKind,
+    ActionStatus,
+    AlertLevel,
+    ObservationRequest,
+    EventType,
+    PlanChangeType,
+    ReasonCode,
+    RequestStatus,
+    emergency_evidence_error,
+)
 from amis.errors import ErrorCode
+from amis.domain.scenario import validate_requester_id
 
 
 class ApiModel(BaseModel):
@@ -137,9 +148,11 @@ class ObservationRequestSchema(ApiModel):
     # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
     # means the planner assigns whichever satellite can serve it.
     satellite_id: str | None = None
+    requester_id: str | None = None
 
     @model_validator(mode="after")
     def validate_deadline_timezone(self) -> Self:
+        validate_requester_id(self.requester_id)
         # Checked here, not only when a request is embedded in
         # ScenarioSchema, so the emergency-event payload (which reuses
         # this schema directly, never nested in a scenario) cannot bypass
@@ -247,6 +260,8 @@ class UnscheduledEntrySchema(ApiModel):
 
 class MissionPlanSchema(ApiModel):
     planner_name: str = "greedy"
+    planning_policy: str = "utility"
+    policy_version: str = "requester-utility-v1"
     solver_details: dict[str, Any] | None = None
     id: str
     scenario_id: str
@@ -342,10 +357,42 @@ class CommunicationOutagePayloadSchema(ApiModel):
 
 
 class EmergencyTaskPayloadSchema(ApiModel):
-    """The emergency request and the explicit windows it arrives with."""
+    """The emergency request and the explicit windows it arrives with.
+
+    A cue arrival (ADR-0015) also carries ``source``, ``source_event_id``
+    and ``alert_level`` together, with optional ``mag`` and ``sig``.
+    """
 
     request: ObservationRequestSchema
     windows: list[ObservationWindowSchema] | None = None
+    source: str | None = Field(default=None, min_length=1)
+    source_event_id: str | None = Field(default=None, min_length=1)
+    alert_level: AlertLevel | None = None
+    # Source-reported USGS magnitude and significance score, both unitless.
+    mag: float | None = Field(default=None, allow_inf_nan=False, strict=True)
+    sig: float | None = Field(default=None, allow_inf_nan=False, strict=True)
+
+    category: str | None = None
+    activation_time: str | None = None
+    source_event_time: str | None = None
+    source_url: str | None = None
+    centroid_policy_version: str | None = None
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> Self:
+        # The domain owns the all-or-nothing rule; the schema only delegates.
+        error = emergency_evidence_error(
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig,
+            self.category, self.activation_time, self.source_event_time, self.source_url,
+            self.centroid_policy_version,
+        )
+        if error is not None:
+            raise ValueError(error)
+        if self.source == "cems":
+            request_error = ObservationRequest(**self.request.model_dump()).validation_error()
+            if request_error is not None:
+                raise ValueError(request_error)
+        return self
 
 
 class CloudBlockEventRequest(ApiModel):
@@ -456,7 +503,52 @@ class SatelliteMetricsSchema(ApiModel):
     downlink_volume_mb: float = 0.0
 
 
+class EmergencyResponseSchema(ApiModel):
+    """One emergency arrival's planned and achieved imaging (ADR-0015).
+
+    Latencies are seconds from arrival to imaging start. Null means no
+    imaging action, never zero latency. Achieved fields stay null until
+    imaging has actually started; acquisition is imaging start, not
+    completion or downlink.
+    """
+
+    request_id: str
+    event_id: str
+    arrival_time: datetime
+    request_status: RequestStatus
+    planned_start_time: datetime | None
+    planned_latency_s: float | None
+    planned_satellite_id: str | None
+    achieved_start_time: datetime | None
+    achieved_latency_s: float | None
+    achieved_satellite_id: str | None
+
+
+class RequesterServiceRowSchema(ApiModel):
+    requester_id: str | None
+    request_count: int
+    demand_utility: int
+    served_request_count: int
+    served_utility: int
+    service_share: float | None
+    fulfillment_ratio: float | None
+
+
+class RequesterServiceSchema(ApiModel):
+    requesters: list[RequesterServiceRowSchema]
+    unattributed: RequesterServiceRowSchema
+    total_served_utility: int
+    fairness_gap: int | None
+    zero_service_requester_count: int
+    no_service: bool
+    metric_version: str
+    scope: str
+    limitations: str
+    measured_at_convention: str
+
+
 class MetricsSchema(ApiModel):
+    requester_service: RequesterServiceSchema | None = None
     plan_id: str
     mission_utility: float
     completion_rate: float
@@ -473,6 +565,51 @@ class MetricsSchema(ApiModel):
     downlink_volume_mb: float = 0
     # Wave 7 (ADR-0014): per-satellite breakdown alongside mission totals.
     per_satellite: list[SatelliteMetricsSchema] = Field(default_factory=list)
+    # Emergency response (ADR-0015): planned and achieved means stay
+    # separate, each with its own denominator; null over an empty one.
+    # Defaults keep metrics payloads recorded before ticket 04 valid. Each
+    # "time_to_first_acquisition" field is a mean latency, not a minimum.
+    emergency_response: list[EmergencyResponseSchema] = Field(default_factory=list)
+    time_to_first_acquisition_s: float | None = None
+    achieved_time_to_first_acquisition_s: float | None = None
+    emergency_request_count: int = 0
+    planned_emergency_request_count: int = 0
+    achieved_emergency_request_count: int = 0
+
+
+class SatelliteFeasibilitySchema(ApiModel):
+    """One satellite's earliest suitable window for a candidate (ADR-0015).
+
+    Window and acquisition fields are null exactly when ``reason`` names
+    why the satellite has no suitable window.
+    """
+
+    satellite_id: str
+    window_id: str | None
+    window_start: datetime | None
+    window_end: datetime | None
+    earliest_start: datetime | None
+    latest_finish: datetime | None
+    reason: Literal["no_suitable_window", "satellite_unavailable"] | None
+
+
+class FeasibilitySchema(ApiModel):
+    """Window-only feasibility: orbital geometry, daylight and pointing
+    policy, duration, deadline, and Scenario availability only. It excludes
+    the current plan, resources, pairwise slew, active outages, and
+    reservations, and it submits or reserves nothing."""
+
+    scenario_id: str
+    scope: Literal["window_only"]
+    target_lat: float
+    target_lon: float
+    duration_s: float
+    deadline: datetime
+    satellite_id: str | None
+    search_start: datetime
+    search_end: datetime
+    earliest_satellite_id: str | None
+    results: list[SatelliteFeasibilitySchema]
 
 
 class PlanDiffEntrySchema(ApiModel):
@@ -509,8 +646,16 @@ class StepRequest(ApiModel):
     seconds: float = Field(gt=0, allow_inf_nan=False)
 
 
+class PlanRequest(ApiModel):
+    planner: Literal["greedy", "cp_sat"] | None = None
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
+
+
 class ReplanRequest(ApiModel):
     planner: Literal["greedy", "cp_sat"] | None = None
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
     expected_parent_plan_id: str = Field(min_length=1)
 
 
@@ -530,6 +675,9 @@ class ScenarioSummarySchema(ApiModel):
     start_time: datetime
     end_time: datetime
     provider: str
+    # Ticket 03: only bundled Examples with a committed briefing set this;
+    # saved missions and other Examples omit it.
+    briefing: str | None = None
 
 
 class ScenarioPreviewSchema(ApiModel):

@@ -229,6 +229,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenario_id}/feasibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Feasibility
+         * @description Each satellite's earliest suitable window for a candidate, window-only.
+         *
+         *     Read-only: the session is loaded but never saved, so nothing is
+         *     submitted, reserved, or recorded.
+         */
+        get: operations["get_feasibility_scenarios__scenario_id__feasibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scenarios/{scenario_id}/requests": {
         parameters: {
             query?: never;
@@ -325,6 +348,23 @@ export interface paths {
         put?: never;
         /** Step Simulation */
         post: operations["step_simulation_scenarios__scenario_id__simulation_step_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenario_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Mission */
+        post: operations["reset_mission_scenarios__scenario_id__reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -635,6 +675,39 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * EmergencyResponseSchema
+         * @description One emergency arrival's planned and achieved imaging (ADR-0015).
+         *
+         *     Latencies are seconds from arrival to imaging start. Null means no
+         *     imaging action, never zero latency. Achieved fields stay null until
+         *     imaging has actually started; acquisition is imaging start, not
+         *     completion or downlink.
+         */
+        EmergencyResponseSchema: {
+            /** Request Id */
+            request_id: string;
+            /** Event Id */
+            event_id: string;
+            /**
+             * Arrival Time
+             * Format: date-time
+             */
+            arrival_time: string;
+            request_status: components["schemas"]["RequestStatus"];
+            /** Planned Start Time */
+            planned_start_time: string | null;
+            /** Planned Latency S */
+            planned_latency_s: number | null;
+            /** Planned Satellite Id */
+            planned_satellite_id: string | null;
+            /** Achieved Start Time */
+            achieved_start_time: string | null;
+            /** Achieved Latency S */
+            achieved_latency_s: number | null;
+            /** Achieved Satellite Id */
+            achieved_satellite_id: string | null;
+        };
         /** EmergencyTaskEventRequest */
         EmergencyTaskEventRequest: {
             /**
@@ -665,11 +738,34 @@ export interface components {
         /**
          * EmergencyTaskPayloadSchema
          * @description The emergency request and the explicit windows it arrives with.
+         *
+         *     A cue arrival (ADR-0015) also carries ``source``, ``source_event_id``
+         *     and ``alert_level`` together, with optional ``mag`` and ``sig``.
          */
         EmergencyTaskPayloadSchema: {
             request: components["schemas"]["ObservationRequestSchema"];
             /** Windows */
             windows?: components["schemas"]["ObservationWindowSchema"][] | null;
+            /** Source */
+            source?: string | null;
+            /** Source Event Id */
+            source_event_id?: string | null;
+            /** Alert Level */
+            alert_level?: ("red" | "orange" | "yellow" | "green" | "unknown") | null;
+            /** Mag */
+            mag?: number | null;
+            /** Sig */
+            sig?: number | null;
+            /** Category */
+            category?: string | null;
+            /** Activation Time */
+            activation_time?: string | null;
+            /** Source Event Time */
+            source_event_time?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Centroid Policy Version */
+            centroid_policy_version?: string | null;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -689,6 +785,49 @@ export interface components {
         /** ErrorEnvelope */
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /**
+         * FeasibilitySchema
+         * @description Window-only feasibility: orbital geometry, daylight and pointing
+         *     policy, duration, deadline, and Scenario availability only. It excludes
+         *     the current plan, resources, pairwise slew, active outages, and
+         *     reservations, and it submits or reserves nothing.
+         */
+        FeasibilitySchema: {
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "window_only";
+            /** Target Lat */
+            target_lat: number;
+            /** Target Lon */
+            target_lon: number;
+            /** Duration S */
+            duration_s: number;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Satellite Id */
+            satellite_id: string | null;
+            /**
+             * Search Start
+             * Format: date-time
+             */
+            search_start: string;
+            /**
+             * Search End
+             * Format: date-time
+             */
+            search_end: string;
+            /** Earliest Satellite Id */
+            earliest_satellite_id: string | null;
+            /** Results */
+            results: components["schemas"]["SatelliteFeasibilitySchema"][];
         };
         /** GroundStationSchema */
         GroundStationSchema: {
@@ -745,6 +884,7 @@ export interface components {
         };
         /** MetricsSchema */
         MetricsSchema: {
+            requester_service?: components["schemas"]["RequesterServiceSchema"] | null;
             /** Plan Id */
             plan_id: string;
             /** Mission Utility */
@@ -782,6 +922,29 @@ export interface components {
              * @default 0
              */
             downlink_volume_mb: number;
+            /** Per Satellite */
+            per_satellite?: components["schemas"]["SatelliteMetricsSchema"][];
+            /** Emergency Response */
+            emergency_response?: components["schemas"]["EmergencyResponseSchema"][];
+            /** Time To First Acquisition S */
+            time_to_first_acquisition_s?: number | null;
+            /** Achieved Time To First Acquisition S */
+            achieved_time_to_first_acquisition_s?: number | null;
+            /**
+             * Emergency Request Count
+             * @default 0
+             */
+            emergency_request_count: number;
+            /**
+             * Planned Emergency Request Count
+             * @default 0
+             */
+            planned_emergency_request_count: number;
+            /**
+             * Achieved Emergency Request Count
+             * @default 0
+             */
+            achieved_emergency_request_count: number;
         };
         /**
          * MissionEventRequest
@@ -800,6 +963,16 @@ export interface components {
              * @default greedy
              */
             planner_name: string;
+            /**
+             * Planning Policy
+             * @default utility
+             */
+            planning_policy: string;
+            /**
+             * Policy Version
+             * @default requester-utility-v1
+             */
+            policy_version: string;
             /** Solver Details */
             solver_details?: {
                 [key: string]: unknown;
@@ -837,18 +1010,20 @@ export interface components {
              * Format: date-time
              */
             simulated_time: string;
+            /** Satellites */
+            satellites?: components["schemas"]["SatelliteStateSchema"][] | null;
             /** Satellite Id */
-            satellite_id: string;
+            satellite_id?: string | null;
             /** Battery Wh */
-            battery_wh: number;
+            battery_wh?: number | null;
             /** Storage Usage Mb */
-            storage_usage_mb: number;
+            storage_usage_mb?: number | null;
             /** Available */
-            available: boolean;
+            available?: boolean | null;
             /** Active Event Ids */
             active_event_ids: string[];
             /** Completed Request Ids */
-            completed_request_ids: string[];
+            completed_request_ids?: string[] | null;
             /** Mission Complete */
             mission_complete: boolean;
         };
@@ -877,6 +1052,10 @@ export interface components {
             status: components["schemas"]["RequestStatus"];
             /** Target Name */
             target_name?: string | null;
+            /** Satellite Id */
+            satellite_id?: string | null;
+            /** Requester Id */
+            requester_id?: string | null;
         };
         /** ObservationWindowSchema */
         ObservationWindowSchema: {
@@ -974,15 +1153,28 @@ export interface components {
              */
             request_pool_mismatch: boolean;
         };
+        /** PlanRequest */
+        PlanRequest: {
+            /** Planner */
+            planner?: ("greedy" | "cp_sat") | null;
+            /** Policy */
+            policy?: ("utility" | "utility_then_fairness") | null;
+            /** Planning Policy */
+            planning_policy?: ("utility" | "utility_then_fairness") | null;
+        };
         /**
          * ReasonCode
          * @enum {string}
          */
-        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED";
+        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
         /** ReplanRequest */
         ReplanRequest: {
             /** Planner */
             planner?: ("greedy" | "cp_sat") | null;
+            /** Policy */
+            policy?: ("utility" | "utility_then_fairness") | null;
+            /** Planning Policy */
+            planning_policy?: ("utility" | "utility_then_fairness") | null;
             /** Expected Parent Plan Id */
             expected_parent_plan_id: string;
         };
@@ -991,6 +1183,87 @@ export interface components {
          * @enum {string}
          */
         RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired";
+        /** RequesterServiceRowSchema */
+        RequesterServiceRowSchema: {
+            /** Requester Id */
+            requester_id: string | null;
+            /** Request Count */
+            request_count: number;
+            /** Demand Utility */
+            demand_utility: number;
+            /** Served Request Count */
+            served_request_count: number;
+            /** Served Utility */
+            served_utility: number;
+            /** Service Share */
+            service_share: number | null;
+            /** Fulfillment Ratio */
+            fulfillment_ratio: number | null;
+        };
+        /** RequesterServiceSchema */
+        RequesterServiceSchema: {
+            /** Requesters */
+            requesters: components["schemas"]["RequesterServiceRowSchema"][];
+            unattributed: components["schemas"]["RequesterServiceRowSchema"];
+            /** Total Served Utility */
+            total_served_utility: number;
+            /** Fairness Gap */
+            fairness_gap: number | null;
+            /** Zero Service Requester Count */
+            zero_service_requester_count: number;
+            /** No Service */
+            no_service: boolean;
+            /** Metric Version */
+            metric_version: string;
+            /** Scope */
+            scope: string;
+            /** Limitations */
+            limitations: string;
+            /** Measured At Convention */
+            measured_at_convention: string;
+        };
+        /**
+         * SatelliteFeasibilitySchema
+         * @description One satellite's earliest suitable window for a candidate (ADR-0015).
+         *
+         *     Window and acquisition fields are null exactly when ``reason`` names
+         *     why the satellite has no suitable window.
+         */
+        SatelliteFeasibilitySchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Window Id */
+            window_id: string | null;
+            /** Window Start */
+            window_start: string | null;
+            /** Window End */
+            window_end: string | null;
+            /** Earliest Start */
+            earliest_start: string | null;
+            /** Latest Finish */
+            latest_finish: string | null;
+            /** Reason */
+            reason: ("no_suitable_window" | "satellite_unavailable") | null;
+        };
+        /** SatelliteMetricsSchema */
+        SatelliteMetricsSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Battery Utilisation */
+            battery_utilisation: number;
+            /** Storage Utilisation */
+            storage_utilisation: number;
+            /**
+             * Downlink Action Count
+             * @default 0
+             */
+            downlink_action_count: number;
+            /**
+             * Downlink Volume Mb
+             * @default 0
+             */
+            downlink_volume_mb: number;
+        };
         /** SatelliteOutageEventRequest */
         SatelliteOutageEventRequest: {
             /**
@@ -1052,6 +1325,19 @@ export interface components {
             available: boolean;
             orbit?: components["schemas"]["OrbitalElementsSchema"] | null;
         };
+        /** SatelliteStateSchema */
+        SatelliteStateSchema: {
+            /** Satellite Id */
+            satellite_id: string;
+            /** Battery Wh */
+            battery_wh: number;
+            /** Storage Usage Mb */
+            storage_usage_mb: number;
+            /** Available */
+            available: boolean;
+            /** Completed Request Ids */
+            completed_request_ids?: string[];
+        };
         /** ScenarioPreviewSchema */
         ScenarioPreviewSchema: {
             /** Errors */
@@ -1086,7 +1372,9 @@ export interface components {
              * Format: date-time
              */
             end_time: string;
-            satellite: components["schemas"]["SatelliteSchema"];
+            satellite?: components["schemas"]["SatelliteSchema"] | null;
+            /** Satellites */
+            satellites?: components["schemas"]["SatelliteSchema"][] | null;
             /** Requests */
             requests: components["schemas"]["ObservationRequestSchema"][];
             window_policy?: components["schemas"]["WindowPolicySchema"] | null;
@@ -1109,6 +1397,8 @@ export interface components {
             end_time: string;
             /** Provider */
             provider: string;
+            /** Briefing */
+            briefing?: string | null;
         };
         /** ScheduledActionSchema */
         ScheduledActionSchema: {
@@ -1207,6 +1497,16 @@ export interface components {
              * @default 0
              */
             downlink_rate_mb_s: number;
+            /**
+             * Slew Rate Deg S
+             * @default 0
+             */
+            slew_rate_deg_s: number;
+            /**
+             * Recharge Rate W
+             * @default 0
+             */
+            recharge_rate_w: number;
         };
     };
     responses: never;
@@ -1606,6 +1906,7 @@ export interface operations {
                 start?: string | null;
                 end?: string | null;
                 step_s?: number;
+                satellite_id?: string | null;
             };
             header?: never;
             path: {
@@ -1631,6 +1932,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_feasibility_scenarios__scenario_id__feasibility_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                /** @description Imaging duration in seconds */
+                duration: number;
+                deadline: string;
+                satellite_id?: string | null;
+            };
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilitySchema"];
+                };
+            };
+            /** @description Invalid scenario or event */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1758,7 +2115,9 @@ export interface operations {
     create_plan_scenarios__scenario_id__plan_post: {
         parameters: {
             query?: {
-                planner?: "greedy" | "cp_sat";
+                planner?: ("greedy" | "cp_sat") | null;
+                policy?: ("utility" | "utility_then_fairness") | null;
+                planning_policy?: ("utility" | "utility_then_fairness") | null;
             };
             header?: never;
             path: {
@@ -1766,7 +2125,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {
@@ -1881,6 +2244,46 @@ export interface operations {
             };
             /** @description Mission state conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reset_mission_scenarios__scenario_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionStateSchema"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

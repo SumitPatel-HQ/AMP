@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { MissionMapPanel } from "./MissionMapPanel";
 import { fakeMap } from "../test/fakeMapEngine";
-import { missionState, plan, scenario } from "../test/mapFixtures";
+import { cueEvent, missionState, plan, scenario } from "../test/mapFixtures";
 import type { MissionEventSchema } from "../api/client";
 
 const api = vi.hoisted(() => {
@@ -152,6 +152,47 @@ describe("mission map", () => {
     expect(card.textContent).toContain("EVT-001");
   });
 
+  it("shows a cue marker's evidence with its credit and policy notice", async () => {
+    await renderMap({ events: [cueEvent] });
+
+    act(() => fakeMap.handlers?.onHover({ kind: "cue", id: "EVT-004", x: 10, y: 10 }));
+
+    const card = screen.getByRole("tooltip");
+    expect(card.textContent).toContain("U.S. Geological Survey");
+    expect(card.textContent).toContain("us7000test");
+    expect(card.textContent).toContain("alert orange");
+    expect(card.textContent).toContain("M6.4");
+    expect(card.textContent).toContain("sig 650");
+    expect(card.textContent).toContain("CUE-1");
+    expect(card.textContent).toContain("AMIS simulation policy, not source recommendations");
+    expect(card.textContent).toContain("not an acquisition");
+    expect(card.textContent).not.toMatch(/completed/i);
+  });
+
+  it("follows a cue marker's event when it is picked, and clears it when picked again", async () => {
+    const onSelectEvent = vi.fn();
+    const { rerender, props } = await renderMap({ events: [cueEvent], onSelectEvent });
+
+    act(() => fakeMap.handlers?.onPickCue?.("EVT-004"));
+    expect(onSelectEvent).toHaveBeenCalledWith("EVT-004");
+
+    rerender(<MissionMapPanel {...props} selectedEventId="EVT-004" />);
+    expect(fakeMap.lastScene().selectedEventId).toBe("EVT-004");
+    act(() => fakeMap.handlers?.onPickCue?.("EVT-004"));
+    expect(onSelectEvent).toHaveBeenLastCalledWith(null);
+  });
+
+  it("rebuilds cue markers from the event log without duplicating or keeping stale ones", async () => {
+    const { rerender, props } = await renderMap({ events: [cueEvent] });
+    expect(fakeMap.lastScene().model.cues).toHaveLength(1);
+
+    rerender(<MissionMapPanel {...props} events={[{ ...cueEvent }]} plan={{ ...plan }} />);
+    expect(fakeMap.lastScene().model.cues).toHaveLength(1);
+
+    rerender(<MissionMapPanel {...props} events={[]} />);
+    expect(fakeMap.lastScene().model.cues).toEqual([]);
+  });
+
   it("names the basemap it is drawing on", async () => {
     await renderMap();
 
@@ -200,6 +241,12 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
     explanation_coverage: null,
     downlink_action_count: 0,
     downlink_volume_mb: 0,
+    emergency_response: [],
+    time_to_first_acquisition_s: null,
+    achieved_time_to_first_acquisition_s: null,
+    emergency_request_count: 0,
+    planned_emergency_request_count: 0,
+    achieved_emergency_request_count: 0,
   });
   const rendered = render(<App />);
 

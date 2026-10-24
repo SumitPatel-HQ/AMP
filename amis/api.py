@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Literal, Annotated, Any
 
 from fastapi import FastAPI, Path, Query, Request, status
-from pydantic import ValidationError
+from pydantic import AwareDatetime, ValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from amis.api_schemas import (
     DecisionTraceSchema,
     ErrorEnvelope,
+    FeasibilitySchema,
     ImpactSchema,
     MetricsSchema,
     MissionEventRequest,
@@ -24,6 +25,7 @@ from amis.api_schemas import (
     ObservationRequestSchema,
     ObservationWindowSchema,
     PlanDiffSchema,
+    PlanRequest,
     ReplanRequest,
     ScenarioSchema,
     StepRequest,
@@ -35,7 +37,7 @@ from amis.api_schemas import (
     GroundStationSchema,
     GroundTrackPointSchema,
 )
-from amis.examples import cloud_example, examples
+from amis.examples import cloud_example, example_briefings, examples
 from amis.domain import Scenario
 from amis.orbital.elements import catalogue, from_tle
 from amis.orbital.track import ground_track
@@ -161,9 +163,11 @@ def create_app(
 
     @app.get("/examples", response_model=list[ScenarioSummarySchema])
     def list_examples() -> list[dict[str, Any]]:
+        briefings = example_briefings()
         return [
             {"id": key, "name": item.name, "start_time": item.start_time,
-             "end_time": item.end_time, "provider": item.window_policy.provider if item.window_policy else "legacy"}
+             "end_time": item.end_time, "provider": item.window_policy.provider if item.window_policy else "legacy",
+             "briefing": briefings.get(key)}
             for key, item in examples().items()
         ]
 
@@ -279,6 +283,27 @@ def create_app(
         return ground_track(scenario, start, end, step_s, satellite_id=satellite.id)
 
     @app.get(
+        "/scenarios/{scenario_id}/feasibility",
+        response_model=FeasibilitySchema,
+        responses=_documented_errors(400, 404, 422),
+    )
+    def get_feasibility(
+        scenario_id: ScenarioId,
+        lat: Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)],
+        lon: Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)],
+        duration: Annotated[float, Query(gt=0, allow_inf_nan=False, description="Imaging duration in seconds")],
+        deadline: AwareDatetime,
+        satellite_id: Annotated[str | None, Query(min_length=1)] = None,
+    ) -> dict[str, Any]:
+        """Each satellite's earliest suitable window for a candidate, window-only.
+
+        Read-only: the session is loaded but never saved, so nothing is
+        submitted, reserved, or recorded.
+        """
+        session = store.load(scenario_id)
+        return session.get_feasibility(lat, lon, duration, deadline, satellite_id).to_dict()
+
+    @app.get(
         "/scenarios/{scenario_id}/requests",
         response_model=list[ObservationRequestSchema],
         response_model_exclude_unset=True,
@@ -319,9 +344,29 @@ def create_app(
         status_code=status.HTTP_201_CREATED,
         responses=_documented_errors(404, 409, 422),
     )
-    def create_plan(scenario_id: ScenarioId, planner: Literal["greedy", "cp_sat"] = "greedy") -> dict[str, Any]:
+    def create_plan(
+        scenario_id: ScenarioId,
+        request: PlanRequest | None = None,
+        planner: Literal["greedy", "cp_sat"] | None = None,
+        policy: Literal["utility", "utility_then_fairness"] | None = None,
+        planning_policy: Literal["utility", "utility_then_fairness"] | None = None,
+    ) -> dict[str, Any]:
         session = store.load(scenario_id)
-        session.select_planner(planner)
+        effective_planner = (
+            (request.planner if request and request.planner else None)
+            or planner
+            or "greedy"
+        )
+        effective_policy = (
+            (request.policy or request.planning_policy if request else None)
+            or policy
+            or planning_policy
+            or "utility"
+        )
+        try:
+            session.select_planner(effective_planner, policy=effective_policy)
+        except ValueError as err:
+            raise InvalidScenarioError(str(err)) from err
         plan = session.plan()
         store.save(session)
         return plan.to_dict()
@@ -344,6 +389,17 @@ def create_app(
     ) -> dict[str, Any]:
         session = store.load(scenario_id)
         state = session.step(request.seconds)
+        store.save(session)
+        return state.to_dict()
+
+    @app.post(
+        "/scenarios/{scenario_id}/reset",
+        response_model=MissionStateSchema,
+        responses=_documented_errors(404, 422),
+    )
+    def reset_mission(scenario_id: ScenarioId) -> dict[str, Any]:
+        session = store.load(scenario_id)
+        state = session.reset()
         store.save(session)
         return state.to_dict()
 
@@ -392,10 +448,17 @@ def create_app(
         scenario_id: ScenarioId, request: ReplanRequest
     ) -> dict[str, Any]:
         session = store.load(scenario_id)
-        session.select_planner(request.planner or session.get_plan().planner_name)
-        plan = session.replan(request.expected_parent_plan_id)
+        current_plan = session.get_plan()
+        planner = request.planner or current_plan.planner_name
+        policy = request.policy or request.planning_policy or getattr(current_plan, "planning_policy", "utility")
+        try:
+            session.select_planner(planner, policy=policy)
+        except ValueError as err:
+            raise InvalidScenarioError(str(err)) from err
+        parent_id = request.expected_parent_plan_id
+        plan = session.replan(parent_id)
         store.save(
-            session, expected_current_plan_id=request.expected_parent_plan_id
+            session, expected_current_plan_id=parent_id
         )
         return plan.to_dict()
 

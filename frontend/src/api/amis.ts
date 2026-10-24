@@ -17,6 +17,7 @@ import type {
   GroundTrackPointSchema,
   GroundStationSchema,
   ContactWindowSchema,
+  FeasibilitySchema,
 } from "./client";
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
@@ -107,10 +108,15 @@ export async function generateWindows(
   );
 }
 
-export async function createPlan(scenarioId: string): Promise<MissionPlanSchema> {
+export async function createPlan(
+  scenarioId: string,
+  planner: "greedy" | "cp_sat" = "greedy",
+  policy: "utility" | "utility_then_fairness" = "utility",
+): Promise<MissionPlanSchema> {
   return unwrap(
     await client.POST("/scenarios/{scenario_id}/plan", {
       params: { path: { scenario_id: scenarioId } },
+      body: { planner, policy },
     }),
   );
 }
@@ -119,6 +125,42 @@ export async function fetchState(scenarioId: string): Promise<MissionStateSchema
   return unwrap(
     await client.GET("/scenarios/{scenario_id}/state", {
       params: { path: { scenario_id: scenarioId } },
+    }),
+  );
+}
+
+/** A candidate for window-only feasibility: where, how long, and by when. */
+export interface FeasibilityQuery {
+  lat: number;
+  lon: number;
+  /** Imaging duration in seconds. */
+  duration: number;
+  /** Timezone-aware ISO 8601 deadline. */
+  deadline: string;
+  satelliteId: string | null;
+}
+
+/**
+ * Each satellite's earliest suitable window for a candidate. Read-only and
+ * window-only: nothing is submitted or reserved, and the backend searches from
+ * the Scenario start whatever the mission clock says.
+ */
+export async function fetchFeasibility(
+  scenarioId: string,
+  query: FeasibilityQuery,
+): Promise<FeasibilitySchema> {
+  return unwrap(
+    await client.GET("/scenarios/{scenario_id}/feasibility", {
+      params: {
+        path: { scenario_id: scenarioId },
+        query: {
+          lat: query.lat,
+          lon: query.lon,
+          duration: query.duration,
+          deadline: query.deadline,
+          ...(query.satelliteId === null ? {} : { satellite_id: query.satelliteId }),
+        },
+      },
     }),
   );
 }
@@ -151,6 +193,16 @@ export async function stepSimulation(
     await client.POST("/scenarios/{scenario_id}/simulation/step", {
       params: { path: { scenario_id: scenarioId } },
       body: { seconds },
+    }),
+  );
+}
+
+export async function resetMission(
+  scenarioId: string,
+): Promise<MissionStateSchema> {
+  return unwrap(
+    await client.POST("/scenarios/{scenario_id}/reset", {
+      params: { path: { scenario_id: scenarioId } },
     }),
   );
 }
@@ -195,11 +247,13 @@ export async function fetchPlan(planId: string): Promise<MissionPlanSchema> {
 export async function replan(
   scenarioId: string,
   expectedParentPlanId: string,
+  planner?: "greedy" | "cp_sat",
+  policy?: "utility" | "utility_then_fairness",
 ): Promise<MissionPlanSchema> {
   return unwrap(
     await client.POST("/scenarios/{scenario_id}/replan", {
       params: { path: { scenario_id: scenarioId } },
-      body: { expected_parent_plan_id: expectedParentPlanId },
+      body: { expected_parent_plan_id: expectedParentPlanId, planner, policy },
     }),
   );
 }

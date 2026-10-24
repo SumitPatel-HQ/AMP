@@ -48,6 +48,7 @@ const api = vi.hoisted(() => {
     injectEvent: vi.fn(),
     parseTle: vi.fn(),
     replan: vi.fn(),
+    resetMission: vi.fn(),
     stepSimulation: vi.fn(),
     validateScenario: vi.fn(),
   };
@@ -157,6 +158,8 @@ const plan = {
   violation_count: 1,
   planning_time_ms: 1,
   planner_name: "greedy",
+  planning_policy: "utility",
+  policy_version: "requester-utility-v1",
 } satisfies MissionPlanSchema;
 
 const revisedPlan = {
@@ -224,6 +227,12 @@ const planDiff = {
     explanation_coverage: null,
     downlink_action_count: 0,
     downlink_volume_mb: 0,
+    emergency_response: [],
+    time_to_first_acquisition_s: null,
+    achieved_time_to_first_acquisition_s: null,
+    emergency_request_count: 0,
+    planned_emergency_request_count: 0,
+    achieved_emergency_request_count: 0,
   },
   metrics_after: {
     plan_id: revisedPlan.id,
@@ -240,6 +249,12 @@ const planDiff = {
     explanation_coverage: 1,
     downlink_action_count: 0,
     downlink_volume_mb: 0,
+    emergency_response: [],
+    time_to_first_acquisition_s: null,
+    achieved_time_to_first_acquisition_s: null,
+    emergency_request_count: 0,
+    planned_emergency_request_count: 0,
+    achieved_emergency_request_count: 0,
   },
   request_pool_mismatch: false,
 } satisfies PlanDiffSchema;
@@ -304,6 +319,7 @@ function installSuccessfulApi(): void {
   api.comparePlans.mockResolvedValue(planDiff);
   api.fetchTraces.mockResolvedValue(traces);
   api.fetchRequests.mockResolvedValue(scenario.requests);
+  api.resetMission.mockResolvedValue(missionState);
   api.fetchMetrics.mockImplementation(async (planId: string) =>
     planId === revisedPlan.id
       ? planDiff.metrics_after
@@ -325,6 +341,22 @@ afterEach(() => {
 });
 
 describe("mission dashboard", () => {
+  it("sends the explicit Greedy selection after a CP-SAT fairness plan", async () => {
+    installSuccessfulApi();
+    api.createPlan.mockResolvedValue({ ...plan, planner_name: "cp_sat", planning_policy: "utility_then_fairness" });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+    await screen.findByText(scenario.name);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planner selection" }), "cp_sat");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planning policy" }), "utility_then_fairness");
+    await user.click(screen.getByRole("button", { name: "Generate plan" }));
+    await screen.findByLabelText("Current plan V1");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planner selection" }), "greedy");
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await waitFor(() => expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id, "greedy", "utility"));
+  });
+
   it("loads the demo and draws a generated plan only after user actions", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
@@ -546,7 +578,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
 
     expect(await screen.findByLabelText("Current plan V2")).toBeTruthy();
-    expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id);
+    expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id, "greedy", "utility");
     expect(api.comparePlans).toHaveBeenCalledWith(plan.id, revisedPlan.id);
 
     const timelines = Array.from(container.querySelectorAll(".amis-vis-timeline[aria-label]")).map(
@@ -571,8 +603,8 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V3");
 
-    expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id);
-    expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
+    expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id, "greedy", "utility");
+    expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id, "greedy", "utility");
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const history = screen.getByRole("list", { name: "Mission plans" });
     for (const version of ["V1", "V2", "V3"]) {
@@ -649,7 +681,7 @@ describe("mission dashboard", () => {
     api.replan.mockResolvedValueOnce({ ...serverPlan, id: "SCN-002:PLAN-10", version: 10, parent_plan_id: serverPlan.id });
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V10");
-    expect(api.replan).toHaveBeenLastCalledWith(scenario.id, serverPlan.id);
+    expect(api.replan).toHaveBeenLastCalledWith(scenario.id, serverPlan.id, "greedy", "utility");
     expect(screen.queryByRole("status", { name: "Stale plan" })).toBeNull();
   });
   it("keeps the revised timeline current when the clock moves after a replan", async () => {
@@ -1597,5 +1629,76 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const plans = within(screen.getByRole("list", { name: "Mission plans" })).getAllByRole("button");
     expect(plans.map((row) => row.textContent?.slice(0, 2))).toEqual(["V1", "V2"]);
+  });
+  it("resets mission clock, plans, events and metrics when clicking Reset mission", async () => {
+    installSuccessfulApi();
+    const emergencyEvent = {
+      id: "EVT-EMERGENCY",
+      scenario_id: scenario.id,
+      event_time: scenario.start_time,
+      event_type: "EMERGENCY_TASK",
+      payload: {
+        request: {
+          id: "OBS-EMERGENCY",
+          target_lat: 34.05,
+          target_lon: -118.24,
+          priority: 5,
+          duration_s: 600,
+          deadline: "2026-09-21T10:25:00Z",
+          energy_cost_wh: 40,
+          storage_cost_mb: 100,
+          status: "pending",
+        },
+        windows: [],
+      },
+    } satisfies MissionEventSchema;
+
+    const metricsWithEmergency = {
+      ...planDiff.metrics_before,
+      emergency_request_count: 1,
+      planned_emergency_request_count: 1,
+      achieved_emergency_request_count: 1,
+      time_to_first_acquisition_s: 600,
+      achieved_time_to_first_acquisition_s: 600,
+      emergency_response: [
+        {
+          request_id: "OBS-EMERGENCY",
+          event_id: "EVT-EMERGENCY",
+          arrival_time: scenario.start_time,
+          request_status: "completed",
+          planned_start_time: "2026-09-21T10:10:00Z",
+          planned_latency_s: 600,
+          planned_satellite_id: "SAT-001",
+          achieved_start_time: "2026-09-21T10:10:00Z",
+          achieved_latency_s: 600,
+          achieved_satellite_id: "SAT-001",
+        },
+      ],
+    };
+
+    api.fetchMetrics.mockResolvedValue(metricsWithEmergency);
+    api.fetchEvents.mockResolvedValue([emergencyEvent]);
+
+    const user = userEvent.setup();
+    render(<App />);
+    await loadDemoAndGeneratePlan(user);
+
+    expect(screen.getByRole("region", { name: "Emergency response" })).toBeTruthy();
+    const resetButton = screen.getByRole("button", { name: "Reset mission" });
+    expect((resetButton as HTMLButtonElement).disabled).toBe(false);
+
+    // Mock reset return: empty plans, empty events, initial requests and state
+    api.fetchEvents.mockResolvedValue([]);
+    api.fetchMissionPlans.mockResolvedValue([]);
+    api.fetchWindows.mockResolvedValue([]);
+    api.fetchRequests.mockResolvedValue(scenario.requests);
+    api.fetchState.mockResolvedValue(missionState);
+
+    await user.click(resetButton);
+
+    expect(api.resetMission).toHaveBeenCalledWith(scenario.id);
+    expect(await screen.findByText("no plan")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Emergency response" })).toBeNull();
+    expect((resetButton as HTMLButtonElement).disabled).toBe(true);
   });
 });

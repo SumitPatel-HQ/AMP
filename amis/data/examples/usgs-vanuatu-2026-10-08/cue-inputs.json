@@ -1,0 +1,43 @@
+{
+  "inputs": [
+    {
+      "event_type": "EMERGENCY_TASK",
+      "injection_time": "2026-10-08T09:00:07.768000+00:00",
+      "payload": {
+        "alert_level": "green",
+        "mag": 6.3,
+        "request": {
+          "deadline": "2026-10-10T09:00:07.768000+00:00",
+          "duration_s": 120.0,
+          "energy_cost_wh": 50.0,
+          "id": "CUE-ea9e9cf26f363385f06f3d6cba9e5ccb5b5d9bd167042f56abff516595ee9177",
+          "priority": 5,
+          "status": "pending",
+          "storage_cost_mb": 200.0,
+          "target_lat": -15.5411,
+          "target_lon": 168.1889,
+          "target_name": "102 km NE of Norsup, Vanuatu"
+        },
+        "sig": 614.0,
+        "source": "usgs",
+        "source_event_id": "us6000u0xi"
+      }
+    }
+  ],
+  "metadata": {
+    "archive": {
+      "file": "response.geojson",
+      "sha256": "821e1300d7889a01677df730d14f72dc7c0e343960c67cce30c18f29bc25f4bc",
+      "source": "usgs",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson"
+    },
+    "artifact_type": "developer-cue-inputs",
+    "imaging_profile": {
+      "duration_s": 120,
+      "energy_cost_wh": 50,
+      "storage_cost_mb": 200
+    },
+    "policy_version": "usgs-earthquake-v1",
+    "scenario_id": "SCN-EX-USGS-VANUATU"
+  }
+}

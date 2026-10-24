@@ -22,6 +22,7 @@ export function MissionLibrary({ mode, onClose, onChoose }: {
         <button disabled={busy} className="w-full rounded border border-neutral-700 p-3 text-left hover:border-sky-700 disabled:opacity-50" onClick={async () => { setBusy(true); await onChoose(item.id); setBusy(false); onClose(); }}>
           <span className="block text-sm font-medium">{item.name}</span>
           <span className="text-xs text-neutral-500">{item.id} · {item.provider} · {new Date(item.start_time).toISOString().slice(0, 10)}–{new Date(item.end_time).toISOString().slice(0, 10)}</span>
+          {item.briefing && <p className="mt-2 whitespace-pre-line text-xs text-neutral-400">{item.briefing}</p>}
         </button>
       </li>)}</ul>
     </div>

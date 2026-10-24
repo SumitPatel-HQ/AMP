@@ -5,6 +5,7 @@ See CONTEXT.md for the vocabulary these types follow.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -64,6 +65,31 @@ class ObservationRequest:
     # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
     # means the planner assigns whichever satellite can serve it.
     satellite_id: str | None = None
+    requester_id: str | None = None
+
+    def __post_init__(self) -> None:
+        validate_requester_id(self.requester_id)
+
+    def validation_error(self) -> str | None:
+        """Request bounds shared by CEMS lifecycle and HTTP validation."""
+        bounds = {
+            "target_lat": (-90, 90), "target_lon": (-180, 180),
+            "priority": (1, 5), "duration_s": (0, None),
+            "energy_cost_wh": (0, None), "storage_cost_mb": (0, None),
+        }
+        for field, (lower, upper) in bounds.items():
+            value = getattr(self, field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                return f"{field} must be an explicit finite number"
+            if value < lower or (upper is not None and value > upper):
+                return f"{field} is outside its valid bounds"
+        if self.duration_s <= 0:
+            return "duration_s must be positive"
+        if not isinstance(self.id, str) or not self.id.strip():
+            return "request id must be nonempty"
+        if self.deadline.tzinfo is None or self.deadline.utcoffset() is None:
+            return "request deadline must include a timezone"
+        return None
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -81,6 +107,8 @@ class ObservationRequest:
             result["target_name"] = self.target_name
         if self.satellite_id is not None:
             result["satellite_id"] = self.satellite_id
+        if self.requester_id is not None:
+            result["requester_id"] = self.requester_id
         return result
 
     @staticmethod
@@ -97,7 +125,15 @@ class ObservationRequest:
             status=RequestStatus(data["status"]),
             target_name=data.get("target_name"),
             satellite_id=data.get("satellite_id"),
+            requester_id=data.get("requester_id"),
         )
+
+
+def validate_requester_id(value: str | None) -> None:
+    if value is not None and (
+        not isinstance(value, str) or not value or value != value.strip()
+    ):
+        raise ValueError("requester_id must be a nonempty string without surrounding whitespace")
 
 
 @dataclass(frozen=True, init=False)

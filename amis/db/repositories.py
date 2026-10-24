@@ -84,6 +84,7 @@ class SqlScenarioRepository:
                                 "scenario_id": scenario.id,
                                 "seq": seq,
                                 **request.to_dict(),
+                                "requester_id": request.requester_id,
                             }
                             for seq, request in enumerate(scenario.requests)
                         ],

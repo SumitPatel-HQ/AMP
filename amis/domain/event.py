@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Union
+from datetime import datetime, timedelta
+from ipaddress import ip_address
+from typing import Any, Literal, Union, get_args
+from urllib.parse import urlsplit
 
 from amis.domain.enums import EventType
 from amis.domain.scenario import ObservationRequest
@@ -78,18 +82,147 @@ class BatteryDropPayload:
         )
 
 
+# Normalized cue alert levels (ADR-0015). ``unknown`` is the explicit value
+# for an absent source alert. The API schema and the frontend read this set.
+AlertLevel = Literal["red", "orange", "yellow", "green", "unknown"]
+CUE_ALERT_LEVELS: tuple[str, ...] = get_args(AlertLevel)
+CEMS_EVIDENCE_FIELDS = ("category", "activation_time", "source_event_time", "source_url", "centroid_policy_version")
+
+EMERGENCY_EVIDENCE_FIELDS = ("source", "source_event_id", "alert_level")
+
+
+def emergency_evidence_error(
+    source: Any,
+    source_event_id: Any,
+    alert_level: Any,
+    mag: Any = None,
+    sig: Any = None,
+    category: Any = None,
+    activation_time: Any = None,
+    source_event_time: Any = None,
+    source_url: Any = None,
+    centroid_policy_version: Any = None,
+) -> str | None:
+    """Why an emergency evidence group is inconsistent, or None when valid.
+
+    The single owner of the all-or-nothing rule: the domain payload, the
+    session's pre-generation check, and the API schema all delegate here.
+    """
+    cems = dict(category=category, activation_time=activation_time,
+                source_event_time=source_event_time, source_url=source_url,
+                centroid_policy_version=centroid_policy_version)
+    if source != "cems" and any(value is not None for value in cems.values()):
+        return "CEMS evidence requires source cems"
+    if source == "cems":
+        for field in ("category", "activation_time", "source_url", "centroid_policy_version"):
+            if not isinstance(cems[field], str) or not cems[field].strip():
+                return f"CEMS evidence requires nonempty {field}"
+        if alert_level != "unknown" or mag is not None or sig is not None:
+            return "CEMS evidence requires unknown alert and no earthquake magnitude/significance"
+        if centroid_policy_version != "cems-centroid-v1":
+            return "unsupported CEMS centroid policy version"
+        moments = {}
+        for field in ("activation_time", "source_event_time"):
+            value = cems[field]
+            if value is None:
+                continue
+            try:
+                moment = datetime.fromisoformat(value)
+                if moment.utcoffset() != timedelta(0):
+                    return f"CEMS {field} must be a UTC timestamp"
+                moments[field] = moment
+            except (TypeError, ValueError):
+                return f"CEMS {field} must be a UTC timestamp"
+        if source_event_time is not None and moments["source_event_time"] > moments["activation_time"]:
+            return "CEMS source event time must not follow activation time"
+        try:
+            url = urlsplit(source_url)
+            host = (url.hostname or "").lower().rstrip(".")
+            try:
+                public_host = ip_address(host).is_global
+            except ValueError:
+                public_host = (
+                    "." in host
+                    and all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label) for label in host.split("."))
+                    # Browsers also interpret dotted decimal/octal/hex aliases
+                    # as IPv4. Do not mistake them for public DNS names.
+                    and not all(re.fullmatch(r"(?:0x[0-9a-f]+|[0-9]+)", label) for label in host.split("."))
+                    and not host.endswith((".localhost", ".local", ".internal", ".test", ".invalid", ".example"))
+                )
+            if url.scheme != "https" or not public_host or url.username or url.password or url.port == 0:
+                return "CEMS source_url must be a public HTTPS source URL"
+        except ValueError:
+            return "CEMS source_url must be a public HTTPS source URL"
+    core = {"source": source, "source_event_id": source_event_id, "alert_level": alert_level}
+    missing = [field for field, value in core.items() if value is None]
+    if missing and len(missing) != len(core):
+        return (
+            "emergency evidence requires source, source_event_id, and alert_level together; "
+            f"missing {', '.join(missing)}"
+        )
+    if missing:
+        optional = [field for field, value in (("mag", mag), ("sig", sig)) if value is not None]
+        if optional:
+            return (
+                f"emergency evidence {', '.join(optional)} requires source, "
+                "source_event_id, and alert_level"
+            )
+        return None
+    for field in ("source", "source_event_id"):
+        value = core[field]
+        if not isinstance(value, str) or not value.strip():
+            return f"emergency evidence {field} must be a nonempty string"
+    if alert_level not in CUE_ALERT_LEVELS:
+        return (
+            f"emergency evidence alert_level must be one of {', '.join(CUE_ALERT_LEVELS)}; "
+            f"got {alert_level!r}"
+        )
+    for field, value in (("mag", mag), ("sig", sig)):
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            return f"emergency evidence {field} must be a finite number when present"
+    return None
+
+
 @dataclass(frozen=True)
 class EmergencyRequestPayload:
-    """The request and windows recorded by the ``EMERGENCY_TASK`` wire event."""
+    """The request and windows recorded by the ``EMERGENCY_TASK`` wire event.
+
+    A manual arrival carries no evidence. A cue arrival (ADR-0015) also
+    carries ``source``, ``source_event_id`` and ``alert_level`` together,
+    with optional ``mag`` (source-reported earthquake magnitude, unitless
+    USGS ``mag``) and ``sig`` (USGS significance score, 0-1000+, unitless);
+    the planner never reads them.
+    """
 
     request: ObservationRequest
     windows: tuple[ObservationWindow, ...]
+    source: str | None = None
+    source_event_id: str | None = None
+    alert_level: AlertLevel | None = None
+    mag: float | None = None
+    sig: float | None = None
+    category: str | None = None
+    activation_time: str | None = None
+    source_event_time: str | None = None
+    source_url: str | None = None
+    centroid_policy_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        # Evidence keys are omitted when absent, so evidence-free payloads
+        # keep their exact serialized shape.
+        result: dict[str, Any] = {
             "request": self.request.to_dict(),
             "windows": [window.to_dict() for window in self.windows],
         }
+        for field in ("source", "source_event_id", "alert_level", "mag", "sig", *CEMS_EVIDENCE_FIELDS):
+            value = getattr(self, field)
+            if value is not None:
+                result[field] = value
+        return result
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "EmergencyRequestPayload":
@@ -98,6 +231,28 @@ class EmergencyRequestPayload:
             windows=tuple(
                 ObservationWindow.from_dict(window) for window in data["windows"]
             ),
+            source=data.get("source"),
+            source_event_id=data.get("source_event_id"),
+            alert_level=data.get("alert_level"),
+            mag=data.get("mag"),
+            sig=data.get("sig"),
+            **{field: data.get(field) for field in CEMS_EVIDENCE_FIELDS},
+        )
+
+    @property
+    def has_evidence(self) -> bool:
+        """True only for a complete, valid evidence group.
+
+        A partial or malformed group is not evidence: ``evidence_error()``
+        rejects it, and this property reports False for it.
+        """
+        return self.source is not None and self.evidence_error() is None
+
+    def evidence_error(self) -> str | None:
+        """Why the evidence group is inconsistent, or None when it is valid."""
+        return emergency_evidence_error(
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig,
+            **{field: getattr(self, field) for field in CEMS_EVIDENCE_FIELDS},
         )
 
 

@@ -1,6 +1,14 @@
 import type { DataGroup, DataItem } from "vis-timeline";
+import {
+  ACQUISITION_MEANING,
+  emergencyResponseState,
+  formatLatency,
+  plannedDiffersFromAchieved,
+  RESPONSE_STATE_LABEL,
+} from "../state/emergencyResponse";
 import type {
   ContactWindowSchema,
+  EmergencyResponseSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -56,11 +64,24 @@ export interface MissionContactTimelineItem extends MissionTimelineItemBase {
   contactId: string;
 }
 
+/**
+ * An emergency arrival's response on its request row, read from the
+ * backend's metrics: arrival to planned imaging start, arrival to achieved
+ * imaging start, or an explicit no-acquisition marker at arrival.
+ */
+export interface MissionResponseTimelineItem extends MissionTimelineItemBase {
+  kind: "response";
+  requestId: string;
+  eventId: string;
+  response: "planned" | "achieved" | "unserved" | "expired";
+}
+
 export type MissionTimelineItem =
   | MissionWindowTimelineItem
   | MissionActionTimelineItem
   | MissionEventTimelineItem
-  | MissionContactTimelineItem;
+  | MissionContactTimelineItem
+  | MissionResponseTimelineItem;
 
 /** Presentation-only lane id for one ground station's contacts and downlinks. */
 export function stationGroupId(stationId: string): string {
@@ -96,6 +117,14 @@ export interface MissionTimelineModelInput {
   selectedEventId: string | null;
   changeByRequestId: Record<string, PlanChangeType>;
   contacts?: ContactWindowSchema[];
+  /**
+   * The backend's emergency response rows for the selected plan, from that
+   * plan's metrics: its own RequestPool membership and planned attribution,
+   * with achieved values from the mission's executed history.
+   */
+  emergencyResponse?: EmergencyResponseSchema[];
+  /** Names the plan the planned segments belong to, e.g. "V1" for a historical plan. */
+  responsePlanLabel?: string;
 }
 
 /** Returns the backend window occupying a request row at a given mission time. */
@@ -339,6 +368,99 @@ function buildEventItems(
   });
 }
 
+function responseItem(
+  row: EmergencyResponseSchema,
+  response: MissionResponseTimelineItem["response"],
+  end: string | null,
+  label: string,
+  detail: string,
+): MissionResponseTimelineItem {
+  return {
+    id: `response:${response}:${row.request_id}`,
+    kind: "response",
+    requestId: row.request_id,
+    eventId: row.event_id,
+    response,
+    "request-id": row.request_id,
+    "event-id": row.event_id,
+    status: response,
+    group: row.request_id,
+    start: row.arrival_time,
+    ...(end === null ? { type: "point" as const } : { end, type: "range" as const }),
+    content: label,
+    selectable: true,
+    selected: false,
+    className: classes("amis-response", `amis-response-${response}`),
+    title: [
+      `${row.request_id} arrived with ${row.event_id} at ${formatUtc(row.arrival_time)}`,
+      detail,
+      `request ${row.request_status}`,
+      ACQUISITION_MEANING,
+    ].join(" | "),
+  };
+}
+
+/**
+ * Response segments for every emergency arrival the backend reports. A
+ * planned segment stays planned until the backend reports an actual
+ * imaging start; when the plan's proposal differs from what actually
+ * started, both segments are drawn. No acquisition is a marker at arrival,
+ * never a zero-width success. Downlinks never appear here.
+ */
+function buildResponseItems(
+  rows: EmergencyResponseSchema[],
+  rowIds: ReadonlySet<string>,
+  planLabel: string | undefined,
+): MissionResponseTimelineItem[] {
+  const planned = planLabel === undefined ? "planned" : `${planLabel} planned`;
+  const items: MissionResponseTimelineItem[] = [];
+  for (const row of rows) {
+    if (!rowIds.has(row.request_id)) {
+      continue;
+    }
+    const state = emergencyResponseState(row);
+    const achievedStart = row.achieved_start_time;
+    const plannedStart = row.planned_start_time;
+    // Once imaging started, the planned segment is kept only where the
+    // plan's proposal differs from what actually started.
+    if (plannedStart !== null && (achievedStart === null || plannedDiffersFromAchieved(row))) {
+      items.push(
+        responseItem(
+          row,
+          "planned",
+          plannedStart,
+          `${planned} · ${formatLatency(row.planned_latency_s)} · ${row.planned_satellite_id}`,
+          `${planLabel === undefined ? "Planned" : `${planLabel} planned`} imaging start ${formatUtc(plannedStart)} on ${row.planned_satellite_id}`,
+        ),
+      );
+    }
+    if (achievedStart !== null) {
+      items.push(
+        responseItem(
+          row,
+          "achieved",
+          achievedStart,
+          `achieved · ${formatLatency(row.achieved_latency_s)} · ${row.achieved_satellite_id}`,
+          `Imaging started ${formatUtc(achievedStart)} on ${row.achieved_satellite_id}`,
+        ),
+      );
+    } else if (state === "expired" || state === "unserved") {
+      items.push(
+        responseItem(
+          row,
+          state,
+          null,
+          RESPONSE_STATE_LABEL[state],
+          state === "expired"
+            ? "Expired with no imaging start"
+            : "No imaging action in this plan",
+        ),
+      );
+    }
+  }
+  return items;
+}
+
 /**
  * Maps backend-owned mission facts into vis-timeline rows and items. This file
  * does not infer feasibility, impact, or plan state.
@@ -468,6 +590,7 @@ export function buildMissionTimelineModel(
       ...contactItems,
       ...buildActionItems(input),
       ...buildEventItems(input.events, requestIds, emergencyIds, input.selectedEventId),
+      ...buildResponseItems(input.emergencyResponse ?? [], emergencyIds, input.responsePlanLabel),
     ],
   };
 }

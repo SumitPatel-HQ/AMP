@@ -8,17 +8,25 @@ until a plan has a parent version. Both also return null when their own
 denominator is zero rather than a score, because 1.0 is the exact number
 the demonstration quotes as evidence of explainability and a vacuous 1.0
 would be defensible arithmetic and a misleading headline.
+
+Emergency response follows the same rule: a mean over no served request
+is null, and an unserved request is never counted as zero latency.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterable, Optional
 
 from amis.constraints.resources import ResourceProjection
 from amis.diff import CHANGED_CHANGE_TYPES, rebuilt_actions
 from amis.domain import (
     DecisionTrace,
+    EmergencyRequestPayload,
+    EmergencyResponse,
+    EventType,
     MetricsResult,
+    MissionEvent,
     MissionPlan,
     MissionState,
     ObservationRequest,
@@ -27,8 +35,11 @@ from amis.domain import (
     Satellite,
     SatelliteMetrics,
     Scenario,
+    ScheduledAction,
     imaging_actions,
 )
+from amis.errors import SimulationStateError
+from amis.domain.metrics import RequesterService, RequesterServiceRow
 
 
 def compute_metrics(
@@ -39,13 +50,22 @@ def compute_metrics(
     previous_plan: Optional[MissionPlan] = None,
     diff: Optional[PlanDiff] = None,
     traces: Iterable[DecisionTrace] = (),
+    events: Iterable[MissionEvent] = (),
+    executed_actions: Iterable[ScheduledAction] = (),
 ) -> MetricsResult:
+    """``executed_actions`` is the session's authoritative history of
+    actions that have actually started. Without it nothing is achieved:
+    a plan's proposed starts are never read as execution, whatever the
+    clock says.
+    """
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
 
-    utility_request_ids = {action.request_id for action in imaging_actions(plan.actions)} | set(
+    utility_request_ids = {action.request_id for action in imaging_actions(plan.actions) if action.request_id is not None} | set(
         mission_state.completed_request_ids
     )
+    # Current completion may include arrivals outside a historical plan's pool.
+    utility_request_ids.intersection_update(priority_by_id)
     mission_utility = sum(priority_by_id[request_id] for request_id in utility_request_ids)
 
     pool_size = len(pool)
@@ -69,8 +89,19 @@ def compute_metrics(
         if per_satellite else 0.0
     )
 
+    responses = compute_emergency_response(
+        events, pool, plan, executed_actions, mission_state.simulated_time
+    )
+    planned_mean, planned_count = _mean_of_known(
+        item.planned_latency_s for item in responses
+    )
+    achieved_mean, achieved_count = _mean_of_known(
+        item.achieved_latency_s for item in responses
+    )
+
     return MetricsResult(
         plan_id=plan.id,
+        requester_service=compute_requester_service(pool, utility_request_ids),
         mission_utility=mission_utility,
         completion_rate=completion_rate,
         violation_count=plan.violation_count,
@@ -85,7 +116,129 @@ def compute_metrics(
         downlink_action_count=sum(1 for action in plan.actions if action.is_downlink),
         downlink_volume_mb=sum(item.downlink_volume_mb for item in per_satellite),
         per_satellite=per_satellite,
+        emergency_response=responses,
+        time_to_first_acquisition_s=planned_mean,
+        achieved_time_to_first_acquisition_s=achieved_mean,
+        emergency_request_count=len(responses),
+        planned_emergency_request_count=planned_count,
+        achieved_emergency_request_count=achieved_count,
     )
+
+
+def compute_requester_service(
+    pool: tuple[ObservationRequest, ...], served_ids: set[str],
+) -> RequesterService:
+    groups: dict[str | None, list[ObservationRequest]] = {None: []}
+    for request in pool:
+        groups.setdefault(request.requester_id, []).append(request)
+    total = sum(request.priority for request in pool if request.id in served_ids)
+
+    def row(identity: str | None) -> RequesterServiceRow:
+        requests = groups[identity]
+        served = [request for request in requests if request.id in served_ids]
+        demand = sum(request.priority for request in requests)
+        utility = sum(request.priority for request in served)
+        return RequesterServiceRow(
+            identity, len(requests), demand, len(served), utility,
+            utility / total if total else None, utility / demand if demand else None,
+        )
+
+    rows = tuple(row(identity) for identity in sorted(key for key in groups if key is not None))
+    utilities = [item.served_utility for item in rows]
+    return RequesterService(
+        requesters=rows, unattributed=row(None), total_served_utility=total,
+        fairness_gap=max(utilities) - min(utilities) if len(rows) >= 2 else None,
+        zero_service_requester_count=sum(value == 0 for value in utilities),
+        no_service=total == 0,
+    )
+
+
+def compute_emergency_response(
+    events: Iterable[MissionEvent],
+    request_pool: Iterable[ObservationRequest],
+    plan: MissionPlan,
+    executed_actions: Iterable[ScheduledAction],
+    measured_at: datetime,
+) -> tuple[EmergencyResponse, ...]:
+    """One row per accepted emergency arrival in the measured plan's pool.
+
+    Planned values come from ``plan``, so a historical plan keeps its own
+    attribution. Achieved values come only from ``executed_actions`` that
+    started at or before ``measured_at``; a proposed start is never proof
+    of execution. Downlinks never count as acquisition.
+    """
+
+    pool_by_id = {request.id: request for request in request_pool}
+    arrivals: dict[str, MissionEvent] = {}
+    for event in events:
+        if event.event_type is not EventType.EMERGENCY_TASK or not isinstance(
+            event.payload, EmergencyRequestPayload
+        ):
+            continue
+        request_id = event.payload.request.id
+        if request_id in pool_by_id and request_id not in arrivals:
+            arrivals[request_id] = event
+
+    planned_by_request = _first_imaging_by_request(plan.actions)
+    achieved_by_request = _first_imaging_by_request(
+        action for action in executed_actions if action.start <= measured_at
+    )
+
+    rows = []
+    for request_id, event in arrivals.items():
+        planned = planned_by_request.get(request_id)
+        achieved = achieved_by_request.get(request_id)
+        rows.append(
+            EmergencyResponse(
+                request_id=request_id,
+                event_id=event.id,
+                arrival_time=event.event_time,
+                request_status=pool_by_id[request_id].status.value,
+                planned_start_time=planned.start if planned else None,
+                planned_latency_s=_latency(event, planned),
+                planned_satellite_id=planned.satellite_id if planned else None,
+                achieved_start_time=achieved.start if achieved else None,
+                achieved_latency_s=_latency(event, achieved),
+                achieved_satellite_id=achieved.satellite_id if achieved else None,
+            )
+        )
+    return tuple(sorted(rows, key=lambda row: (row.arrival_time, row.request_id)))
+
+
+def _first_imaging_by_request(
+    actions: Iterable[ScheduledAction],
+) -> dict[str, ScheduledAction]:
+    first: dict[str, ScheduledAction] = {}
+    for action in sorted(imaging_actions(actions), key=lambda item: (item.start, item.id)):
+        if action.request_id is not None:
+            first.setdefault(action.request_id, action)
+    return first
+
+
+def _latency(event: MissionEvent, action: Optional[ScheduledAction]) -> Optional[float]:
+    if action is None:
+        return None
+    latency = (action.start - event.event_time).total_seconds()
+    if latency < 0:
+        # An action starting before its request arrived is an inconsistent
+        # association; clamping it to zero would read as instant service.
+        raise SimulationStateError(
+            "emergency imaging action starts before its request arrived",
+            details={
+                "request_id": action.request_id,
+                "event_id": event.id,
+                "action_id": action.id,
+                "arrival_time": event.event_time.isoformat(),
+                "action_start": action.start.isoformat(),
+            },
+        )
+    return latency
+
+
+def _mean_of_known(values: Iterable[Optional[float]]) -> tuple[Optional[float], int]:
+    """Mean over the non-null values and its denominator; null when empty."""
+    known = [value for value in values if value is not None]
+    return (sum(known) / len(known) if known else None), len(known)
 
 
 def _satellite_metrics(

@@ -88,6 +88,7 @@ observation_requests = Table(
     Column("target_lat", Float, nullable=False),
     Column("target_lon", Float, nullable=False),
     Column("target_name", String, nullable=True),
+    Column("requester_id", String, nullable=True),
     Column("priority", Integer, nullable=False),
     Column("duration_s", Float, nullable=False),
     Column("deadline", String, nullable=False),
@@ -159,6 +160,8 @@ mission_plans = Table(
     Column("violation_count", Integer, nullable=False),
     Column("planning_time_ms", Float, nullable=False),
     Column("planner_name", String, nullable=True),
+    Column("planning_policy", String, nullable=True),
+    Column("policy_version", String, nullable=True),
     Column("solver_details", JSON, nullable=True),
 )
 

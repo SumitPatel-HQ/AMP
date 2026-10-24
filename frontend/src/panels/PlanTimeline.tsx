@@ -3,6 +3,7 @@ import moment from "moment";
 import { Timeline, type TimelineEventPropertiesResult, type TimelineOptions } from "vis-timeline";
 import type {
   ContactWindowSchema,
+  EmergencyResponseSchema,
   ImpactSchema,
   MissionEventSchema,
   MissionPlanSchema,
@@ -34,6 +35,9 @@ export interface PlanTimelineProps {
   impact: ImpactSchema | null;
   changeByRequestId: Record<string, PlanChangeType>;
   contacts?: ContactWindowSchema[];
+  /** The backend's emergency response rows for this plan. */
+  emergencyResponse?: EmergencyResponseSchema[];
+  responsePlanLabel?: string;
   selectedRequestId: string | null;
   selectedWindowId: string | null;
   selectedEventId: string | null;
@@ -213,6 +217,8 @@ export function PlanTimeline({
   impact,
   changeByRequestId,
   contacts,
+  emergencyResponse,
+  responsePlanLabel,
   selectedRequestId,
   selectedWindowId,
   selectedEventId,
@@ -240,6 +246,8 @@ export function PlanTimeline({
         selectedEventId,
         changeByRequestId,
         contacts,
+        emergencyResponse,
+        responsePlanLabel,
       }),
     [
       scenario,
@@ -253,6 +261,8 @@ export function PlanTimeline({
       selectedEventId,
       changeByRequestId,
       contacts,
+      emergencyResponse,
+      responsePlanLabel,
     ],
   );
   useEffect(() => {
@@ -280,7 +290,8 @@ export function PlanTimeline({
     const selectElement = (element: HTMLElement) => {
       const kind = element.dataset.kind;
       const nextId = element.dataset.selected === "true" ? null : undefined;
-      if (kind === "event") {
+      // A response segment links to the emergency event that introduced it.
+      if (kind === "event" || kind === "response") {
         onSelectEvent(nextId === null ? null : element.dataset.eventId ?? null);
       } else if (kind === "action" || kind === "window") {
         onSelectWindow(nextId === null ? null : element.dataset.windowId ?? null);
@@ -326,7 +337,7 @@ export function PlanTimeline({
         return;
       }
       const item = itemByIdRef.current.get(properties.item);
-      if (item?.kind === "event") {
+      if (item?.kind === "event" || item?.kind === "response") {
         onSelectEvent(item.selected ? null : item.eventId);
       } else if (item?.kind === "action" || item?.kind === "window") {
         onSelectWindow(item.selected ? null : item.windowId);

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Union
 
+from amis.domain.event import CEMS_EVIDENCE_FIELDS
 from amis.diff import compare_plans
 from amis.dynamics.recharge import recharge_model
 from amis.domain import (
@@ -26,6 +27,7 @@ from amis.domain import (
     GroundStation,
     EmergencyRequestPayload,
     EventPayload,
+    FeasibilityResult,
     EventType,
     Impact,
     MetricsResult,
@@ -42,9 +44,11 @@ from amis.domain import (
     SatelliteState,
     Scenario,
     ScheduledAction,
+    emergency_evidence_error,
 )
 from amis.errors import (
     InvalidEventError,
+    InvalidScenarioError,
     PlanVersionConflictError,
     SimulationStateError,
 )
@@ -57,11 +61,21 @@ from amis.ids import (
     next_id,
     next_number,
 )
+from amis.feasibility import assess_feasibility
 from amis.impact import analyze_impact
 from amis.metrics import compute_metrics
 from amis.planning import GreedyPlanner, Planner
 from amis.trace import build_traces
 from amis.windows import SyntheticWindowProvider, WindowProvider
+
+
+# The hypothetical candidate a feasibility query asks about. It never enters
+# the RequestPool or any record, so it consumes no session identifier.
+FEASIBILITY_REQUEST_ID = "FEASIBILITY-CANDIDATE"
+
+_EMERGENCY_PAYLOAD_FIELDS = frozenset(
+    {"request", "windows", "source", "source_event_id", "alert_level", "mag", "sig", *CEMS_EVIDENCE_FIELDS}
+)
 
 
 class MissionSession:
@@ -83,6 +97,8 @@ class MissionSession:
         self._base_contacts: list[ContactWindow] | None = None
         self._window_provider = window_provider or SyntheticWindowProvider()
         self._planner = planner or GreedyPlanner()
+        self._planner_name = "cp_sat" if getattr(self._planner, "name", None) == "cp_sat" or type(self._planner).__name__ == "CpSatPlanner" else "greedy"
+        self._planning_policy = "utility"
         self._plan_id_prefix = plan_id_prefix
 
     def load_scenario(self, source: Union[Scenario, dict[str, Any], str, Path]) -> Scenario:
@@ -115,10 +131,15 @@ class MissionSession:
         self._require_scenario()
         return tuple(self._windows)
 
-    def select_planner(self, name: str) -> None:
+    def select_planner(self, name: str, *, policy: str = "utility") -> None:
         from amis.planning.selection import make_planner
 
-        self._planner = make_planner(name)
+        self._planner = make_planner(name, policy=policy)
+        self._planner_name = name
+        self._planning_policy = policy
+
+    def get_selected_policy(self) -> str:
+        return self._planning_policy
 
     def plan(self) -> MissionPlan:
         scenario = self._require_scenario()
@@ -152,7 +173,7 @@ class MissionSession:
         self._record_request_pool_for(plan)
         return plan
 
-    def replan(self, expected_parent_plan_id: str | None = None) -> MissionPlan:
+    def replan(self, expected_parent_plan_id: str | None = None, *, policy: str | None = None) -> MissionPlan:
         """Freeze what started, rebuild the rest, write the next version.
 
         The caller names the plan version it believes is current. A
@@ -160,6 +181,8 @@ class MissionSession:
         rebuilt per request and two concurrent replans would otherwise
         both read the same parent and both write the next version.
         """
+        if policy is not None:
+            self.select_planner(self._planner_name, policy=policy)
 
         scenario = self._require_scenario()
         previous_plan = self.get_plan()
@@ -288,6 +311,123 @@ class MissionSession:
             previous_plan=parent_plan,
             diff=self._compare(parent_plan, plan) if parent_plan else None,
             traces=self.get_traces(plan.id),
+            events=self._events,
+            executed_actions=self._executed_actions(),
+        )
+
+    def _executed_actions(self) -> tuple[ScheduledAction, ...]:
+        """Every action that has actually started, whichever plan measured.
+
+        The current plan's frozen actions are the authoritative record:
+        replanning carries them forward unchanged (ADR-0003), so an
+        acquisition that began keeps its start and satellite across later
+        plans and reconstruction. Recorded plans add any action the clock
+        marked started. A historical plan's proposed start alone is never
+        treated as execution.
+        """
+
+        if not self._plans:
+            return ()
+        clock = self.get_state().simulated_time
+        executed = {
+            action.id: action
+            for action in self._plans[-1].actions
+            if action.start <= clock
+        }
+        for plan in self._plans:
+            for action in plan.actions:
+                if action.status is not ActionStatus.PLANNED:
+                    executed.setdefault(action.id, action)
+        return tuple(executed.values())
+
+    def request_windows(self, request: ObservationRequest) -> tuple[ObservationWindow, ...]:
+        """The provider's windows for one request, without recording them.
+
+        Read-only: the request does not enter the RequestPool and the
+        session's windows, events, and identifiers are untouched. Emergency
+        injection and window-only feasibility share this provider call.
+        """
+        return tuple(self._window_provider.generate(self._require_scenario(), (request,)))
+
+    def get_feasibility(
+        self,
+        target_lat: float,
+        target_lon: float,
+        duration_s: float,
+        deadline: datetime,
+        satellite_id: str | None = None,
+    ) -> FeasibilityResult:
+        """Each satellite's earliest suitable window for a hypothetical candidate.
+
+        Window-only (ADR-0015): the search starts at the Scenario start, not
+        the current clock, and ignores the current plan, resources, pairwise
+        slew, active outages, and reservations. Nothing is submitted,
+        reserved, or recorded.
+        """
+        scenario = self._require_scenario()
+        for name, value in (("lat", target_lat), ("lon", target_lon), ("duration", duration_s)):
+            if not math.isfinite(value):
+                raise InvalidScenarioError(f"feasibility {name} must be finite", details={name: value})
+        if not -90 <= target_lat <= 90 or not -180 <= target_lon <= 180:
+            raise InvalidScenarioError(
+                "feasibility coordinates are outside geographic bounds",
+                details={"lat": target_lat, "lon": target_lon},
+            )
+        if duration_s <= 0:
+            raise InvalidScenarioError(
+                "feasibility duration must be positive seconds",
+                details={"duration": duration_s},
+            )
+        if deadline.tzinfo is None:
+            raise InvalidScenarioError("feasibility deadline must include a timezone")
+        if deadline <= scenario.start_time:
+            raise InvalidScenarioError(
+                "feasibility deadline must be after the scenario start",
+                details={
+                    "deadline": deadline.isoformat(),
+                    "scenario_start": scenario.start_time.isoformat(),
+                },
+            )
+        if satellite_id is not None and satellite_id not in {item.id for item in scenario.satellites}:
+            raise InvalidScenarioError(
+                "scenario has no satellite with that id",
+                details={"satellite_id": satellite_id},
+            )
+        policy = scenario.window_policy
+        if policy is None or policy.provider != "orbital":
+            raise InvalidScenarioError(
+                "window-only feasibility supports orbital window policies only",
+                details={"provider": policy.provider if policy is not None else "legacy"},
+            )
+
+        windows: tuple[ObservationWindow, ...] = ()
+        if satellite_id is None or scenario.satellite_by_id(satellite_id).available:
+            candidate = ObservationRequest(
+                id=FEASIBILITY_REQUEST_ID,
+                target_lat=target_lat,
+                target_lon=target_lon,
+                priority=1,
+                duration_s=duration_s,
+                deadline=deadline,
+                energy_cost_wh=0.0,
+                storage_cost_mb=0.0,
+                satellite_id=satellite_id,
+            )
+            try:
+                windows = self.request_windows(candidate)
+            except ValueError as error:
+                raise InvalidScenarioError(
+                    "could not generate feasibility observation windows",
+                    details={"reason": str(error)},
+                ) from error
+        return assess_feasibility(
+            scenario,
+            windows,
+            target_lat=target_lat,
+            target_lon=target_lon,
+            duration_s=duration_s,
+            deadline=deadline,
+            satellite_id=satellite_id,
         )
 
     def inject_event(
@@ -320,10 +460,17 @@ class MissionSession:
             event_payload = self._parse_battery_drop_payload(payload)
             self._validate_battery_drop(event_payload)
         elif parsed_event_type is EventType.EMERGENCY_TASK:
+            if isinstance(payload, dict):
+                # Refuse stray keys and inconsistent evidence before the
+                # provider runs, so a rejected cue has no observable effect.
+                self._reject_unknown_emergency_fields(payload)
+                self._reject_invalid_emergency_evidence(payload)
             if isinstance(payload, dict) and payload.get("windows") is None and scenario.window_policy is not None and scenario.window_policy.provider == "orbital":
+                # Validate the whole arrival before the provider can observe it.
+                candidate = self._parse_emergency_request_payload({**payload, "windows": []})
+                self._validate_emergency_request(candidate)
                 try:
-                    request = ObservationRequest.from_dict(payload["request"])
-                    payload = {**payload, "windows": [window.to_dict() for window in self._window_provider.generate(scenario, (request,))]}
+                    payload = {**payload, "windows": [window.to_dict() for window in self.request_windows(candidate.request)]}
                 except (KeyError, TypeError, ValueError) as error:
                     raise InvalidEventError("could not generate emergency observation windows") from error
             event_payload = self._parse_emergency_request_payload(payload)
@@ -565,32 +712,15 @@ class MissionSession:
         }
         introduced_requests = tuple(introduced_by_event_id.values())
         self._request_pool = scenario.requests + introduced_requests
-
-        base_request_ids = {request.id for request in scenario.requests}
-        plan_by_id = {plan.id: plan for plan in plans}
-        introduced_at_version = [
-            (evaluated_plan.version, introduced_request.id)
-            for impact in impacts
-            if (evaluated_plan := plan_by_id.get(impact.evaluated_plan_id))
-            is not None
-            and (
-                introduced_request := introduced_by_event_id.get(impact.event_id)
-            )
-            is not None
-        ]
         self._request_pool_ids_by_plan_id = {
-            plan.id: frozenset(
-                base_request_ids
-                | {
-                    request_id
-                    for version, request_id in introduced_at_version
-                    if version < plan.version
-                }
-            )
-            for plan in plans
+            plan.id: self._request_pool_ids_from_log(plan) for plan in plans
         }
 
         if self._plans:
+            latest_plan = self._plans[-1]
+            planner_name = latest_plan.planner_name or "greedy"
+            planning_policy = getattr(latest_plan, "planning_policy", None) or getattr(latest_plan, "policy", None) or "utility"
+            self.select_planner(planner_name, policy=planning_policy)
             self._update_request_statuses_from_plan()
             self._update_request_statuses_after_step()
 
@@ -776,10 +906,35 @@ class MissionSession:
     ) -> tuple[ObservationRequest, ...]:
         request_ids = self._request_pool_ids_by_plan_id.get(plan.id)
         if request_ids is None:
-            return self._request_pool
+            # Fail closed: never the live pool, which would leak arrivals
+            # introduced after this plan into its metrics.
+            request_ids = self._request_pool_ids_from_log(plan)
         return tuple(
             request for request in self._request_pool if request.id in request_ids
         )
+
+    def _request_pool_ids_from_log(self, plan: MissionPlan) -> frozenset[str]:
+        """The plan's RequestPool membership rebuilt from the event log.
+
+        A request an event introduced belongs to a plan only when that
+        event's impact was evaluated against an earlier plan version.
+        """
+
+        scenario = self._require_scenario()
+        introduced_by_event_id = {
+            event.id: request
+            for event in self._events
+            if isinstance(request := getattr(event.payload, "request", None), ObservationRequest)
+        }
+        version_by_plan_id = {item.id: item.version for item in self._plans}
+        introduced = {
+            request.id
+            for impact in self._impacts
+            if (version := version_by_plan_id.get(impact.evaluated_plan_id)) is not None
+            and version < plan.version
+            and (request := introduced_by_event_id.get(impact.event_id)) is not None
+        }
+        return frozenset({request.id for request in scenario.requests} | introduced)
 
     def _next_plan_id(self) -> str:
         return next_id(self._plan_id_prefix, [plan.id for plan in self._plans])
@@ -1051,10 +1206,71 @@ class MissionSession:
                 "emergency request payload requires a request and explicit windows"
             ) from error
 
+    @staticmethod
+    def _reject_unknown_emergency_fields(payload: dict[str, Any]) -> None:
+        # The accepted event takes the current simulated clock, so a
+        # generated developer input's intended time (or any other stray
+        # key) is refused rather than silently ignored.
+        unknown = sorted(set(payload) - _EMERGENCY_PAYLOAD_FIELDS)
+        if unknown:
+            raise InvalidEventError(
+                "emergency request payload has unsupported fields; "
+                "the event time is the session's simulated clock",
+                details={"fields": unknown},
+            )
+
+    @staticmethod
+    def _reject_invalid_emergency_evidence(payload: dict[str, Any]) -> None:
+        error = emergency_evidence_error(
+            payload.get("source"),
+            payload.get("source_event_id"),
+            payload.get("alert_level"),
+            payload.get("mag"),
+            payload.get("sig"),
+            **{field: payload.get(field) for field in CEMS_EVIDENCE_FIELDS},
+        )
+        if error is not None:
+            request = payload.get("request")
+            request_id = request.get("id") if isinstance(request, dict) else None
+            raise InvalidEventError(error, details={"request_id": request_id})
+
     def _validate_emergency_request(self, payload: EmergencyRequestPayload) -> None:
         scenario = self._require_scenario()
         request = payload.request
         windows = payload.windows
+
+        evidence_error = payload.evidence_error()
+        if evidence_error is not None:
+            raise InvalidEventError(
+                evidence_error,
+                details={"request_id": request.id},
+            )
+
+        if payload.source == "cems":
+            request_error = request.validation_error()
+            if request_error is not None:
+                raise InvalidEventError(f"invalid CEMS request: {request_error}")
+            assert payload.activation_time is not None  # Guaranteed by evidence validation.
+            activation = datetime.fromisoformat(payload.activation_time)
+            if activation != self.get_state().simulated_time:
+                raise InvalidEventError("CEMS activation time must equal the simulated injection time")
+            if not scenario.start_time <= activation < scenario.end_time:
+                raise InvalidEventError("CEMS activation must be inside the Scenario interval")
+            if request.deadline.utcoffset() != timedelta(0):
+                raise InvalidEventError("CEMS deadline must be UTC")
+            try:
+                policy_deadline = activation + timedelta(hours=24)
+            except OverflowError as error:
+                raise InvalidEventError("CEMS policy deadline is outside the supported datetime range") from error
+            if request.priority != 5 or request.deadline != policy_deadline:
+                raise InvalidEventError("CEMS request must follow cems-centroid-v1 priority/deadline policy")
+            if request.satellite_id is not None and request.satellite_id not in {sat.id for sat in scenario.satellites}:
+                raise InvalidEventError("CEMS imaging profile names an unknown satellite")
+            if any(isinstance(event.payload, EmergencyRequestPayload)
+                   and event.payload.source == "cems"
+                   and event.payload.source_event_id == payload.source_event_id
+                   for event in self._events):
+                raise InvalidEventError("CEMS activation already exists")
 
         if request.id in {item.id for item in self._request_pool}:
             raise InvalidEventError(

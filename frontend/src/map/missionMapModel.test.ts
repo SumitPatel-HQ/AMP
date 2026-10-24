@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { missionState, plan, scenario } from "../test/mapFixtures";
-import { buildMissionMapModel, satellitePlacement } from "./missionMapModel";
+import { cueEvent, missionState, plan, scenario } from "../test/mapFixtures";
+import { buildMissionMapModel, cueMarkers, satellitePlacement } from "./missionMapModel";
 
 describe("mission map model", () => {
   it("places the satellite over the target it is observing", () => {
@@ -115,5 +115,27 @@ describe("mission map model", () => {
       [151.21, -33.87],
     ]);
     expect(model.bounds).toEqual([77.59, -33.87, 151.21, 12.97]);
+  });
+});
+
+describe("cue markers", () => {
+  it("places one marker per accepted cue event at its longitude/latitude request point", () => {
+    const model = buildMissionMapModel(scenario, plan, missionState, [cueEvent]);
+
+    expect(model.cues).toHaveLength(1);
+    expect(model.cues?.[0].coordinate).toEqual([142.4, 38.3]);
+    expect(model.cues?.[0].evidence.eventId).toBe("EVT-004");
+    expect(model.cues?.[0].evidence.requestId).toBe("CUE-1");
+    expect(model.targets.find((target) => target.requestId === "CUE-1")?.eventIds).toEqual(["EVT-004"]);
+  });
+
+  it("keys markers by event identity so a repeated read never duplicates one", () => {
+    expect(cueMarkers([cueEvent, { ...cueEvent }])).toHaveLength(1);
+  });
+
+  it("draws no marker for manual arrivals or an empty event log", () => {
+    const { source: _s, source_event_id: _id, alert_level: _a, mag: _m, sig: _g, ...manual } = cueEvent.payload;
+    expect(cueMarkers([{ ...cueEvent, payload: manual }])).toEqual([]);
+    expect(buildMissionMapModel(scenario, plan, missionState, []).cues).toEqual([]);
   });
 });

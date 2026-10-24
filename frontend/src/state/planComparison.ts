@@ -23,6 +23,7 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
   NO_OBSERVATION_WINDOW: "No observation window",
   REQUEST_UNCHANGED: "Unaffected by the event",
   HIGHER_PRIORITY_TASK_INSERTED: "Entered the pool and was scheduled",
+  REBALANCED_FOR_REQUESTER_SHARE: "Rebalanced for requester share",
 };
 
 /** Changed decisions first, clock outcomes and non-changes last and quiet. */

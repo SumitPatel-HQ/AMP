@@ -1,0 +1,7 @@
+{
+  "source": "usgs",
+  "source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson",
+  "retrieved_at": "2026-10-09T05:34:15.940850+00:00",
+  "file": "response.geojson",
+  "sha256": "821e1300d7889a01677df730d14f72dc7c0e343960c67cce30c18f29bc25f4bc"
+}
