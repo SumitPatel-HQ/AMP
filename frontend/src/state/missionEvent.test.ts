@@ -77,6 +77,8 @@ function plan(id: string, unscheduled: MissionPlanSchema["unscheduled"]): Missio
     violation_count: 0,
     planning_time_ms: 0,
     planner_name: "greedy",
+    planning_policy: "utility",
+    policy_version: "requester-utility-v1",
   };
 }
 
@@ -274,6 +276,13 @@ describe("cue evidence guard", () => {
 describe("emergency form evidence", () => {
   const base = emergencyRequestDefaults("2026-09-21T10:05:00Z", []);
   const filled = { ...base, targetLat: "38.3", targetLon: "142.4" };
+
+  it("preserves explicit requester attribution and rejects surrounding whitespace", () => {
+    const body = buildEmergencyRequestEvent({ ...filled, requesterId: "Agency" }, "SAT-001");
+    expect(body?.payload).toMatchObject({ request: { requester_id: "Agency" } });
+    expect(buildEmergencyRequestEvent({ ...filled, requesterId: " Agency" }, "SAT-001")).toBeNull();
+    expect(buildEmergencyRequestEvent(filled, "SAT-001")?.payload).not.toHaveProperty("request.requester_id");
+  });
 
   it("keeps a manual arrival's payload free of evidence keys", () => {
     const body = buildEmergencyRequestEvent(filled, "SAT-001");

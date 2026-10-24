@@ -200,7 +200,7 @@ export function MissionBuilder({ onClose, onCreate }: {
           </div>
           <div className="space-y-3">{draft.requests.map((request, index) => <div key={index} className="rounded border border-neutral-800 p-2">
             <div className="grid grid-cols-2 gap-2">
-              {(["id", "target_name"] as const).map((key) => <label key={key}>{key.replace("_", " ")}<input className={input} value={request[key] ?? ""} onChange={(event) => updateRequest(index, { [key]: event.target.value })} /></label>)}
+              {(["id", "target_name", "requester_id"] as const).map((key) => <label key={key}>{key.replace("_", " ")}<input className={input} value={request[key] ?? ""} onChange={(event) => updateRequest(index, { [key]: key === "requester_id" && event.target.value === "" ? undefined : event.target.value })} /></label>)}
               {(["target_lat", "target_lon", "priority", "duration_s", "energy_cost_wh", "storage_cost_mb"] as const).map((key) => <label key={key}>{key.replaceAll("_", " ")}<input className={input} type="number" step="any" value={request[key]} onChange={(event) => updateRequest(index, { [key]: Number(event.target.value) })} /></label>)}
               <label className="col-span-2">Deadline UTC<input className={input} type="datetime-local" value={utcInput(request.deadline)} onChange={(event) => updateRequest(index, { deadline: fromUtcInput(event.target.value) })} /></label>
             </div><div className="mt-2 flex justify-between"><span>{preview?.window_counts[request.id] ?? "–"} windows</span><button className={button} onClick={() => setDraft((current) => ({ ...current, requests: current.requests.filter((_, at) => at !== index) }))}>Remove</button></div>

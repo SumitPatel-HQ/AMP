@@ -124,6 +124,10 @@ export function MissionBar({
   onStep,
   onInjectEvent,
   onReplan,
+  planner,
+  policy,
+  onPlannerChange,
+  onPolicyChange,
 }: {
   scenario: ScenarioSchema | null;
   plan: MissionPlanSchema | null;
@@ -149,6 +153,10 @@ export function MissionBar({
   onResetMission: () => void;
   onStep: (seconds: number) => void;
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
+  planner?: "greedy" | "cp_sat";
+  policy?: "utility" | "utility_then_fairness";
+  onPlannerChange?: (planner: "greedy" | "cp_sat") => void;
+  onPolicyChange?: (policy: "utility" | "utility_then_fairness") => void;
   onReplan: () => void;
 }) {
   const [seconds, setSeconds] = useState(300);
@@ -211,6 +219,41 @@ export function MissionBar({
         >
           Load demo scenario
         </button>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="planner-select" className="text-[10px] uppercase text-neutral-500">
+            Planner
+          </label>
+          <select
+            id="planner-select"
+            aria-label="Planner selection"
+            value={planner ?? "greedy"}
+            onChange={(e) => onPlannerChange?.(e.target.value as "greedy" | "cp_sat")}
+            disabled={loading}
+            className={`${CONTROL_INPUT} text-xs py-0.5`}
+          >
+            <option value="greedy">Greedy</option>
+            <option value="cp_sat">CP-SAT</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="policy-select" className="text-[10px] uppercase text-neutral-500">
+            Policy
+          </label>
+          <select
+            id="policy-select"
+            aria-label="Planning policy"
+            value={policy ?? "utility"}
+            onChange={(e) => onPolicyChange?.(e.target.value as "utility" | "utility_then_fairness")}
+            disabled={loading}
+            title={planner === "greedy" ? "Fairness policy requires CP-SAT planner" : undefined}
+            className={`${CONTROL_INPUT} text-xs py-0.5`}
+          >
+            <option value="utility">Pure Utility</option>
+            <option value="utility_then_fairness" disabled={planner === "greedy"}>
+              Utility-then-Fairness
+            </option>
+          </select>
+        </div>
         <button
           type="button"
           onClick={() => {

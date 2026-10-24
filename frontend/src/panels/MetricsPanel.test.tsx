@@ -1,5 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
 import { MetricsPanel } from "./MetricsPanel";
 
@@ -65,6 +65,8 @@ function plan(id: string, version: number): MissionPlanSchema {
     violation_count: 0,
     planning_time_ms: 0,
     planner_name: "greedy",
+    planning_policy: "utility",
+    policy_version: "requester-utility-v1",
   };
 }
 
@@ -246,4 +248,95 @@ describe("metrics panel", () => {
     expect(screen.queryByRole("region", { name: "Emergency response" })).toBeNull();
     expect(metricRow("Planned response").textContent).toContain("N/A · 0 of 0 planned");
   });
+});
+
+
+const requesterMetrics: MetricsSchema = {
+  ...metricsBefore,
+  requester_service: {
+    requesters: [{ requester_id: "Agency", request_count: 2, demand_utility: 8,
+      served_request_count: 1, served_utility: 5, service_share: 0.5, fulfillment_ratio: 0.625 }],
+    unattributed: { requester_id: null, request_count: 1, demand_utility: 5,
+      served_request_count: 1, served_utility: 5, service_share: 0.5, fulfillment_ratio: 1 },
+    total_served_utility: 10, fairness_gap: null, no_service: false,
+    zero_service_requester_count: 0, metric_version: "requester-utility-v1",
+    scope: "Unattributed service is excluded from gap.",
+    limitations: "Absolute utility is not normalized by demand, capability, or entitlement.",
+    measured_at_convention: "Selected-plan membership with current completed work.",
+  },
+};
+
+it("shows requester demand, shares, fulfillment, unattributed totals and scope together", () => {
+  render(<MetricsPanel currentPlanId="PLAN-1" metrics={requesterMetrics} diff={null} />);
+  const region = screen.getByRole("region", { name: "Requester service" });
+  expect(region.textContent).toContain("10 total served priority units, including unattributed service");
+  const row = within(region).getByRole("rowheader", { name: "Agency" }).closest("tr")!;
+  expect(row.textContent).toContain("50%");
+  expect(row.textContent).toContain("63%");
+  expect(region.textContent).toContain("Unattributed (no requester id)");
+  expect(region.textContent).toContain("fewer than two requesters");
+  expect(region.textContent).toContain("not normalized by demand");
+  expect(region.textContent).toContain(requesterMetrics.measured_at);
+});
+
+it("shows zero service and null shares without implying equitable service", () => {
+  const metrics: MetricsSchema = { ...requesterMetrics, requester_service: {
+    ...requesterMetrics.requester_service!, total_served_utility: 0, fairness_gap: 0,
+    no_service: true, zero_service_requester_count: 2,
+    requesters: ["A", "B"].map(requester_id => ({ requester_id, request_count: 1,
+      demand_utility: 5, served_request_count: 0, served_utility: 0, service_share: null, fulfillment_ratio: 0 })),
+    unattributed: { requester_id: null, request_count: 0, demand_utility: 0,
+      served_request_count: 0, served_utility: 0, service_share: null, fulfillment_ratio: null },
+  }};
+  render(<MetricsPanel currentPlanId="PLAN-1" metrics={metrics} diff={null} />);
+  const region = screen.getByRole("region", { name: "Requester service" });
+  expect(region.textContent).toContain("zero gap does not demonstrate equitable service");
+  expect(region.textContent).toContain("2 identified requesters with zero service");
+  expect(within(region).getAllByText("N/A").length).toBe(4);
+});
+
+it("loads selected historical requester metrics and refreshes when live metrics change", async () => {
+  const loadPlanMetrics = vi.fn().mockResolvedValue(requesterMetrics);
+  const props = { currentPlanId: "PLAN-2", metrics: metricsAfter, diff, plans, selectedPlanId: "PLAN-1", loadPlanMetrics };
+  const view = render(<MetricsPanel {...props} />);
+  expect(await screen.findByRole("region", { name: "Requester service" })).toBeTruthy();
+  expect(loadPlanMetrics).toHaveBeenCalledWith("PLAN-1");
+  loadPlanMetrics.mockResolvedValue({ ...requesterMetrics, measured_at: "2026-09-21T11:10:00Z" });
+  view.rerender(<MetricsPanel {...props} metrics={{ ...metricsAfter, measured_at: "2026-09-21T11:10:00Z" }} />);
+  expect(await screen.findByText(/Measured at: 2026-09-21T11:10:00Z/)).toBeTruthy();
+  view.rerender(<MetricsPanel {...props} selectedPlanId={null} />);
+  expect(screen.queryByRole("region", { name: "Requester service" })).toBeNull();
+});
+
+it("surfaces active policy, solver status, achieved gap, and rebalancing details in RequesterService", () => {
+  const fairPlan: MissionPlanSchema = {
+    ...plan("PLAN-1", 1),
+    planner_name: "cp_sat",
+    planning_policy: "utility_then_fairness",
+    policy_version: "requester-utility-v1",
+    solver_details: {
+      status: "OPTIMAL",
+      achieved_gap: 0,
+      achieved_gap_unit: "priority_utility",
+      skip_reason: null,
+      fallback_reason: null,
+      fairness_rebalanced_request_ids: ["OBS-B1", "OBS-A2"],
+    },
+  };
+
+  render(
+    <MetricsPanel
+      currentPlanId="PLAN-1"
+      metrics={requesterMetrics}
+      diff={null}
+      plans={[fairPlan]}
+    />,
+  );
+
+  const region = screen.getByRole("region", { name: "Requester service" });
+  expect(region.textContent).toContain("Policy: Utility-then-Fairness");
+  expect(region.textContent).toContain("CP-SAT");
+  expect(region.textContent).toContain("Solver status: OPTIMAL");
+  expect(region.textContent).toContain("Achieved gap: 0 priority units");
+  expect(region.textContent).toContain("Fairness rebalanced requests (2): OBS-B1, OBS-A2");
 });

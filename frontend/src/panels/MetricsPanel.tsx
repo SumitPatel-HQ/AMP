@@ -1,3 +1,5 @@
+import { usePlanMetrics } from "../state/usePlanMetrics";
+import { fetchMetrics } from "../api/amis";
 import type { EmergencyResponseSchema, MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
 import {
   ACQUISITION_MEANING,
@@ -18,6 +20,7 @@ import {
 import { planLabel } from "../state/planContext";
 import { clockTime, fullTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
+import { RequesterService } from "./RequesterService";
 
 const TREND_STYLE: Record<MetricTrend, string> = {
   better: "text-emerald-400",
@@ -143,6 +146,7 @@ export function MetricsPanel({
   diff,
   plans = [],
   selectedPlanId = null,
+  loadPlanMetrics = fetchMetrics,
 }: {
   currentPlanId: string | null;
   /** The current plan's own metrics. */
@@ -152,9 +156,12 @@ export function MetricsPanel({
   /** The plan versions the session holds, so columns name them as V1, V2. */
   plans?: readonly MissionPlanSchema[];
   selectedPlanId?: string | null;
+  loadPlanMetrics?: (planId: string) => Promise<MetricsSchema>;
 }) {
   const label = (planId: string) => planLabel(planId, plans);
-  const subject = metricsSubject(currentPlanId, metrics, diff);
+  const selectedMetrics = usePlanMetrics(currentPlanId, metrics, selectedPlanId, loadPlanMetrics);
+  const historical = selectedPlanId !== null && selectedPlanId !== currentPlanId;
+  const subject = metricsSubject(historical ? selectedPlanId : currentPlanId, selectedMetrics, historical ? null : diff);
   if (subject === null) {
     return (
       <PanelFrame title="Mission evaluation">
@@ -229,6 +236,7 @@ export function MetricsPanel({
           : `Request pool: ${view.pool.before} → ${view.pool.after} requests`}
       </p>
       <EmergencyResponseList metrics={subject.after} planLabel={label(view.afterPlanId)} />
+      <RequesterService metrics={subject.after} plan={plans?.find((p) => p.id === view.afterPlanId) ?? null} />
     </PanelFrame>
   );
 }

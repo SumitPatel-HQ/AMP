@@ -47,6 +47,8 @@ def examples() -> dict[str, Scenario]:
         result["usgs-vanuatu-2026-10-08"] = usgs_vanuatu_example()
     except ModuleNotFoundError:
         pass
+    result["fairness-balance"] = fairness_balance_example()
+    result["fairness-strict-utility"] = fairness_strict_utility_example()
     result["cems-crete-2026-10-04"] = cems_crete_example()
     return result
 
@@ -60,10 +62,28 @@ def example_briefings() -> dict[str, str]:
     Cached because every ``/examples`` list request would otherwise reread
     the same static file.
     """
-    return {
+    briefings = {
         "usgs-vanuatu-2026-10-08": (_CUE_EXAMPLE_DIR / "briefing.md").read_text(encoding="utf-8"),
         "cems-crete-2026-10-04": (_CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "briefing.md").read_text(encoding="utf-8"),
     }
+    briefings["fairness-balance"] = (
+        "# Requester Fairness Balance Comparison\n\n"
+        "This scenario demonstrates a multi-requester bottleneck where multiple distinct maximum-utility plans exist.\n\n"
+        "## Expected Behavior\n\n"
+        "- Under **Pure Utility (`utility`)**, the solver maximizes mission utility (6 priority units) by selecting OBS-3 and OBS-1, both from ORG-A, leaving ORG-B unserved with a fairness gap of 6.\n"
+        "- Under **Utility-Then-Fairness (`utility_then_fairness`)**, the solver proves optimal total utility (6 priority units) in Stage 1, holds it fixed, and in Stage 2 minimizes the requester utility gap down to 0 by scheduling OBS-1 (ORG-A) and OBS-2 (ORG-B) without any loss of primary utility.\n"
+        "- OBS-2 replaces OBS-3 with reason code `REBALANCED_FOR_REQUESTER_SHARE`.\n"
+    )
+    briefings["fairness-strict-utility"] = (
+        "# Utility-Fixed Fairness Comparison\n\n"
+        "This scenario demonstrates that primary mission utility is strictly held fixed before balancing requester utility.\n\n"
+        "## Expected Behavior\n\n"
+        "- Two high/medium-priority requests from ORG-A (OBS-A2 with priority 5, OBS-A1 with priority 3) compete against a lower-priority request from ORG-B (OBS-B1 with priority 2) in a 2-slot window.\n"
+        "- Under **Pure Utility (`utility`)**, the solver schedules OBS-A2 and OBS-A1 for maximum total utility 8 (all ORG-A, fairness gap 8).\n"
+        "- Under **Utility-Then-Fairness (`utility_then_fairness`)**, Stage 1 proves maximum utility is 8. Serving OBS-B1 would reduce total utility to 7 (OBS-A2 + OBS-B1) or 5. Because Stage 2 strictly constrains primary utility to the Stage 1 optimum (8), no rebalancing occurs.\n"
+        "- The schedule preserves total utility 8 and the solver details report achieved gap 8 with zero rebalanced requests.\n"
+    )
+    return briefings
 
 
 def cems_crete_example() -> Scenario:
@@ -135,4 +155,79 @@ def usgs_vanuatu_example() -> Scenario:
         # so this real geometry has a daylight window before the cue's
         # policy deadline.
         window_policy=WindowPolicy("orbital", 60, 10),
+    )
+
+
+def fairness_balance_example() -> Scenario:
+    """A scenario with multiple equal-utility plans exhibiting different requester shares.
+
+    Demonstrates how ``utility_then_fairness`` reduces the requester fairness gap from 6
+    to 0 without any sacrifice of total primary mission utility (holding fixed at 6).
+    """
+    satellite = Satellite("SAT-001", 1000.0, 1000.0, 4000.0, 0.0)
+    start = datetime(2026, 10, 20, 0, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(seconds=100)
+    requests = (
+        ObservationRequest(
+            id="OBS-1", target_lat=0.0, target_lon=0.0, priority=3, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-A",
+            target_name="Alpha Priority Area 1",
+        ),
+        ObservationRequest(
+            id="OBS-2", target_lat=0.0, target_lon=0.0, priority=3, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-B",
+            target_name="Bravo Priority Area 1",
+        ),
+        ObservationRequest(
+            id="OBS-3", target_lat=0.0, target_lon=0.0, priority=3, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-A",
+            target_name="Alpha Priority Area 2",
+        ),
+    )
+    return Scenario(
+        id="SCN-EX-FAIRNESS-BALANCE",
+        name="Requester fairness balance comparison",
+        start_time=start,
+        end_time=end,
+        satellite=satellite,
+        requests=requests,
+        window_policy=WindowPolicy("synthetic"),
+    )
+
+
+def fairness_strict_utility_example() -> Scenario:
+    """A scenario where fairness cannot be improved because utility is held fixed.
+
+    Demonstrates that ``utility_then_fairness`` strictly holds proven primary utility
+    (8 priority units: OBS-A2 + OBS-A1) fixed, refusing to balance requester service
+    with OBS-B1 because doing so would reduce primary mission utility to 7.
+    """
+    satellite = Satellite("SAT-001", 1000.0, 1000.0, 4000.0, 0.0)
+    start = datetime(2026, 10, 20, 0, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(seconds=100)
+    requests = (
+        ObservationRequest(
+            id="OBS-A1", target_lat=0.0, target_lon=0.0, priority=3, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-A",
+            target_name="Alpha Medium-Priority Zone",
+        ),
+        ObservationRequest(
+            id="OBS-A2", target_lat=0.0, target_lon=0.0, priority=5, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-A",
+            target_name="Alpha High-Priority Zone",
+        ),
+        ObservationRequest(
+            id="OBS-B1", target_lat=0.0, target_lon=0.0, priority=2, duration_s=40.0,
+            deadline=end, energy_cost_wh=10.0, storage_cost_mb=10.0, requester_id="ORG-B",
+            target_name="Bravo Low-Priority Zone",
+        ),
+    )
+    return Scenario(
+        id="SCN-EX-FAIRNESS-STRICT-UTILITY",
+        name="Utility-fixed fairness comparison",
+        start_time=start,
+        end_time=end,
+        satellite=satellite,
+        requests=requests,
+        window_policy=WindowPolicy("synthetic"),
     )

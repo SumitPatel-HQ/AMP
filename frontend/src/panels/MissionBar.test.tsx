@@ -45,6 +45,8 @@ const basePlan: MissionPlanSchema = {
   actions: [],
   unscheduled: [],
   planner_name: "greedy",
+  planning_policy: "utility",
+  policy_version: "requester-utility-v1",
   mission_utility: 0,
   violation_count: 0,
   planning_time_ms: 0,
@@ -245,5 +247,92 @@ describe("MissionBar reset button", () => {
 
     const button = screen.getByRole("button", { name: "Reset mission" }) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
+  });
+});
+
+
+describe("MissionBar planner and policy controls", () => {
+  it("renders planner and policy selects with correct options", () => {
+    render(
+      <MissionBar
+        scenario={baseScenario}
+        plan={null}
+        previousVersion={null}
+        awaitingReplan={false}
+        missionState={baseMissionState}
+        windows={[]}
+        events={[]}
+        loading={false}
+        replanning={false}
+        planner="greedy"
+        policy="utility"
+        onPlannerChange={vi.fn()}
+        onPolicyChange={vi.fn()}
+        onLoadDemo={vi.fn()}
+        onNewMission={vi.fn()}
+        onLoadMission={vi.fn()}
+        onExamples={vi.fn()}
+        onFeasibility={vi.fn()}
+        onGeneratePlan={vi.fn()}
+        onResetMission={vi.fn()}
+        onStep={vi.fn()}
+        onInjectEvent={vi.fn()}
+        onReplan={vi.fn()}
+      />,
+    );
+
+    const plannerSelect = screen.getByRole("combobox", { name: "Planner selection" }) as HTMLSelectElement;
+    expect(plannerSelect.value).toBe("greedy");
+
+    const policySelect = screen.getByRole("combobox", { name: "Planning policy" }) as HTMLSelectElement;
+    expect(policySelect.value).toBe("utility");
+
+    const fairnessOption = screen.getByRole("option", { name: "Utility-then-Fairness" }) as HTMLOptionElement;
+    expect(fairnessOption.disabled).toBe(true);
+  });
+
+  it("enables Utility-then-Fairness when planner is cp_sat", async () => {
+    const user = userEvent.setup();
+    const onPlannerChange = vi.fn();
+    const onPolicyChange = vi.fn();
+
+    render(
+      <MissionBar
+        scenario={baseScenario}
+        plan={null}
+        previousVersion={null}
+        awaitingReplan={false}
+        missionState={baseMissionState}
+        windows={[]}
+        events={[]}
+        loading={false}
+        replanning={false}
+        planner="cp_sat"
+        policy="utility"
+        onPlannerChange={onPlannerChange}
+        onPolicyChange={onPolicyChange}
+        onLoadDemo={vi.fn()}
+        onNewMission={vi.fn()}
+        onLoadMission={vi.fn()}
+        onExamples={vi.fn()}
+        onFeasibility={vi.fn()}
+        onGeneratePlan={vi.fn()}
+        onResetMission={vi.fn()}
+        onStep={vi.fn()}
+        onInjectEvent={vi.fn()}
+        onReplan={vi.fn()}
+      />,
+    );
+
+    const fairnessOption = screen.getByRole("option", { name: "Utility-then-Fairness" }) as HTMLOptionElement;
+    expect(fairnessOption.disabled).toBe(false);
+
+    const policySelect = screen.getByRole("combobox", { name: "Planning policy" });
+    await user.selectOptions(policySelect, "utility_then_fairness");
+    expect(onPolicyChange).toHaveBeenCalledWith("utility_then_fairness");
+
+    const plannerSelect = screen.getByRole("combobox", { name: "Planner selection" });
+    await user.selectOptions(plannerSelect, "greedy");
+    expect(onPlannerChange).toHaveBeenCalledWith("greedy");
   });
 });

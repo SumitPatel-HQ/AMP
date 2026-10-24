@@ -46,6 +46,7 @@ _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
     ReasonCode.NO_OBSERVATION_WINDOW: "no observation window exists for its target during the mission",
     ReasonCode.REQUEST_UNCHANGED: "nothing the event changed affected it",
     ReasonCode.HIGHER_PRIORITY_TASK_INSERTED: "it entered the pool and was scheduled",
+    ReasonCode.REBALANCED_FOR_REQUESTER_SHARE: "capacity was rebalanced for requester share at equal utility",
 }
 
 _CONSTRAINT_BY_REASON_CODE: dict[ReasonCode, Optional[str]] = {
@@ -58,6 +59,7 @@ _CONSTRAINT_BY_REASON_CODE: dict[ReasonCode, Optional[str]] = {
     ReasonCode.TIME_OVERLAP: "overlap",
     ReasonCode.DISPLACED_BY_COMPETING_REQUEST: "overlap",
     ReasonCode.SATELLITE_UNAVAILABLE: "satellite_availability",
+    ReasonCode.REBALANCED_FOR_REQUESTER_SHARE: "requester_share",
 }
 
 
@@ -68,6 +70,7 @@ def build_traces(
     event_id: Optional[str] = None,
     event_ids_by_request: Optional[Mapping[str, str]] = None,
     first_trace_number: int = 1,
+    requester_ids_by_request: Optional[Mapping[str, str]] = None,
 ) -> tuple[DecisionTrace, ...]:
     """``event_id`` is the fallback (the overall triggering event, or the
     only event there is). ``event_ids_by_request`` overrides it per
@@ -87,6 +90,7 @@ def build_traces(
     ):
         previous_action = previous_actions.get(entry.request_id)
         new_action = current_actions.get(entry.request_id)
+        requester_id = (requester_ids_by_request or {}).get(entry.request_id)
         traces.append(
             DecisionTrace(
                 id=format_id(TRACE_ID_PREFIX, first_trace_number + offset),
@@ -103,8 +107,9 @@ def build_traces(
                     reason_code=entry.reason_code,
                     old_start=entry.old_start,
                     new_start=entry.new_start,
+                    requester_id=requester_id,
                 ),
-                metadata=_metadata(entry.change_type, previous_action, new_action),
+                metadata=_metadata(entry.change_type, previous_action, new_action, requester_id=requester_id),
             )
         )
     return tuple(traces)
@@ -116,12 +121,17 @@ def render_message(
     reason_code: ReasonCode,
     old_start: Optional[datetime] = None,
     new_start: Optional[datetime] = None,
+    requester_id: Optional[str] = None,
 ) -> str:
     outcome = _FRAME_BY_CHANGE_TYPE[change_type].format(
         request_id=request_id,
         old_start=_format_time(old_start),
         new_start=_format_time(new_start),
     )
+    if reason_code == ReasonCode.REBALANCED_FOR_REQUESTER_SHARE:
+        if requester_id:
+            return f"{outcome} because capacity was rebalanced for requester {requester_id} share at equal utility."
+        return f"{outcome} because capacity was rebalanced for requester share at equal utility."
     return f"{outcome} because {_CAUSE_BY_REASON_CODE[reason_code]}."
 
 
@@ -129,12 +139,16 @@ def _metadata(
     change_type: PlanChangeType,
     previous_action: Optional[ScheduledAction],
     new_action: Optional[ScheduledAction],
+    requester_id: Optional[str] = None,
 ) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "change_type": change_type.value,
         "previous_window_id": previous_action.window_id if previous_action else None,
         "new_window_id": new_action.window_id if new_action else None,
     }
+    if requester_id is not None:
+        data["requester_id"] = requester_id
+    return data
 
 
 def _format_time(value: Optional[datetime]) -> str:

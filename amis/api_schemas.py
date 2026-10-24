@@ -19,6 +19,7 @@ from amis.domain import (
     emergency_evidence_error,
 )
 from amis.errors import ErrorCode
+from amis.domain.scenario import validate_requester_id
 
 
 class ApiModel(BaseModel):
@@ -147,9 +148,11 @@ class ObservationRequestSchema(ApiModel):
     # Wave 7 (ADR-0014): naming a satellite pins the request to it; absent
     # means the planner assigns whichever satellite can serve it.
     satellite_id: str | None = None
+    requester_id: str | None = None
 
     @model_validator(mode="after")
     def validate_deadline_timezone(self) -> Self:
+        validate_requester_id(self.requester_id)
         # Checked here, not only when a request is embedded in
         # ScenarioSchema, so the emergency-event payload (which reuses
         # this schema directly, never nested in a scenario) cannot bypass
@@ -257,6 +260,8 @@ class UnscheduledEntrySchema(ApiModel):
 
 class MissionPlanSchema(ApiModel):
     planner_name: str = "greedy"
+    planning_policy: str = "utility"
+    policy_version: str = "requester-utility-v1"
     solver_details: dict[str, Any] | None = None
     id: str
     scenario_id: str
@@ -519,7 +524,31 @@ class EmergencyResponseSchema(ApiModel):
     achieved_satellite_id: str | None
 
 
+class RequesterServiceRowSchema(ApiModel):
+    requester_id: str | None
+    request_count: int
+    demand_utility: int
+    served_request_count: int
+    served_utility: int
+    service_share: float | None
+    fulfillment_ratio: float | None
+
+
+class RequesterServiceSchema(ApiModel):
+    requesters: list[RequesterServiceRowSchema]
+    unattributed: RequesterServiceRowSchema
+    total_served_utility: int
+    fairness_gap: int | None
+    zero_service_requester_count: int
+    no_service: bool
+    metric_version: str
+    scope: str
+    limitations: str
+    measured_at_convention: str
+
+
 class MetricsSchema(ApiModel):
+    requester_service: RequesterServiceSchema | None = None
     plan_id: str
     mission_utility: float
     completion_rate: float
@@ -617,9 +646,17 @@ class StepRequest(ApiModel):
     seconds: float = Field(gt=0, allow_inf_nan=False)
 
 
+class PlanRequest(ApiModel):
+    planner: Literal["greedy", "cp_sat"] | None = None
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
+
+
 class ReplanRequest(ApiModel):
     planner: Literal["greedy", "cp_sat"] | None = None
-    expected_parent_plan_id: str = Field(min_length=1)
+    policy: Literal["utility", "utility_then_fairness"] | None = None
+    planning_policy: Literal["utility", "utility_then_fairness"] | None = None
+    expected_parent_plan_id: str | None = None
 
 
 class ErrorBody(ApiModel):
