@@ -1176,7 +1176,7 @@ export interface components {
             /** Planning Policy */
             planning_policy?: ("utility" | "utility_then_fairness") | null;
             /** Expected Parent Plan Id */
-            expected_parent_plan_id?: string | null;
+            expected_parent_plan_id: string;
         };
         /**
          * RequestStatus

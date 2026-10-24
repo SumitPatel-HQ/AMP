@@ -656,7 +656,7 @@ class ReplanRequest(ApiModel):
     planner: Literal["greedy", "cp_sat"] | None = None
     policy: Literal["utility", "utility_then_fairness"] | None = None
     planning_policy: Literal["utility", "utility_then_fairness"] | None = None
-    expected_parent_plan_id: str | None = None
+    expected_parent_plan_id: str = Field(min_length=1)
 
 
 class ErrorBody(ApiModel):

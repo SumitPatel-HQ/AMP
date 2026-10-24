@@ -19,6 +19,9 @@ export function RequesterService({
   const policy = plan?.planning_policy ?? "utility";
   const policyVersion = plan?.policy_version ?? service.metric_version;
   const isFairnessPolicy = policy === "utility_then_fairness";
+  const stages = (solverDetails?.stages ?? []) as { stage: string; status: string }[];
+  const primaryOptimal = stages.some((stage) => stage.stage === "utility" && stage.status === "OPTIMAL");
+  const fairnessOptimal = stages.some((stage) => stage.stage === "fairness" && stage.status === "OPTIMAL");
 
   return (
     <section aria-label="Requester service" className="mt-3 space-y-2 text-[11px] text-neutral-400">
@@ -61,13 +64,13 @@ export function RequesterService({
 
           {skipReason && (
             <p className="text-amber-300">
-              Fairness balancing skipped: {skipReason}. Optimal primary utility plan retained.
+              Fairness balancing skipped: {skipReason}.
             </p>
           )}
 
           {fallbackReason && (
             <p className="text-amber-300">
-              Fallback to baseline floor: {fallbackReason}.
+              Retained feasible plan: {fallbackReason}.
             </p>
           )}
 
@@ -78,7 +81,9 @@ export function RequesterService({
               </p>
             ) : (
               <p className="text-neutral-400">
-                Primary utility held strictly fixed; no alternate placement improves fairness gap without sacrificing total utility.
+                {primaryOptimal && fairnessOptimal
+                  ? "Primary utility held fixed; the requester utility gap is proven optimal."
+                  : "No requester selection changes were attributed to fairness; optimality is not established for every stage."}
               </p>
             )
           )}
@@ -118,8 +123,12 @@ export function RequesterService({
       <p>{service.scope}</p>
       <p>{service.limitations}</p>
       <p>{service.measured_at_convention} Measured at: {metrics.measured_at}.</p>
-      <p className="text-[10px] text-neutral-400 italic">Boundary guarantee: Primary utility is held strictly fixed at the Stage 1 optimal baseline; fairness optimization never sacrifices total mission utility.</p>
-      <p>Measurement only; existing planning objectives apply. Requester ids are author labels, not entitlements.</p>
+      {isFairnessPolicy && (
+        <p className="text-[10px] text-neutral-400 italic">
+          Fairness balancing runs only after primary utility is proven optimal and keeps that utility fixed.
+        </p>
+      )}
+      <p>Requester ids are author labels, not entitlements.</p>
     </section>
   );
 }

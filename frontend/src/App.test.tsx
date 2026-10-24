@@ -341,6 +341,22 @@ afterEach(() => {
 });
 
 describe("mission dashboard", () => {
+  it("sends the explicit Greedy selection after a CP-SAT fairness plan", async () => {
+    installSuccessfulApi();
+    api.createPlan.mockResolvedValue({ ...plan, planner_name: "cp_sat", planning_policy: "utility_then_fairness" });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Load demo scenario" }));
+    await screen.findByText(scenario.name);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planner selection" }), "cp_sat");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planning policy" }), "utility_then_fairness");
+    await user.click(screen.getByRole("button", { name: "Generate plan" }));
+    await screen.findByLabelText("Current plan V1");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Planner selection" }), "greedy");
+    await user.click(screen.getByRole("button", { name: "Replan" }));
+    await waitFor(() => expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id, "greedy", "utility"));
+  });
+
   it("loads the demo and draws a generated plan only after user actions", async () => {
     installSuccessfulApi();
     const user = userEvent.setup();
@@ -562,7 +578,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
 
     expect(await screen.findByLabelText("Current plan V2")).toBeTruthy();
-    expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id);
+    expect(api.replan).toHaveBeenCalledWith(scenario.id, plan.id, "greedy", "utility");
     expect(api.comparePlans).toHaveBeenCalledWith(plan.id, revisedPlan.id);
 
     const timelines = Array.from(container.querySelectorAll(".amis-vis-timeline[aria-label]")).map(
@@ -587,8 +603,8 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V3");
 
-    expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id);
-    expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id);
+    expect(api.replan).toHaveBeenNthCalledWith(1, scenario.id, plan.id, "greedy", "utility");
+    expect(api.replan).toHaveBeenNthCalledWith(2, scenario.id, revisedPlan.id, "greedy", "utility");
     await user.click(screen.getByRole("tab", { name: /Plans/ }));
     const history = screen.getByRole("list", { name: "Mission plans" });
     for (const version of ["V1", "V2", "V3"]) {
@@ -665,7 +681,7 @@ describe("mission dashboard", () => {
     api.replan.mockResolvedValueOnce({ ...serverPlan, id: "SCN-002:PLAN-10", version: 10, parent_plan_id: serverPlan.id });
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V10");
-    expect(api.replan).toHaveBeenLastCalledWith(scenario.id, serverPlan.id);
+    expect(api.replan).toHaveBeenLastCalledWith(scenario.id, serverPlan.id, "greedy", "utility");
     expect(screen.queryByRole("status", { name: "Stale plan" })).toBeNull();
   });
   it("keeps the revised timeline current when the clock moves after a replan", async () => {

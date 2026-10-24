@@ -439,16 +439,8 @@ class CpSatPlanner:
 
         identified_requesters = sorted({r.requester_id for r in requests if r.requester_id is not None})
 
-        if self.policy == "utility":
+        if self.policy == "utility" or len(identified_requesters) < 2:
             return self._plan_utility(
-                scenario, mission_state, requests, eligible, windows, frozen, reservations,
-                previous, builder, baseline, slew_by_satellite, outages, weight,
-                first_action_number, started, plan_id, contacts
-            )
-
-        # policy == "utility_then_fairness"
-        if len(identified_requesters) < 2:
-            return self._plan_fairness_skipped_fewer_requesters(
                 scenario, mission_state, requests, eligible, windows, frozen, reservations,
                 previous, builder, baseline, slew_by_satellite, outages, weight,
                 first_action_number, started, plan_id, identified_requesters, contacts
@@ -463,56 +455,6 @@ class CpSatPlanner:
     def _plan_utility(
         self, scenario, mission_state, requests, eligible, windows, frozen, reservations,
         previous, builder, baseline, slew_by_satellite, outages, weight,
-        first_action_number, started, plan_id, contacts=()
-    ) -> MissionPlan:
-        builder.maximize_utility(previous, weight)
-        solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = 1
-        solver.parameters.random_seed = 0
-        solver.parameters.max_deterministic_time = self.deterministic_limit
-        status = solver.solve(builder.model)
-        if status == cp_model.MODEL_INVALID:
-            raise ValueError(f"Invalid CP-SAT model: {builder.model.validate()}")
-        imaging = self._selected_actions(solver, status, builder, first_action_number)
-        utility = sum(r.priority for r in requests if r.id in {a.request_id for a in [*frozen, *imaging]})
-        use_baseline = status not in _SOLVED or utility < baseline.mission_utility
-        if use_baseline:
-            actions = list(baseline.actions)
-            utility = baseline.mission_utility
-            fallback_reason = "utility_below_baseline" if status in _SOLVED else "solver_infeasible"
-        else:
-            actions = list(frozen) + self._with_downlinks(scenario, mission_state, reservations, frozen,
-                                                          imaging, first_action_number)
-            fallback_reason = None
-        unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages, slew_by_satellite)
-        details = self._solver_details(
-            solver, status, use_baseline, weight,
-            policy="utility",
-            fallback_reason=fallback_reason,
-            skip_reason=None,
-            fairness_population=None,
-            budget_allocation={"utility": self.deterministic_limit},
-            achieved_gap=None,
-            stability_result=None,
-            stages=[{
-                "stage": "utility",
-                "status": solver.status_name(status),
-                "objective": solver.objective_value if status in _SOLVED else None,
-                "objective_bound": solver.best_objective_bound if status in _SOLVED else None,
-                "objective_unit": "priority_utility",
-                "budget": self.deterministic_limit,
-            }],
-            rebalanced_ids=(),
-        )
-        result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
-            mission_utility=utility, planner_name="cp_sat", planning_policy="utility",
-            policy_version="requester-utility-v1", solver_details=details,
-            planning_time_ms=(time.perf_counter() - started) * 1000)
-        return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result, outages, contacts)))
-
-    def _plan_fairness_skipped_fewer_requesters(
-        self, scenario, mission_state, requests, eligible, windows, frozen, reservations,
-        previous, builder, baseline, slew_by_satellite, outages, weight,
         first_action_number, started, plan_id, identified_requesters, contacts=()
     ) -> MissionPlan:
         builder.maximize_utility(previous, weight)
@@ -529,7 +471,7 @@ class CpSatPlanner:
         if use_baseline:
             actions = list(baseline.actions)
             utility = baseline.mission_utility
-            fallback_reason = "utility_below_baseline" if status in _SOLVED else "solver_infeasible"
+            fallback_reason = "utility_below_baseline" if status in _SOLVED else f"solver_{solver.status_name(status).lower()}"
         else:
             actions = list(frozen) + self._with_downlinks(scenario, mission_state, reservations, frozen,
                                                           imaging, first_action_number)
@@ -537,25 +479,18 @@ class CpSatPlanner:
         unscheduled = self._explain(eligible, windows, actions, mission_state, scenario, previous, outages, slew_by_satellite)
         details = self._solver_details(
             solver, status, use_baseline, weight,
-            policy="utility_then_fairness",
+            policy=self.policy,
             fallback_reason=fallback_reason,
-            skip_reason="fewer than two identified requesters",
-            fairness_population=identified_requesters,
+            skip_reason="fewer than two identified requesters" if self.policy == "utility_then_fairness" else None,
+            fairness_population=identified_requesters if self.policy == "utility_then_fairness" else None,
             budget_allocation={"utility": self.deterministic_limit},
             achieved_gap=None,
             stability_result=None,
-            stages=[{
-                "stage": "utility",
-                "status": solver.status_name(status),
-                "objective": solver.objective_value if status in _SOLVED else None,
-                "objective_bound": solver.best_objective_bound if status in _SOLVED else None,
-                "objective_unit": "priority_utility",
-                "budget": self.deterministic_limit,
-            }],
+            stages=[self._utility_stage(solver, status, builder, self.deterministic_limit)],
             rebalanced_ids=(),
         )
         result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
-            mission_utility=utility, planner_name="cp_sat", planning_policy="utility_then_fairness",
+            mission_utility=utility, planner_name="cp_sat", planning_policy=self.policy,
             policy_version="requester-utility-v1", solver_details=details,
             planning_time_ms=(time.perf_counter() - started) * 1000)
         return replace(result, violation_count=len(validate_plan(scenario, mission_state, requests, windows, result, outages, contacts)))
@@ -566,9 +501,9 @@ class CpSatPlanner:
         first_action_number, started, plan_id, identified_requesters, contacts=()
     ) -> MissionPlan:
         total_budget = self.deterministic_limit
-        d_utility = round(total_budget * 0.4, 4)
-        d_fairness = round(total_budget * 0.4, 4)
-        d_stability = round(total_budget * 0.2, 4)
+        d_utility = total_budget * 0.4
+        d_fairness = total_budget * 0.4
+        d_stability = total_budget * 0.2
         budget_allocation = {"utility": d_utility, "fairness": d_fairness, "stability": d_stability}
 
         # Stage 1: Primary utility optimization
@@ -581,16 +516,7 @@ class CpSatPlanner:
         if status1 == cp_model.MODEL_INVALID:
             raise ValueError(f"Invalid CP-SAT model: {builder.model.validate()}")
 
-        # Compute pure candidate priority utility if solved
-        s1_candidate_utility = sum(c.request.priority * solver1.value(c.present) for c in builder.candidates) if status1 in _SOLVED else None
-        stage_1_entry = {
-            "stage": "utility",
-            "status": solver1.status_name(status1),
-            "objective": s1_candidate_utility,
-            "objective_bound": s1_candidate_utility if status1 == cp_model.OPTIMAL else None,
-            "objective_unit": "priority_utility",
-            "budget": d_utility,
-        }
+        stage_1_entry = self._utility_stage(solver1, status1, builder, d_utility)
 
         # If Stage 1 optimality is unproven, skip fairness and retain Stage 1 / baseline result
         if status1 != cp_model.OPTIMAL:
@@ -600,7 +526,7 @@ class CpSatPlanner:
             if use_baseline:
                 actions = list(baseline.actions)
                 utility = baseline.mission_utility
-                fallback_reason = "utility_below_baseline" if status1 in _SOLVED else "solver_infeasible"
+                fallback_reason = "utility_below_baseline" if status1 in _SOLVED else f"solver_{solver1.status_name(status1).lower()}"
             else:
                 actions = list(frozen) + self._with_downlinks(scenario, mission_state, reservations, frozen,
                                                               imaging, first_action_number)
@@ -719,9 +645,12 @@ class CpSatPlanner:
         stage_3_entry = {
             "stage": "stability",
             "status": solver3.status_name(status3),
-            "objective": solver3.objective_value if status3 in _SOLVED else None,
-            "objective_bound": solver3.best_objective_bound if status3 in _SOLVED else None,
+            "objective": sum(solver3.value(term) for term in stability_terms) if status3 in _SOLVED else None,
+            "objective_bound": sum(solver3.value(term) for term in stability_terms) if status3 == cp_model.OPTIMAL else None,
             "objective_unit": "retained_window_count",
+            "solver_objective": solver3.objective_value if status3 in _SOLVED else None,
+            "solver_objective_bound": solver3.best_objective_bound if status3 in _SOLVED else None,
+            "solver_objective_unit": "weighted_stability_geometry",
             "budget": d_stability,
         }
 
@@ -731,8 +660,9 @@ class CpSatPlanner:
             final_status = cp_model.FEASIBLE if status2 != cp_model.OPTIMAL else status3
             stability_result = {
                 "status": solver3.status_name(status3),
-                "objective": solver3.objective_value,
-                "objective_bound": solver3.best_objective_bound,
+                "objective": stage_3_entry["objective"],
+                "objective_bound": stage_3_entry["objective_bound"],
+                "objective_unit": "retained_window_count",
             }
         else:
             final_solver = solver2
@@ -759,18 +689,29 @@ class CpSatPlanner:
                                                           final_imaging, first_action_number)
             utility = final_utility
 
-            # Establish causality between pre-fairness and final solution:
-            pre_actions_by_req = {a.request_id: a for a in pre_fairness_actions if a.request_id}
-            final_actions_by_req = {a.request_id: a for a in final_imaging if a.request_id}
-            # Symmetric difference of scheduled requests:
-            rebalanced = set(pre_actions_by_req.keys()) ^ set(final_actions_by_req.keys())
-            # Plus requests whose placement/window changed to accommodate fairness balancing:
-            for req_id, pre_act in pre_actions_by_req.items():
-                if req_id in final_actions_by_req:
-                    fin_act = final_actions_by_req[req_id]
-                    if pre_act.window_id != fin_act.window_id or pre_act.start != fin_act.start:
-                        rebalanced.add(req_id)
-            fairness_rebalanced_request_ids = rebalanced
+            # A timing/window tie-break is not evidence of changed requester service.
+            # Attribute only selection changes for requesters whose service actually
+            # changed while the identified-requester gap strictly improved.
+            completed_ids = set(mission_state.completed_request_ids)
+            def requester_utilities(imaging):
+                served = completed_ids | {a.request_id for a in [*frozen, *imaging]}
+                return {
+                    identity: sum(r.priority for r in requests if r.requester_id == identity and r.id in served)
+                    for identity in identified_requesters
+                }
+            before_service = requester_utilities(pre_fairness_actions)
+            after_service = requester_utilities(final_imaging)
+            before_gap = max(before_service.values()) - min(before_service.values())
+            achieved_gap = max(after_service.values()) - min(after_service.values())
+            changed_requesters = {identity for identity in identified_requesters
+                                  if before_service[identity] != after_service[identity]}
+            changed_selection = ({a.request_id for a in pre_fairness_actions}
+                                 ^ {a.request_id for a in final_imaging})
+            fairness_rebalanced_request_ids = {
+                r.id for r in requests
+                if achieved_gap < before_gap and r.id in changed_selection
+                and r.requester_id in changed_requesters
+            }
 
         unscheduled = self._explain(
             eligible, windows, actions, mission_state, scenario, previous, outages, slew_by_satellite,
@@ -788,6 +729,9 @@ class CpSatPlanner:
             stages=[stage_1_entry, stage_2_entry, stage_3_entry],
             rebalanced_ids=fairness_rebalanced_request_ids,
         )
+        if not use_baseline:
+            details["fairness_service_before"] = before_service
+            details["fairness_service_after"] = after_service
         result = replace(baseline, actions=tuple(actions), unscheduled=tuple(unscheduled),
             mission_utility=utility, planner_name="cp_sat", planning_policy="utility_then_fairness",
             policy_version="requester-utility-v1", solver_details=details,
@@ -811,6 +755,27 @@ class CpSatPlanner:
                 request.energy_cost_wh, request.storage_cost_mb))
         return actions
 
+    @staticmethod
+    def _utility_stage(solver, status, builder, budget) -> dict[str, Any]:
+        """Report candidate priority separately from the solver's tie-break score.
+
+        Frozen/completed service is constant and is not part of this objective.
+        A pure-utility bound is reported only when optimality is proven; raw
+        composite bounds remain available under explicitly labelled fields.
+        """
+        solved = status in _SOLVED
+        utility = sum(c.request.priority * solver.value(c.present) for c in builder.candidates) if solved else None
+        return {
+            "stage": "utility", "status": solver.status_name(status),
+            "objective": utility,
+            # A composite bound cannot be labelled as pure priority utility.
+            "objective_bound": utility if status == cp_model.OPTIMAL else None,
+            "objective_unit": "priority_utility", "budget": budget,
+            "solver_objective": solver.objective_value if solved else None,
+            "solver_objective_bound": solver.best_objective_bound if solved else None,
+            "solver_objective_unit": "weighted_utility_stability_geometry",
+        }
+
     def _solver_details(
         self, solver: cp_model.CpSolver, status, use_baseline: bool, weight: int,
         policy: str = "utility",
@@ -828,7 +793,7 @@ class CpSatPlanner:
             "status": solver.status_name(status),
             "objective": solver.objective_value if solved else None,
             "objective_bound": solver.best_objective_bound if solved else None,
-            "optimality_gap": (max(0.0, solver.best_objective_bound - solver.objective_value)
+            "optimality_gap": (abs(solver.best_objective_bound - solver.objective_value)
                                / max(1.0, abs(solver.objective_value))) if solved and not use_baseline else None,
             "fallback": use_baseline,
             "fallback_reason": fallback_reason,
@@ -837,6 +802,9 @@ class CpSatPlanner:
             "workers": 1,
             "seed": 0,
             "max_deterministic_time": self.deterministic_limit,
+            "objective_unit": next((stage.get("solver_objective_unit", stage["objective_unit"])
+                                    for stage in reversed(stages or [])
+                                    if stage["status"] in ("OPTIMAL", "FEASIBLE")), None),
             "objective_priority_weight": weight,
             "time_resolution_s": 1,
             "policy": policy,

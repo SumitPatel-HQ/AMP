@@ -340,3 +340,16 @@ it("surfaces active policy, solver status, achieved gap, and rebalancing details
   expect(region.textContent).toContain("Achieved gap: 0 priority units");
   expect(region.textContent).toContain("Fairness rebalanced requests (2): OBS-B1, OBS-A2");
 });
+
+it("does not claim primary optimality when a bounded solve falls back", () => {
+  const boundedPlan: MissionPlanSchema = { ...plan("PLAN-1", 1),
+    planner_name: "cp_sat", planning_policy: "utility_then_fairness",
+    solver_details: { status: "UNKNOWN", skip_reason: "primary optimality unproven",
+      fallback: true, fallback_reason: "solver_unknown", stages: [{ stage: "utility", status: "UNKNOWN" }] },
+  };
+  render(<MetricsPanel currentPlanId="PLAN-1" metrics={requesterMetrics} diff={null} plans={[boundedPlan]} />);
+  const region = screen.getByRole("region", { name: "Requester service" });
+  expect(region.textContent).toContain("primary optimality unproven");
+  expect(region.textContent).not.toContain("Optimal primary utility plan retained");
+  expect(region.textContent).not.toContain("Stage 1 optimal baseline");
+});

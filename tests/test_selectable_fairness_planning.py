@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -23,6 +24,7 @@ from amis.examples import (
 )
 from amis.metrics import compute_requester_service
 from amis.planning.selection import make_planner
+from amis.planning.cp_sat import CpSatPlanner
 from amis.repositories import MissionSessionStore
 from amis.session import MissionSession
 from amis.windows.synthetic import SyntheticWindowProvider
@@ -122,7 +124,7 @@ def test_multi_requester_bottleneck_reduces_gap_without_utility_sacrifice():
     assert details["status"] == "OPTIMAL"
     assert details["policy"] == "utility_then_fairness"
     assert details["achieved_gap"] == 0
-    assert details["achieved_gap_unit"] == "priority_utility"
+    assert details["achieved_gap_unit"] == "priority_utility_gap"
     assert details["budget_allocation"] == {"utility": 0.4, "fairness": 0.4, "stability": 0.2}
 
     stages = details["stages"]
@@ -141,6 +143,8 @@ def test_multi_requester_bottleneck_reduces_gap_without_utility_sacrifice():
 
     # Causality and trace check
     assert "OBS-2" in details["fairness_rebalanced_request_ids"]
+    assert details["fairness_service_before"] == {"ORG-A": 6, "ORG-B": 0}
+    assert details["fairness_service_after"] == {"ORG-A": 3, "ORG-B": 3}
 
 
 def test_unimprovable_utility_first_preserves_schedule_and_utility():
@@ -249,7 +253,7 @@ def test_api_endpoints_accept_and_return_policy():
             # Replan endpoint accepts policy
             replan_res = await client.post(
                 f"/scenarios/{scenario.id}/replan",
-                json={"policy": "utility"},
+                json={"policy": "utility", "expected_parent_plan_id": plan_data["id"]},
             )
             assert replan_res.status_code == 201
             replan_data = replan_res.json()
@@ -263,3 +267,54 @@ def test_api_endpoints_accept_and_return_policy():
             assert "fairness-strict-utility" in example_ids
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("payload", [{}, {"expected_parent_plan_id": None}, {"expected_parent_plan_id": ""}])
+def test_replan_requires_the_callers_plan_version(payload):
+    async def run():
+        scenario = fairness_balance_example()
+        async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as client:
+            await client.post("/scenarios", json=scenario.to_dict())
+            await client.post(f"/scenarios/{scenario.id}/windows/generate")
+            plan = (await client.post(f"/scenarios/{scenario.id}/plan")).json()
+            for _ in range(2):
+                response = await client.post(f"/scenarios/{scenario.id}/replan", json=payload)
+                assert response.status_code == 422
+            response = await client.post(f"/scenarios/{scenario.id}/replan", json={
+                "expected_parent_plan_id": plan["id"], "planner": "greedy", "policy": "utility",
+            })
+            assert response.status_code == 201
+            assert response.json()["version"] == 2
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("policy", ["utility", "utility_then_fairness"])
+def test_utility_stage_reports_priority_units_without_tie_break_weights(policy):
+    scenario = fairness_balance_example()
+    scenario = replace(scenario, requests=tuple(replace(r, requester_id="ONE") for r in scenario.requests))
+    session = MissionSession()
+    session.load_scenario(scenario)
+    session.generate_windows()
+    session.select_planner("cp_sat", policy=policy)
+    plan = session.plan()
+    stage = plan.solver_details["stages"][0]
+    assert stage["objective_unit"] == "priority_utility"
+    assert stage["objective"] == stage["objective_bound"] == plan.mission_utility == 6
+
+
+def test_bounded_fairness_solve_preserves_the_floor_without_claiming_optimality():
+    session = MissionSession(planner=CpSatPlanner(1e-8, policy="utility_then_fairness"))
+    session.load_scenario(fairness_balance_example())
+    session.generate_windows()
+    plan = session.plan()
+    details = plan.solver_details
+    assert details["status"] == "UNKNOWN"
+    assert details["skip_reason"] == "primary optimality unproven"
+    assert details["fallback"] is True
+    assert details["fallback_reason"] == "solver_unknown"
+    assert plan.mission_utility == 6
+    assert plan.violation_count == 0
+    assert details["fairness_rebalanced_request_ids"] == []
+    assert details["stages"][0]["objective_bound"] is None
+    assert all(budget > 0 for budget in details["budget_allocation"].values())
+    assert sum(details["budget_allocation"].values()) == pytest.approx(1e-8)

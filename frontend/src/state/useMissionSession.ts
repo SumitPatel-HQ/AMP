@@ -434,10 +434,7 @@ export function useMissionSession(): MissionSessionState {
     // is the version the server must still hold for this replan to be safe.
     const initialPlan = plan;
     try {
-      const revisedPlan =
-        planner === "greedy" && policy === "utility"
-          ? await replanMission(scenario.id, initialPlan.id)
-          : await replanMission(scenario.id, initialPlan.id, planner, policy);
+      const revisedPlan = await replanMission(scenario.id, initialPlan.id, planner, policy);
       setPlanConflict(null);
       setStalePlan(false);
       // The server has already committed to the new version, so the local

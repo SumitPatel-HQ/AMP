@@ -455,7 +455,7 @@ def create_app(
             session.select_planner(planner, policy=policy)
         except ValueError as err:
             raise InvalidScenarioError(str(err)) from err
-        parent_id = request.expected_parent_plan_id or current_plan.id
+        parent_id = request.expected_parent_plan_id
         plan = session.replan(parent_id)
         store.save(
             session, expected_current_plan_id=parent_id
