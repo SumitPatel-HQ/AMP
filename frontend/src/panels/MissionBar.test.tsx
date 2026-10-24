@@ -45,6 +45,8 @@ const basePlan: MissionPlanSchema = {
   actions: [],
   unscheduled: [],
   planner_name: "greedy",
+  planning_policy: "utility",
+  policy_version: "requester-utility-v1",
   mission_utility: 0,
   violation_count: 0,
   planning_time_ms: 0,

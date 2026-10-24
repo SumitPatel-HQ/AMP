@@ -67,6 +67,8 @@ const planV1 = {
   violation_count: 1,
   planning_time_ms: 1,
   planner_name: "greedy",
+  planning_policy: "utility",
+  policy_version: "requester-utility-v1",
 } satisfies MissionPlanSchema;
 
 const planV2 = {

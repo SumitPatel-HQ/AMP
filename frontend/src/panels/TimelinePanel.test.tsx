@@ -49,6 +49,8 @@ function plan(id: string, version: number): MissionPlanSchema {
     violation_count: 0,
     planning_time_ms: 0,
     planner_name: "greedy",
+    planning_policy: "utility",
+    policy_version: "requester-utility-v1",
   };
 }
 

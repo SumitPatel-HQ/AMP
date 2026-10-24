@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
+import json
 
 from amis.demo import build_canonical_replan_scenario, build_emergency_replan_fixture
 from amis.domain import ObservationRequest, OrbitalElements, Satellite, Scenario, WindowPolicy
@@ -48,6 +49,7 @@ def examples() -> dict[str, Scenario]:
         pass
     result["fairness-balance"] = fairness_balance_example()
     result["fairness-strict-utility"] = fairness_strict_utility_example()
+    result["cems-crete-2026-10-04"] = cems_crete_example()
     return result
 
 
@@ -60,7 +62,10 @@ def example_briefings() -> dict[str, str]:
     Cached because every ``/examples`` list request would otherwise reread
     the same static file.
     """
-    briefings = {"usgs-vanuatu-2026-10-08": (_CUE_EXAMPLE_DIR / "briefing.md").read_text(encoding="utf-8")}
+    briefings = {
+        "usgs-vanuatu-2026-10-08": (_CUE_EXAMPLE_DIR / "briefing.md").read_text(encoding="utf-8"),
+        "cems-crete-2026-10-04": (_CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "briefing.md").read_text(encoding="utf-8"),
+    }
     briefings["fairness-balance"] = (
         "# Requester Fairness Balance Comparison\n\n"
         "This scenario demonstrates a multi-requester bottleneck where multiple distinct maximum-utility plans exist.\n\n"
@@ -79,6 +84,12 @@ def example_briefings() -> dict[str, str]:
         "- The schedule preserves total utility 8 and the solver details report achieved gap 8 with zero rebalanced requests.\n"
     )
     return briefings
+
+
+def cems_crete_example() -> Scenario:
+    """Load the dated Scenario with its own stored orbital snapshot offline."""
+    path = _CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "scenario.json"
+    return Scenario.from_dict(json.loads(path.read_bytes()))
 
 
 def orbital_example() -> Scenario:

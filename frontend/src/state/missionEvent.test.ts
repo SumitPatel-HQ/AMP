@@ -77,6 +77,8 @@ function plan(id: string, unscheduled: MissionPlanSchema["unscheduled"]): Missio
     violation_count: 0,
     planning_time_ms: 0,
     planner_name: "greedy",
+    planning_policy: "utility",
+    policy_version: "requester-utility-v1",
   };
 }
 

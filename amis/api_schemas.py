@@ -11,6 +11,7 @@ from amis.domain import (
     ActionKind,
     ActionStatus,
     AlertLevel,
+    ObservationRequest,
     EventType,
     PlanChangeType,
     ReasonCode,
@@ -371,14 +372,26 @@ class EmergencyTaskPayloadSchema(ApiModel):
     mag: float | None = Field(default=None, allow_inf_nan=False, strict=True)
     sig: float | None = Field(default=None, allow_inf_nan=False, strict=True)
 
+    category: str | None = None
+    activation_time: str | None = None
+    source_event_time: str | None = None
+    source_url: str | None = None
+    centroid_policy_version: str | None = None
+
     @model_validator(mode="after")
     def validate_evidence(self) -> Self:
         # The domain owns the all-or-nothing rule; the schema only delegates.
         error = emergency_evidence_error(
-            self.source, self.source_event_id, self.alert_level, self.mag, self.sig
+            self.source, self.source_event_id, self.alert_level, self.mag, self.sig,
+            self.category, self.activation_time, self.source_event_time, self.source_url,
+            self.centroid_policy_version,
         )
         if error is not None:
             raise ValueError(error)
+        if self.source == "cems":
+            request_error = ObservationRequest(**self.request.model_dump()).validation_error()
+            if request_error is not None:
+                raise ValueError(request_error)
         return self
 
 
