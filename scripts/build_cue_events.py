@@ -8,6 +8,7 @@ from pathlib import Path
 
 from amis.cues import ImagingProfile, build_cue_inputs, load_archive, write_cue_inputs
 from amis.domain import Scenario
+from amis.cues.cems import build_cems_inputs
 
 
 def main() -> None:
@@ -32,7 +33,12 @@ def main() -> None:
             raise ValueError("output must not replace an archive, Scenario, or imaging profile input")
         scenario = Scenario.from_dict(json.loads(args.scenario.read_bytes()))
         profile = ImagingProfile.from_dict(json.loads(args.imaging_profile.read_bytes()))
-        artifact = build_cue_inputs(archive, scenario, profile, selected_event_ids=args.event_id)
+        if archive.source == "cems":
+            if args.event_id:
+                raise ValueError("CEMS detail archives use --all; fetch the selected activation by code")
+            artifact = build_cems_inputs(archive, scenario, profile)
+        else:
+            artifact = build_cue_inputs(archive, scenario, profile, selected_event_ids=args.event_id)
         write_cue_inputs(args.out, artifact)
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"cue build failed: {error}\n")

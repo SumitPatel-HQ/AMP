@@ -31,6 +31,20 @@ itself.
 
 ## Data sources
 
+### Copernicus EMS activation metadata
+
+Copernicus Emergency Management Service (© European Union, 2026), activation
+EMSR933, Flood in Crete, Greece. Original public detail response and manifest:
+`amis/data/cues/crete-emsr933-20261004/`. Adapted centroid-based training inputs:
+`amis/data/examples/cems-crete-2026-10-04/`.
+[Terms](https://mapping.emergency.copernicus.eu/terms-and-conditions/) permit
+reproduction, distribution and adaptation subject to attribution and applicable law.
+[Citation guidelines](https://mapping.emergency.copernicus.eu/about/citation-guidelines/)
+and visibility were checked 2026-10-21; see
+[source verification](../../.doc/world-impact/a3-cems/source-verification.md).
+No third-party imagery is bundled. AMIS priority, deadline and resource values are
+simulation assumptions; the centroid provides no area-coverage guarantee.
+
 | Source | What AMIS used | License / terms | Where |
 | --- | --- | --- | --- |
 | U.S. Geological Survey, Earthquake Hazards Program GeoJSON feed | Archived earthquake event `us6000u0xi` ("102 km NE of Norsup, Vanuatu", M6.3, 2026-10-08), used to generate the bundled USGS Vanuatu earthquake replay Example's emergency arrival. | USGS-authored data is in the U.S. public domain; USGS requests credit as `U.S. Geological Survey`. See https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits. | Archive and manifest: `amis/data/cues/vanuatu-us6000u0xi-20261008/`. Example bundle: `amis/data/examples/usgs-vanuatu-2026-10-08/`. Credit and the AMIS simulation-policy notice are displayed beside cue evidence in the dashboard and in the Example's briefing. See [ADR-0015](../adr/0015-usgs-cue-replay.md). |

@@ -1,0 +1,46 @@
+{
+  "inputs": [
+    {
+      "event_type": "EMERGENCY_TASK",
+      "injection_time": "2026-10-04T11:02:00+00:00",
+      "payload": {
+        "activation_time": "2026-10-04T11:02:00+00:00",
+        "alert_level": "unknown",
+        "category": "Flood",
+        "centroid_policy_version": "cems-centroid-v1",
+        "request": {
+          "deadline": "2026-10-05T11:02:00+00:00",
+          "duration_s": 30.0,
+          "energy_cost_wh": 20.0,
+          "id": "CUE-c922bc386c9d0cdb211cd0b92b11230558e9730290d7a6e2efa314490b285848",
+          "priority": 5,
+          "status": "pending",
+          "storage_cost_mb": 100.0,
+          "target_lat": 35.22506250241993,
+          "target_lon": 24.978601792058495,
+          "target_name": "Flood in Crete, Greece"
+        },
+        "source": "cems",
+        "source_event_id": "EMSR933",
+        "source_event_time": "2026-10-01T07:00:00+00:00",
+        "source_url": "https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR933"
+      }
+    }
+  ],
+  "metadata": {
+    "archive": {
+      "file": "response.json",
+      "sha256": "952c4378bc44eed1101006db234ee1b4a1be21007d930191ee6f848eb60de39b",
+      "source": "cems",
+      "source_url": "https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR933"
+    },
+    "artifact_type": "developer-cue-inputs",
+    "imaging_profile": {
+      "duration_s": 30,
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100
+    },
+    "policy_version": "cems-centroid-v1",
+    "scenario_id": "SCN-EX-CEMS-CRETE"
+  }
+}

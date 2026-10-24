@@ -756,6 +756,16 @@ export interface components {
             mag?: number | null;
             /** Sig */
             sig?: number | null;
+            /** Category */
+            category?: string | null;
+            /** Activation Time */
+            activation_time?: string | null;
+            /** Source Event Time */
+            source_event_time?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Centroid Policy Version */
+            centroid_policy_version?: string | null;
         };
         /** ErrorBody */
         ErrorBody: {
