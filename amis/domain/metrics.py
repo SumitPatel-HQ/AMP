@@ -78,6 +78,8 @@ class RequesterServiceRow:
     served_utility: int
     service_share: float | None
     fulfillment_ratio: float | None
+    archive_satisfied_count: int = 0
+    archive_satisfied_utility: int = 0
 
 
 @dataclass(frozen=True)
@@ -91,9 +93,9 @@ class RequesterService:
     zero_service_requester_count: int = 0
     no_service: bool = True
     metric_version: str = "requester-utility-v1"
-    scope: str = "Identified requesters in the selected plan's RequestPool; unattributed service included in service shares, excluded from gap."
-    limitations: str = "Unique completed or planned imaging priority, not delivered imagery. Absolute utility is not normalized by demand, capability, or entitlement. Expired and infeasible demand remain included."
-    measured_at_convention: str = "Selected-plan membership and planned imaging, with completed requests from current mission state at measured_at."
+    scope: str = "Acquisition uses the selected plan's RequestPool; archive fulfillment is attributed separately, including accepted current archive arrivals. Unattributed acquisition is included in service shares, excluded from gap."
+    limitations: str = "Unique completed or planned imaging priority, not delivered imagery. Absolute utility is not normalized by demand, capability, or entitlement. Expired and infeasible demand remain included. Archive count and utility are separate from acquisition service and fairness."
+    measured_at_convention: str = "Selected-plan membership and planned imaging, with completed requests from current mission state at measured_at. Archive counts use accepted fulfillment at measured_at; historical plans exclude later transitions."
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)

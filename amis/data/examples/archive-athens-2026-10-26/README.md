@@ -47,14 +47,15 @@ results never changes this replay. See [archive operations](../../imagery/README
 
 ## Dashboard
 
-Choose Examples → Athens archive imagery releases simulated capacity, create
-the baseline plan, step 300 seconds, then choose Event → Archive fulfillment.
-Paste the `payload` from archive-inputs.json (do not paste its injection_time
-wrapper). Confirm the mission clock is 2026-10-26T07:05:00Z before recording.
-Inspect the distinct request badge, source item, profile/quality, attribution,
-affected old plan, map and timeline. Replan separately and inspect the PlanDiff
-and acquisition/fulfillment totals. Reload the saved mission to inspect its
-preserved evidence and status. Loading an Example never injects or replans.
+Archive satisfaction is submitted through the developer replay/API workflow;
+manual dashboard injection does not expose a raw JSON editor or archive option.
+For a persisted demonstration, run the replay with --database pointing at a new
+SQLite file and configure the backend's AMIS_DATABASE_URL to that same file.
+Load the saved mission in the dashboard to inspect the distinct request badge,
+source item, profile/quality, attribution, affected old plan, map and timeline.
+The replay without --replan preserves the affected baseline; use the dashboard's
+separate Replan action to inspect the resulting PlanDiff and metrics. Loading
+an Example never injects or replans automatically.
 
 ## Evidence and limits
 

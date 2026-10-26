@@ -18,6 +18,8 @@ from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
+from amis.time import parse_utc_iso_timestamp
+
 
 def _freeze(value: Any) -> Any:
     if isinstance(value, Mapping):
@@ -43,14 +45,7 @@ def _number(value: Any, name: str, low: float, high: float = math.inf) -> float:
     return value
 
 
-def _time(value: str) -> datetime:
-    moment = datetime.fromisoformat(value)
-    if moment.utcoffset() is None:
-        raise ValueError("archive evidence timestamps must include a timezone")
-    return moment
-
-
-def _text(value: Any, name: str) -> None:
+def _require_non_empty_str(value: Any, name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"archive evidence requires nonempty {name}")
 
@@ -62,14 +57,14 @@ def validate_suitability_profile(profile: Mapping[str, Any]) -> None:
                 "max_cloud_cover_pct", "max_gsd_m", "sensor_product_assertion"}
     if not isinstance(profile, Mapping) or not required <= profile.keys() or profile.keys() - required - {"max_view_angle_deg"}:
         raise ValueError("archive profile has missing or unsupported requirements")
-    _text(profile["version"], "profile version")
-    _text(profile["sensor_product_assertion"], "sensor/product assertion")
+    _require_non_empty_str(profile["version"], "profile version")
+    _require_non_empty_str(profile["sensor_product_assertion"], "sensor/product assertion")
     collections = profile["allowed_collections"]
     if not isinstance(collections, tuple) or not collections:
         raise ValueError("archive profile requires allowed collections")
     for collection in collections:
-        _text(collection, "allowed collection")
-    if _time(profile["acquisition_start"]) > _time(profile["acquisition_end"]):
+        _require_non_empty_str(collection, "allowed collection")
+    if parse_utc_iso_timestamp(profile["acquisition_start"]) > parse_utc_iso_timestamp(profile["acquisition_end"]):
         raise ValueError("archive profile acquisition interval is reversed")
     _number(profile["max_cloud_cover_pct"], "max_cloud_cover_pct", 0, 100)
     if _number(profile["max_gsd_m"], "max_gsd_m", 0) <= 0:
@@ -116,8 +111,8 @@ class ArchiveSatisfactionPayload:
 
     def validate(self, satisfaction_time: datetime) -> None:
         for field in ("request_id", "catalogue_source", "collection_id", "item_id", "source_credit"):
-            _text(getattr(self, field), field)
-        _text(self.source_url, "source_url")
+            _require_non_empty_str(getattr(self, field), field)
+        _require_non_empty_str(self.source_url, "source_url")
         url = urlsplit(self.source_url)
         if url.scheme != "https" or not url.hostname or url.username or url.password:
             raise ValueError("archive source_url must be an HTTPS URL without credentials")
@@ -130,11 +125,11 @@ class ArchiveSatisfactionPayload:
         collections = profile["allowed_collections"]
         if self.collection_id not in collections:
             raise ValueError("archive collection is not allowed by the profile")
-        start, end = _time(self.acquisition_start), _time(self.acquisition_end)
-        allowed_start, allowed_end = _time(profile["acquisition_start"]), _time(profile["acquisition_end"])
+        start, end = parse_utc_iso_timestamp(self.acquisition_start), parse_utc_iso_timestamp(self.acquisition_end)
+        allowed_start, allowed_end = parse_utc_iso_timestamp(profile["acquisition_start"]), parse_utc_iso_timestamp(profile["acquisition_end"])
         if not allowed_start <= start <= end <= allowed_end or end > satisfaction_time:
             raise ValueError("archive acquisition must fall wholly within the profile and precede satisfaction")
-        if not end <= _time(self.retrieved_at) <= satisfaction_time:
+        if not end <= parse_utc_iso_timestamp(self.retrieved_at) <= satisfaction_time:
             raise ValueError("archive retrieval must demonstrate availability by satisfaction time")
         cloud = _number(self.cloud_cover_pct, "cloud_cover_pct", 0, 100)
         max_cloud = _number(profile["max_cloud_cover_pct"], "max_cloud_cover_pct", 0, 100)

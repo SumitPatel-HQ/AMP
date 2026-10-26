@@ -353,3 +353,68 @@ def test_public_event_evidence_cannot_be_mutated_after_validation():
     serialized = accepted.to_dict()
     serialized["payload"]["profile"]["allowed_collections"].clear()
     assert session.get_events()[0].to_dict() == original
+
+
+def test_requester_archive_breakdown_preserves_acquisition_and_historical_membership():
+    from dataclasses import replace
+    from amis.demo import build_canonical_replan_scenario, build_emergency_replan_fixture
+
+    scenario = build_canonical_replan_scenario()
+    scenario = replace(scenario, requests=tuple(replace(r, requester_id="Archive owner" if r.id == "OBS-B" else "Imaging owner") for r in scenario.requests))
+    session = MissionSession(window_provider=CanonicalWindowProvider())
+    session.load_scenario(scenario)
+    session.generate_windows()
+    first = session.plan()
+    session.step(300)
+    before = session.get_metrics().requester_service
+    session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session))
+    current = session.get_metrics().requester_service
+    row = next(r for r in current.requesters if r.requester_id == "Archive owner")
+    assert (row.archive_satisfied_count, row.archive_satisfied_utility) == (1, 4)
+    assert (row.served_request_count, row.served_utility) == (1, 4)
+    assert current.total_served_utility == before.total_served_utility
+    assert current.fairness_gap == before.fairness_gap
+    session.replan()
+    row = next(r for r in session.get_metrics().requester_service.requesters if r.requester_id == "Archive owner")
+    assert (row.archive_satisfied_count, row.archive_satisfied_utility) == (1, 4)
+    assert (row.served_request_count, row.served_utility) == (0, 0)
+    assert all(r.archive_satisfied_count == 0 for r in session.get_metrics(first.id).requester_service.requesters)
+    _, arrival = build_emergency_replan_fixture()
+    arrival = replace(arrival, request=replace(arrival.request, requester_id="New archive owner"))
+    session.inject_event("EMERGENCY_TASK", arrival.to_dict())
+    before_arrival_credit = session.get_metrics().requester_service
+    session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session, arrival.request.id))
+    service = session.get_metrics().requester_service
+    row = next(r for r in service.requesters if r.requester_id == "New archive owner")
+    assert (row.archive_satisfied_count, row.archive_satisfied_utility) == (1, 5)
+    assert (row.request_count, row.served_request_count, row.served_utility) == (0, 0, 0)
+    assert service.total_served_utility == before_arrival_credit.total_served_utility
+    assert service.fairness_gap == before_arrival_credit.fairness_gap
+    assert service.zero_service_requester_count == before_arrival_credit.zero_service_requester_count
+
+
+def test_unattributed_archive_fulfillment_is_reported_separately_from_acquisition():
+    session = planned_session()
+    session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session))
+    session.replan()
+    row = session.get_metrics().requester_service.unattributed
+    assert (row.archive_satisfied_count, row.archive_satisfied_utility) == (1, 4)
+    assert (row.served_request_count, row.served_utility) == (4, 11)
+
+
+def test_archive_only_arrival_does_not_create_an_acquisition_fairness_population():
+    from dataclasses import replace
+    from amis.demo import build_canonical_replan_scenario, build_emergency_replan_fixture
+
+    scenario = build_canonical_replan_scenario()
+    scenario = replace(scenario, requests=tuple(replace(r, requester_id="Only acquisition requester") for r in scenario.requests))
+    session = MissionSession(window_provider=CanonicalWindowProvider())
+    session.load_scenario(scenario)
+    session.generate_windows()
+    session.plan()
+    session.step(300)
+    _, arrival = build_emergency_replan_fixture()
+    arrival = replace(arrival, request=replace(arrival.request, requester_id="Archive-only requester"))
+    session.inject_event("EMERGENCY_TASK", arrival.to_dict())
+    session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session, arrival.request.id))
+    assert session.get_metrics().requester_service.fairness_gap is None

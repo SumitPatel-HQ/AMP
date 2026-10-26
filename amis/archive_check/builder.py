@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import unquote, urlsplit
 
-from amis.archive_check.archive import SOURCE, ArchivePage, checked_url, load_archive, timestamp
+from amis.archive_check.archive import SOURCE, ArchivePage, checked_url, load_archive
+from amis.time import parse_utc_iso_timestamp
 from amis.domain import ArchiveSatisfactionPayload, EmergencyRequestPayload, EventType, MissionEvent, ObservationRequest, RequestStatus, Scenario
 from amis.domain.archive import validate_suitability_profile
 
@@ -36,8 +36,8 @@ def _payload(item: dict[str, Any], page: ArchivePage, request: ObservationReques
         start, end = properties["start_datetime"], properties["end_datetime"]
     else:
         start = end = properties["datetime"]
-    start = timestamp(start).astimezone(timezone.utc)
-    end = timestamp(end).astimezone(timezone.utc)
+    start = parse_utc_iso_timestamp(start)
+    end = parse_utc_iso_timestamp(end)
     links = item["links"]
     source_links = [link["href"] for link in links if link.get("rel") == "self"]
     if len(source_links) != 1:
@@ -45,6 +45,9 @@ def _payload(item: dict[str, Any], page: ArchivePage, request: ObservationReques
     source_url = checked_url(source_links[0])
     if unquote(urlsplit(source_url).path) != f"/v1/collections/{collection}/items/{item_id}":
         raise ValueError("STAC self link does not match the collection/item identity")
+    view_angle = properties.get("view:incidence_angle")
+    if view_angle is None:
+        view_angle = properties.get("view:off_nadir")
     return ArchiveSatisfactionPayload(
         request_id=request.id, catalogue_source=SOURCE, collection_id=collection, item_id=item_id,
         source_url=source_url, source_response_sha256=page.sha256,
@@ -52,7 +55,7 @@ def _payload(item: dict[str, Any], page: ArchivePage, request: ObservationReques
         acquisition_start=start.isoformat(), acquisition_end=end.isoformat(), retrieved_at=retrieved_at,
         target_lat=request.target_lat, target_lon=request.target_lon, footprint=item["geometry"],
         cloud_cover_pct=properties["eo:cloud_cover"], gsd_m=properties["gsd"],
-        view_angle_deg=properties.get("view:off_nadir"), profile=profile, policy_version=POLICY,
+        view_angle_deg=view_angle, profile=profile, policy_version=POLICY,
     )
 
 
@@ -103,7 +106,7 @@ def build_archive_inputs(
         if not isinstance(requirement, dict) or set(requirement) != {"injection_time", "profile"}:
             raise ValueError("each archive requirement needs only injection_time and profile")
         request, arrival_time = pool[request_id]
-        injection = timestamp(requirement["injection_time"]).astimezone(timezone.utc)
+        injection = parse_utc_iso_timestamp(requirement["injection_time"])
         if (request.validation_error() is not None or request.status not in (RequestStatus.PENDING, RequestStatus.SCHEDULED)
                 or not scenario.start_time <= injection < scenario.end_time
                 or injection < arrival_time or injection > request.deadline):
@@ -128,7 +131,7 @@ def build_archive_inputs(
         # Three stable sorts avoid timestamp float precision and retain full intervals.
         qualified.sort(key=lambda p: (p.collection_id, p.item_id))
         qualified.sort(key=lambda p: p.cloud_cover_pct)
-        qualified.sort(key=lambda p: timestamp(p.acquisition_end), reverse=True)
+        qualified.sort(key=lambda p: parse_utc_iso_timestamp(p.acquisition_end), reverse=True)
         if qualified:
             selected = qualified[0]
             inputs.append({"injection_time": injection.isoformat(), "event_type": EventType.REQUEST_SATISFIED_BY_ARCHIVE.value,

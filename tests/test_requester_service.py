@@ -61,15 +61,15 @@ def test_unequal_demand_infeasible_expired_and_unattributed_totals():
     service = session.get_metrics().to_dict()["requester_service"]
     assert service["requesters"] == [
         dict(requester_id="A", request_count=2, demand_utility=8, served_request_count=1,
-             served_utility=5, service_share=5/17, fulfillment_ratio=5/8),
+             served_utility=5, service_share=5/17, fulfillment_ratio=5/8, archive_satisfied_count=0, archive_satisfied_utility=0),
         dict(requester_id="B", request_count=1, demand_utility=4, served_request_count=1,
-             served_utility=4, service_share=4/17, fulfillment_ratio=1),
+             served_utility=4, service_share=4/17, fulfillment_ratio=1, archive_satisfied_count=0, archive_satisfied_utility=0),
         dict(requester_id="C", request_count=1, demand_utility=2, served_request_count=0,
-             served_utility=0, service_share=0, fulfillment_ratio=0),
+             served_utility=0, service_share=0, fulfillment_ratio=0, archive_satisfied_count=0, archive_satisfied_utility=0),
     ]
     assert service["unattributed"] == dict(requester_id=None, request_count=3,
         demand_utility=8, served_request_count=3, served_utility=8,
-        service_share=8/17, fulfillment_ratio=1)
+        service_share=8/17, fulfillment_ratio=1, archive_satisfied_count=0, archive_satisfied_utility=0)
     assert service["fairness_gap"] == 5
     assert service["zero_service_requester_count"] == 1
 

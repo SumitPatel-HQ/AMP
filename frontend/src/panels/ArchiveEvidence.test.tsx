@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MissionEventSchema } from "../api/client";
 import { missionState, plan, scenario } from "../test/mapFixtures";
@@ -27,17 +26,13 @@ it("shows the source, explicit thresholds, approximation, credit and fulfillment
   expect(evidence.getByRole("link", { name: "Source item" }).getAttribute("href")).toBe("https://example.org/synthetic-scene-001");
 });
 
-it("records the supplied payload through the event control without a replan operation", async () => {
-  const onInjectEvent = vi.fn().mockResolvedValue(true);
-  const onInjected = vi.fn();
-  render(<EventControl scenario={scenario} plan={plan} missionState={missionState} windows={[]} events={[]} loading={false} onInjectEvent={onInjectEvent} onInjected={onInjected} />);
-  const user = userEvent.setup();
-  await user.click(screen.getByRole("radio", { name: "Archive fulfillment" }));
-  await user.click(screen.getByLabelText("Archive evidence payload (JSON)"));
-  await user.paste(JSON.stringify(input.payload));
-  await user.click(screen.getByRole("button", { name: "Record archive fulfillment" }));
-  expect(onInjectEvent).toHaveBeenCalledWith(input);
-  expect(onInjected).toHaveBeenCalledOnce();
+it("offers manual mission events while archive evidence remains inspection only", () => {
+  const onInjectEvent = vi.fn();
+  render(<EventControl scenario={scenario} plan={plan} missionState={missionState} windows={[]} events={[event]} loading={false} onInjectEvent={onInjectEvent} onInjected={vi.fn()} />);
+  expect(screen.queryByRole("radio", { name: "Archive fulfillment" })).toBeNull();
+  expect(screen.queryByLabelText("Archive evidence payload (JSON)")).toBeNull();
+  expect(screen.getByRole("radio", { name: "Cloud block" })).toBeTruthy();
+  expect(onInjectEvent).not.toHaveBeenCalled();
 });
 
 it("keeps archive fulfillment distinct from the obsolete active imaging action in request inspection", () => {

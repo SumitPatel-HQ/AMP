@@ -156,10 +156,37 @@ def test_geographic_boundary_passes_while_bbox_only_and_unsupported_geometry_are
     assert {r["item_id"] for r in result["results"][0]["rejections"]} == {"bbox-only", "unsupported", "invalid"}
 
 
-def test_optional_view_requirement_does_not_treat_incidence_as_off_nadir(tmp_path):
+@pytest.mark.parametrize("properties,expected", [
+    ({"view:incidence_angle": 2}, 2),
+    ({"view:incidence_angle": 2, "view:off_nadir": 50}, 2),
+    ({"view:off_nadir": 3}, 3),
+    ({"view:incidence_angle": None, "view:off_nadir": 3}, 3),
+])
+def test_view_requirement_prefers_sentinel_incidence_with_off_nadir_fallback(tmp_path, properties, expected):
     from amis.archive_check import build_archive_inputs
 
-    manifest = archive_items(tmp_path, synthetic_item(**{"view:incidence_angle": 2}))
+    manifest = archive_items(tmp_path, synthetic_item(**properties))
+    scenario, requirements = scenario_and_requirements()
+    requirements["OBS-1"]["profile"]["max_view_angle_deg"] = 10
+    result = build_archive_inputs(manifest, scenario, requirements)
+    assert result["inputs"][0]["payload"]["view_angle_deg"] == expected
+
+
+def test_invalid_incidence_is_not_replaced_with_a_more_favorable_off_nadir_value(tmp_path):
+    from amis.archive_check import build_archive_inputs
+
+    manifest = archive_items(tmp_path, synthetic_item(**{"view:incidence_angle": 20, "view:off_nadir": 2}))
+    scenario, requirements = scenario_and_requirements()
+    requirements["OBS-1"]["profile"]["max_view_angle_deg"] = 10
+    result = build_archive_inputs(manifest, scenario, requirements)
+    assert result["inputs"] == []
+    assert "view angle" in result["results"][0]["rejections"][0]["reason"]
+
+
+def test_required_view_angle_is_not_invented_when_both_catalogue_fields_are_missing(tmp_path):
+    from amis.archive_check import build_archive_inputs
+
+    manifest = archive_items(tmp_path, synthetic_item())
     scenario, requirements = scenario_and_requirements()
     requirements["OBS-1"]["profile"]["max_view_angle_deg"] = 10
     result = build_archive_inputs(manifest, scenario, requirements)

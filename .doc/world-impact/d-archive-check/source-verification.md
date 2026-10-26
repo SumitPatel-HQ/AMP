@@ -57,10 +57,13 @@ explicitly accept the sensor/product need.
 The [EO extension](https://raw.githubusercontent.com/stac-extensions/eo/v2.0.0/README.md)
 defines scene cloud percentage. It does not certify clear pixels at the target.
 The [view extension](https://raw.githubusercontent.com/stac-extensions/view/v1.0.0/README.md)
-distinguishes sensor off-nadir and surface incidence angles. Optional AMIS
-max_view_angle_deg uses only view:off_nadir. These CDSE items supply incidence
-angle, so the Example requires no off-nadir limit. Missing required values
-never receive favorable defaults.
+distinguishes sensor off-nadir and surface incidence angles. The reviewed
+Sentinel-2 adapter policy now prefers view:incidence_angle, falling back to
+view:off_nadir only when incidence is absent or null. Optional AMIS
+max_view_angle_deg applies to that selected metadata value; no equivalence or
+geometric conversion between the angles is asserted. The Example imposes no
+viewing limit but records the available incidence angle. Missing required
+values never receive favorable defaults.
 
 Availability is established conservatively from completion of the archived
 search: `2026-10-26T05:55:02.376253+00:00`. Satisfaction occurs later at

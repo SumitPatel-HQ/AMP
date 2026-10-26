@@ -19,11 +19,10 @@ the distinct archive outcome; its future imaging is released. OBS-A's already
 started action and consumed resources stay intact. This fixture demonstrates
 the transition, not D-02's real catalogue capacity-release Example.
 
-To submit through the dashboard, load `scenario.json` with the mission builder,
-plan, step five minutes, select **Event → Archive fulfillment**, and paste the
-`payload` object from `event-input.json`. Record it, inspect the evidence, then
-use Replan. The event time is the current simulated clock; do not shift the
-fixture's acquisition/retrieval/profile dates to fit another mission.
+Archive evidence is recorded through the developer script or event API.
+The dashboard inspects accepted evidence, events and fulfillment results; its
+manual event controls do not accept archive JSON. The event time is the current
+simulated clock; do not shift the fixture's dates to fit another mission.
 
 The equivalent API operation is `POST /scenarios/SCN-002/events` with the full
 contents of `event-input.json`, after creating this Scenario and planning and

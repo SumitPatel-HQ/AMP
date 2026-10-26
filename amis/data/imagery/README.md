@@ -28,9 +28,12 @@ python -m scripts.build_imagery_events scenario.json --archive-manifest amis/dat
 Requirements map request IDs to exactly `injection_time` and `profile`. Each
 profile explicitly supplies version, allowed collections, acquisition_start,
 acquisition_end, max_cloud_cover_pct, max_gsd_m and sensor_product_assertion.
-Optional max_view_angle_deg means **off-nadir angle** in degrees; a measured
-`view:off_nadir` is required for that criterion. Incidence angle is not used
-as a substitute. The initial adapter supports Sentinel-2 L1C and L2A; it
+Optional max_view_angle_deg limits the selected catalogue viewing angle in
+degrees. For Sentinel-2, `view:incidence_angle` is preferred, with
+`view:off_nadir` used only when incidence is absent or null. These are distinct
+physical angles; this is an explicit metadata-selection policy, not a geometric
+conversion. Invalid or over-limit incidence is never replaced by a more
+favorable fallback. The initial adapter supports Sentinel-2 L1C and L2A; it
 diagnoses other collections rather than inventing sensor/product suitability.
 
 An optional `--arrival-events accepted-events.json` accepts an array of recorded

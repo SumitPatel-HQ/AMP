@@ -576,6 +576,8 @@ class RequesterServiceRowSchema(ApiModel):
     served_utility: int
     service_share: float | None
     fulfillment_ratio: float | None
+    archive_satisfied_count: int = 0
+    archive_satisfied_utility: int = 0
 
 
 class RequesterServiceSchema(ApiModel):

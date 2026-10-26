@@ -1308,6 +1308,16 @@ export interface components {
             service_share: number | null;
             /** Fulfillment Ratio */
             fulfillment_ratio: number | null;
+            /**
+             * Archive Satisfied Count
+             * @default 0
+             */
+            archive_satisfied_count: number;
+            /**
+             * Archive Satisfied Utility
+             * @default 0
+             */
+            archive_satisfied_utility: number;
         };
         /** RequesterServiceSchema */
         RequesterServiceSchema: {

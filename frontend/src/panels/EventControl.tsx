@@ -21,8 +21,9 @@ import {
 import { CONTROL_BUTTON, CONTROL_INPUT, EVENT_BUTTON_OPEN } from "./controls";
 import { clockTime } from "./format";
 
-const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
-  { type: "REQUEST_SATISFIED_BY_ARCHIVE", label: "Archive fulfillment" },
+type ManualEventType = Exclude<MissionEventType, "REQUEST_SATISFIED_BY_ARCHIVE">;
+
+const EVENT_TYPES: { type: ManualEventType; label: string }[] = [
   { type: "CLOUD_BLOCK", label: "Cloud block" },
   { type: "BATTERY_DROP", label: "Battery drop" },
   { type: "EMERGENCY_TASK", label: "Emergency request" },
@@ -30,8 +31,7 @@ const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
   { type: "COMMUNICATION_OUTAGE", label: "Comm outage" },
 ];
 
-const INJECT_LABEL: Record<MissionEventType, string> = {
-  REQUEST_SATISFIED_BY_ARCHIVE: "Record archive fulfillment",
+const INJECT_LABEL: Record<ManualEventType, string> = {
   CLOUD_BLOCK: "Inject cloud block",
   BATTERY_DROP: "Inject battery drop",
   EMERGENCY_TASK: "Inject emergency request",
@@ -46,27 +46,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
-}
-
-function ArchiveFields({ onChange }: { onChange: (event: MissionEventRequest | null) => void }) {
-  const [text, setText] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  return <Field label="Archive evidence payload (JSON)">
-    <textarea aria-label="Archive evidence payload (JSON)" className={CONTROL_INPUT} rows={12} value={text}
-      onChange={e => {
-        setText(e.target.value);
-        try {
-          const payload = JSON.parse(e.target.value);
-          if (payload === null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Expected an evidence object");
-          onChange({ event_type: "REQUEST_SATISFIED_BY_ARCHIVE", payload });
-          setProblem(null);
-        } catch {
-          onChange(null);
-          setProblem("Enter a valid evidence JSON object.");
-        }
-      }} />
-    <span>{problem ?? "Record at the current mission clock. Evidence is validated offline. Replanning remains explicit."}</span>
-  </Field>;
 }
 
 /** Request, then one of that request's real windows: the cloud block the API accepts. */
@@ -400,7 +379,7 @@ export function EventControl({
   onInjectEvent: (event: MissionEventRequest) => Promise<boolean>;
   onInjected: () => void;
 }) {
-  const [type, setType] = useState<MissionEventType>("CLOUD_BLOCK");
+  const [type, setType] = useState<ManualEventType>("CLOUD_BLOCK");
   const [configured, setConfigured] = useState<MissionEventRequest | null>(null);
 
   const requestIds = useMemo(
@@ -413,7 +392,7 @@ export function EventControl({
       : emergencyRequestDefaults(missionState.simulated_time, requestIds),
   );
 
-  const chooseType = (next: MissionEventType) => {
+  const chooseType = (next: ManualEventType) => {
     setType(next);
     setConfigured(null);
   };
@@ -440,9 +419,7 @@ export function EventControl({
           </button>
         ))}
       </div>
-      {type === "REQUEST_SATISFIED_BY_ARCHIVE" ? (
-        <ArchiveFields onChange={setConfigured} />
-      ) : type === "CLOUD_BLOCK" ? (
+      {type === "CLOUD_BLOCK" ? (
         <CloudBlockFields requestIds={requestIds} windows={windows} onChange={setConfigured} />
       ) : type === "BATTERY_DROP" ? (
         <BatteryDropFields

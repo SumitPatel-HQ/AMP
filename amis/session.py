@@ -524,10 +524,7 @@ class MissionSession:
 
         if parsed_event_type is EventType.REQUEST_SATISFIED_BY_ARCHIVE:
             assert isinstance(event_payload, ArchiveSatisfactionPayload)
-            self._request_pool = tuple(
-                replace(r, status=RequestStatus.SATISFIED_BY_ARCHIVE)
-                if r.id == event_payload.request_id else r for r in self._request_pool
-            )
+            self._mark_requests_satisfied_by_archive({event_payload.request_id})
             self._state = replace(state, active_event_ids=state.active_event_ids + (event.id,))
         elif parsed_event_type is EventType.CLOUD_BLOCK:
             assert isinstance(event_payload, CloudBlockPayload)
@@ -751,8 +748,7 @@ class MissionSession:
         }
 
         satisfied_ids = {e.payload.request_id for e in events if isinstance(e.payload, ArchiveSatisfactionPayload)}
-        self._request_pool = tuple(replace(r, status=RequestStatus.SATISFIED_BY_ARCHIVE)
-                                   if r.id in satisfied_ids else r for r in self._request_pool)
+        self._mark_requests_satisfied_by_archive(satisfied_ids)
         if self._plans:
             latest_plan = self._plans[-1]
             planner_name = latest_plan.planner_name or "greedy"
@@ -897,6 +893,12 @@ class MissionSession:
         self._traces = []
         self._impacts = []
         self._base_contacts = None
+
+    def _mark_requests_satisfied_by_archive(self, request_ids: set[str]) -> None:
+        self._request_pool = tuple(
+            replace(request, status=RequestStatus.SATISFIED_BY_ARCHIVE)
+            if request.id in request_ids else request for request in self._request_pool
+        )
 
     def _update_request_statuses_from_plan(self) -> None:
         plan = self.get_plan()

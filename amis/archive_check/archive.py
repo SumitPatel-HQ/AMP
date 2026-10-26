@@ -14,16 +14,11 @@ from typing import Any, Callable
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 from urllib.request import urlopen
 
+from amis.time import parse_utc_iso_timestamp
+
 
 SOURCE = "copernicus-data-space-stac"
 FORMAT = "stac-get-archive-v1"
-
-
-def timestamp(value: str) -> datetime:
-    moment = datetime.fromisoformat(value)
-    if moment.utcoffset() is None:
-        raise ValueError("archive timestamps must include a timezone")
-    return moment
 
 
 def checked_url(value: str) -> str:
@@ -116,7 +111,7 @@ def fetch_archive(
         seen.add(url)
         raw = fetch(url)
         data = decode_page(raw)
-        retrieved = timestamp(clock().isoformat())
+        retrieved = parse_utc_iso_timestamp(clock().isoformat())
         if previous_time is not None and retrieved < previous_time:
             raise ValueError("archive retrieval clock moved backwards")
         previous_time = retrieved
@@ -170,7 +165,7 @@ def load_archive(manifest_path: Path) -> ImageryArchive:
         url = checked_url(record["url"])
         if record.get("method") != "GET" or record.get("parameters") != [list(p) for p in parse_qsl(urlsplit(url).query, keep_blank_values=True)]:
             raise ValueError("archive request parameters/method are inconsistent")
-        pages.append(ArchivePage(raw, url, timestamp(record["retrieved_at"]), digest))
+        pages.append(ArchivePage(raw, url, parse_utc_iso_timestamp(record["retrieved_at"]), digest))
     expected: str | None = checked_url(manifest["source_url"])
     item_count, seen = 0, set()
     previous_time = pages[0].retrieved_at
@@ -188,7 +183,7 @@ def load_archive(manifest_path: Path) -> ImageryArchive:
         matched = decode_page(page.raw).get("numberMatched")
         if matched is not None and (type(matched) is not int or matched != item_count):
             raise ValueError("archive result count does not match the completed search")
-    retrieved = timestamp(manifest["retrieved_at"])
+    retrieved = parse_utc_iso_timestamp(manifest["retrieved_at"])
     if retrieved != pages[-1].retrieved_at:
         raise ValueError("archive completion time does not match the final retrieval")
     return ImageryArchive(tuple(pages), retrieved)

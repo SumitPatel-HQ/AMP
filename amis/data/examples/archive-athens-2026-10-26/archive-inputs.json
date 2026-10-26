@@ -56,7 +56,8 @@
         "source_response_sha256": "f792d85f091258a2ade3dc71966439352baa9353368fa13b3919428372f1f6b0",
         "source_url": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20260908T091331_N0512_R050_T35SKC_20260908T141908",
         "target_lat": 37.98,
-        "target_lon": 23.73
+        "target_lon": 23.73,
+        "view_angle_deg": 2.907945954908292
       }
     }
   ],

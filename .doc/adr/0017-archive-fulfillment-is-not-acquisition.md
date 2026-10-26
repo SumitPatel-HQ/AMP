@@ -42,6 +42,10 @@ Archive-satisfied emergency arrivals remain visible; after replan they have
 null planned acquisition and always null achieved acquisition/Satellite.
 Missing acquisition is never zero latency. Requester utility/fairness remains
 acquisition-based; D-01 adds no dependency on requester attribution.
+When requester labels are present, separate archive-satisfied count and utility
+are included in each requester row and the unattributed row. Archive-only
+arrivals can receive immediate credit without entering acquisition membership,
+counts, utility or fairness denominators before replan.
 
 Accepted evidence persists in the event log and reconstructs the terminal
 RequestPool state offline. Reset clears it. The source-response digest records

@@ -93,11 +93,11 @@ export function RequesterService({
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <caption className="text-left">
-            Service share denominator: {service.total_served_utility} total served priority units, including unattributed service. Fulfillment: served / demand utility.
+            Service share denominator: {service.total_served_utility} total served priority units, including unattributed service. Fulfillment: acquisition served / demand utility. Archive count and utility are separate.
           </caption>
           <thead>
             <tr>
-              {["Requester", "Requests", "Demand utility", "Served requests", "Served utility", "Service share", "Fulfillment"].map((label) => (
+              {["Requester", "Archive count", "Archive utility", "Requests", "Demand utility", "Served requests", "Served utility", "Service share", "Fulfillment"].map((label) => (
                 <th key={label} className="pr-2">{label}</th>
               ))}
             </tr>
@@ -108,6 +108,8 @@ export function RequesterService({
                 <th scope="row" className="pr-2">
                   {row.requester_id === null ? "Unattributed (no requester id)" : row.requester_id}
                 </th>
+                <td>{row.archive_satisfied_count ?? 0}</td>
+                <td>{row.archive_satisfied_utility ?? 0}</td>
                 <td>{row.request_count}</td>
                 <td>{row.demand_utility}</td>
                 <td>{row.served_request_count}</td>

@@ -112,7 +112,10 @@ def compute_metrics(
 
     return MetricsResult(
         plan_id=plan.id,
-        requester_service=compute_requester_service(pool, utility_request_ids),
+        requester_service=compute_requester_service(
+            pool, utility_request_ids,
+            archive_requests=(r for r in fulfillment_pool if r.id in archive_ids),
+        ),
         mission_utility=mission_utility,
         archive_satisfied_count=len(archive_ids),
         archive_satisfied_utility=sum(fulfillment_priority_by_id[r] for r in archive_ids),
@@ -142,27 +145,35 @@ def compute_metrics(
 
 def compute_requester_service(
     pool: tuple[ObservationRequest, ...], served_ids: set[str],
+    *, archive_requests: Iterable[ObservationRequest] = (),
 ) -> RequesterService:
     groups: dict[str | None, list[ObservationRequest]] = {None: []}
     for request in pool:
         groups.setdefault(request.requester_id, []).append(request)
+    archive_groups: dict[str | None, list[ObservationRequest]] = {}
+    for request in {r.id: r for r in archive_requests}.values():
+        archive_groups.setdefault(request.requester_id, []).append(request)
     total = sum(request.priority for request in pool if request.id in served_ids)
 
     def row(identity: str | None) -> RequesterServiceRow:
-        requests = groups[identity]
+        requests = groups.get(identity, [])
+        archived = archive_groups.get(identity, [])
         served = [request for request in requests if request.id in served_ids]
         demand = sum(request.priority for request in requests)
         utility = sum(request.priority for request in served)
         return RequesterServiceRow(
             identity, len(requests), demand, len(served), utility,
             utility / total if total else None, utility / demand if demand else None,
+            archive_satisfied_count=len(archived),
+            archive_satisfied_utility=sum(request.priority for request in archived),
         )
 
-    rows = tuple(row(identity) for identity in sorted(key for key in groups if key is not None))
-    utilities = [item.served_utility for item in rows]
+    rows = tuple(row(identity) for identity in sorted(key for key in groups.keys() | archive_groups.keys() if key is not None))
+    # Archive-only arrivals must not change the acquisition fairness population.
+    utilities = [item.served_utility for item in rows if item.requester_id in groups]
     return RequesterService(
         requesters=rows, unattributed=row(None), total_served_utility=total,
-        fairness_gap=max(utilities) - min(utilities) if len(rows) >= 2 else None,
+        fairness_gap=max(utilities) - min(utilities) if len(utilities) >= 2 else None,
         zero_service_requester_count=sum(value == 0 for value in utilities),
         no_service=total == 0,
     )
