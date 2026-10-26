@@ -1,3 +1,4 @@
+from amis.domain.archive import ArchiveSatisfactionPayload
 from amis.domain.contact import ContactWindow, GroundStation
 from amis.domain.diff import PlanDiff, PlanDiffEntry
 from amis.domain.enums import (
@@ -36,6 +37,7 @@ from amis.domain.violation import Violation
 from amis.domain.window import ObservationWindow
 
 __all__ = [
+    "ArchiveSatisfactionPayload",
     "ActionKind",
     "CommunicationOutagePayload",
     "ContactWindow",

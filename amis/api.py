@@ -38,7 +38,7 @@ from amis.api_schemas import (
     GroundTrackPointSchema,
 )
 from amis.examples import cloud_example, example_briefings, examples
-from amis.domain import Scenario
+from amis.domain import EventType, Scenario
 from amis.orbital.elements import catalogue, from_tle
 from amis.orbital.track import ground_track
 from amis.orbital.validation import preview
@@ -416,7 +416,7 @@ def create_app(
         session = store.load(scenario_id)
         event_request = request.root
         event = session.inject_event(
-            event_request.event_type, event_request.payload.model_dump(mode="json")
+            event_request.event_type, event_request.payload.model_dump(mode="json", exclude_unset=event_request.event_type is EventType.REQUEST_SATISFIED_BY_ARCHIVE)
         )
         store.save(session)
         return event.to_dict()

@@ -9,6 +9,7 @@ class RequestStatus(str, Enum):
     COMPLETED = "completed"
     DROPPED = "dropped"
     EXPIRED = "expired"
+    SATISFIED_BY_ARCHIVE = "satisfied_by_archive"
 
 
 class ActionStatus(str, Enum):
@@ -23,6 +24,7 @@ class ActionKind(str, Enum):
 
 
 class EventType(str, Enum):
+    REQUEST_SATISFIED_BY_ARCHIVE = "REQUEST_SATISFIED_BY_ARCHIVE"
     CLOUD_BLOCK = "CLOUD_BLOCK"
     BATTERY_DROP = "BATTERY_DROP"
     EMERGENCY_TASK = "EMERGENCY_TASK"
@@ -31,6 +33,7 @@ class EventType(str, Enum):
 
 
 class PlanChangeType(str, Enum):
+    SATISFIED_BY_ARCHIVE = "SATISFIED_BY_ARCHIVE"
     UNCHANGED = "UNCHANGED"
     MOVED = "MOVED"
     INSERTED = "INSERTED"
@@ -39,6 +42,7 @@ class PlanChangeType(str, Enum):
 
 
 class ReasonCode(str, Enum):
+    SATISFIED_BY_ARCHIVE = "SATISFIED_BY_ARCHIVE"
     WINDOW_INVALIDATED = "WINDOW_INVALIDATED"
     INSUFFICIENT_BATTERY = "INSUFFICIENT_BATTERY"
     INSUFFICIENT_STORAGE = "INSUFFICIENT_STORAGE"

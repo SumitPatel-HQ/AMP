@@ -5,12 +5,13 @@ import type { EmergencyResponseSchema, MetricsSchema } from "../api/client";
  * row. Achieved means the backend reports that imaging actually started;
  * the browser never infers it from the clock or a proposed action time.
  */
-export type EmergencyResponseState = "achieved" | "planned" | "expired" | "unserved";
+export type EmergencyResponseState = "archive" | "achieved" | "planned" | "expired" | "unserved";
 
 export function emergencyResponseState(row: EmergencyResponseSchema): EmergencyResponseState {
   if (row.achieved_start_time !== null) {
     return "achieved";
   }
+  if (row.request_status === "satisfied_by_archive") return "archive";
   if (row.request_status === "expired") {
     return "expired";
   }
@@ -19,6 +20,7 @@ export function emergencyResponseState(row: EmergencyResponseSchema): EmergencyR
 
 /** The one label each state carries in every view. */
 export const RESPONSE_STATE_LABEL: Record<EmergencyResponseState, string> = {
+  archive: "archive fulfilled · no acquisition",
   achieved: "achieved",
   planned: "planned",
   expired: "expired · no acquisition",

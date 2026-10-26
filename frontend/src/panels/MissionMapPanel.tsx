@@ -1,3 +1,4 @@
+import { ArchiveEvidenceDetails } from "./ArchiveEvidence";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContactWindowSchema,
@@ -174,9 +175,10 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
         <span className="text-neutral-500">P{target.priority}</span>
       </p>
       <p className="text-neutral-400">Requester: {target.requesterId ?? "Unattributed"}</p>
+      <ArchiveEvidenceDetails event={target.archiveEvent} />
       <p style={{ color: cssColor(STATUS_COLORS[target.status]) }}>
         {STATUS_LABELS[target.status]}
-        {target.action === null ? "" : ` · ${target.action.status}`}
+        {target.action === null ? "" : target.archiveEvent ? " · obsolete planned imaging; replan required" : ` · ${target.action.status}`}
       </p>
       {target.action === null ? null : (
         <p className="text-neutral-400">

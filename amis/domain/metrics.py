@@ -138,12 +138,20 @@ class MetricsResult:
     planned_emergency_request_count: int = 0
     achieved_emergency_request_count: int = 0
     requester_service: RequesterService = field(default_factory=RequesterService)
+    archive_satisfied_count: int = 0
+    archive_satisfied_utility: float = 0
+    total_fulfilled_count: int = 0
+    total_fulfilled_utility: float = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "plan_id": self.plan_id,
             "requester_service": self.requester_service.to_dict(),
             "mission_utility": self.mission_utility,
+            "archive_satisfied_count": self.archive_satisfied_count,
+            "archive_satisfied_utility": self.archive_satisfied_utility,
+            "total_fulfilled_count": self.total_fulfilled_count,
+            "total_fulfilled_utility": self.total_fulfilled_utility,
             "completion_rate": self.completion_rate,
             "violation_count": self.violation_count,
             "planning_time_ms": self.planning_time_ms,

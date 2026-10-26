@@ -1,3 +1,4 @@
+import { ArchiveEvidenceDetails } from "./ArchiveEvidence";
 import { useState } from "react";
 import type {
   ImpactSchema,
@@ -40,6 +41,7 @@ function Empty({ children }: { children: string }) {
 }
 
 const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: string }> = {
+  satisfied_by_archive: { dot: "bg-violet-400", text: "text-violet-300", label: "archive fulfilled" },
   completed: { dot: "bg-emerald-400", text: "text-emerald-400", label: "completed" },
   started: { dot: "bg-amber-400", text: "text-amber-300", label: "started" },
   planned: { dot: "bg-sky-400", text: "text-sky-300", label: "planned" },
@@ -52,6 +54,7 @@ const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: stri
 function RequestList({
   scenario,
   introduced,
+  events,
   plan,
   impact,
   diff,
@@ -63,6 +66,7 @@ function RequestList({
   scenario: ScenarioSchema;
   /** Emergency requests the event log added; the scenario itself never lists them. */
   introduced: IntroducedRequest[];
+  events: MissionEventSchema[];
   plan: MissionPlanSchema | null;
   impact: ImpactSchema | null;
   /** The last replan's diff; it marks changes only while its plan is current. */
@@ -84,6 +88,7 @@ function RequestList({
           plan,
           completedRequestIds,
           expiredRequestIds,
+          archiveSatisfiedRequestIds: new Set(events.flatMap(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" ? [e.payload.request_id] : [])),
           impact,
           diff,
         });
@@ -119,6 +124,7 @@ function RequestList({
                 </span>
               )}
             </button>
+            {selected ? <ArchiveEvidenceDetails event={events.find(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" && e.payload.request_id === request.id)} /> : null}
           </li>
         );
       })}
@@ -225,6 +231,7 @@ function EventList({
                 {activeIds.has(event.id) ? <span className="text-amber-400">active</span> : null}
               </span>
             </button>
+            {selected ? <ArchiveEvidenceDetails event={event} /> : null}
             {selected && evidence !== null ? (
               <div className="px-2 pb-1">
                 <CueEvidenceDetails evidence={evidence} />
@@ -356,6 +363,7 @@ export function MissionNavPanel({
           <RequestList
             scenario={scenario}
             introduced={introduced}
+            events={events}
             plan={plan}
             impact={impact}
             diff={replanResult?.diff ?? null}

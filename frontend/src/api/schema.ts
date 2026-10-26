@@ -505,6 +505,95 @@ export interface components {
          * @enum {string}
          */
         ActionStatus: "planned" | "started" | "completed";
+        /** ArchiveSatisfactionEventRequest */
+        ArchiveSatisfactionEventRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "REQUEST_SATISFIED_BY_ARCHIVE";
+            payload: components["schemas"]["ArchiveSatisfactionPayloadSchema"];
+        };
+        /** ArchiveSatisfactionMissionEventSchema */
+        ArchiveSatisfactionMissionEventSchema: {
+            /** Id */
+            id: string;
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Event Time
+             * Format: date-time
+             */
+            event_time: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "REQUEST_SATISFIED_BY_ARCHIVE";
+            payload: components["schemas"]["ArchiveSatisfactionPayloadSchema"];
+        };
+        /** ArchiveSatisfactionPayloadSchema */
+        ArchiveSatisfactionPayloadSchema: {
+            /** Request Id */
+            request_id: string;
+            /** Catalogue Source */
+            catalogue_source: string;
+            /** Collection Id */
+            collection_id: string;
+            /** Item Id */
+            item_id: string;
+            /** Source Url */
+            source_url: string;
+            /** Source Response Sha256 */
+            source_response_sha256: string;
+            /** Source Credit */
+            source_credit: string;
+            /** Acquisition Start */
+            acquisition_start: string;
+            /** Acquisition End */
+            acquisition_end: string;
+            /** Retrieved At */
+            retrieved_at: string;
+            /** Target Lat */
+            target_lat: number;
+            /** Target Lon */
+            target_lon: number;
+            /** Footprint */
+            footprint: {
+                [key: string]: unknown;
+            };
+            /** Cloud Cover Pct */
+            cloud_cover_pct: number;
+            /** Gsd M */
+            gsd_m: number;
+            /** View Angle Deg */
+            view_angle_deg?: number | null;
+            profile: components["schemas"]["ArchiveSuitabilityProfileSchema"];
+            /**
+             * Policy Version
+             * @constant
+             */
+            policy_version: "archive-point-v1";
+        };
+        /** ArchiveSuitabilityProfileSchema */
+        ArchiveSuitabilityProfileSchema: {
+            /** Version */
+            version: string;
+            /** Allowed Collections */
+            allowed_collections: string[];
+            /** Acquisition Start */
+            acquisition_start: string;
+            /** Acquisition End */
+            acquisition_end: string;
+            /** Max Cloud Cover Pct */
+            max_cloud_cover_pct: number;
+            /** Max Gsd M */
+            max_gsd_m: number;
+            /** Sensor Product Assertion */
+            sensor_product_assertion: string;
+            /** Max View Angle Deg */
+            max_view_angle_deg?: number | null;
+        };
         /** BatteryDropEventRequest */
         BatteryDropEventRequest: {
             /**
@@ -884,6 +973,26 @@ export interface components {
         };
         /** MetricsSchema */
         MetricsSchema: {
+            /**
+             * Archive Satisfied Count
+             * @default 0
+             */
+            archive_satisfied_count: number;
+            /**
+             * Archive Satisfied Utility
+             * @default 0
+             */
+            archive_satisfied_utility: number;
+            /**
+             * Total Fulfilled Count
+             * @default 0
+             */
+            total_fulfilled_count: number;
+            /**
+             * Total Fulfilled Utility
+             * @default 0
+             */
+            total_fulfilled_utility: number;
             requester_service?: components["schemas"]["RequesterServiceSchema"] | null;
             /** Plan Id */
             plan_id: string;
@@ -950,12 +1059,12 @@ export interface components {
          * MissionEventRequest
          * @description Every event the route accepts, chosen by ``event_type``.
          */
-        MissionEventRequest: components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"] | components["schemas"]["SatelliteOutageEventRequest"] | components["schemas"]["CommunicationOutageEventRequest"];
+        MissionEventRequest: components["schemas"]["ArchiveSatisfactionEventRequest"] | components["schemas"]["CloudBlockEventRequest"] | components["schemas"]["BatteryDropEventRequest"] | components["schemas"]["EmergencyTaskEventRequest"] | components["schemas"]["SatelliteOutageEventRequest"] | components["schemas"]["CommunicationOutageEventRequest"];
         /**
          * MissionEventSchema
          * @description Every event the log can hold, chosen by ``event_type``.
          */
-        MissionEventSchema: components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"] | components["schemas"]["SatelliteOutageMissionEventSchema"] | components["schemas"]["CommunicationOutageMissionEventSchema"];
+        MissionEventSchema: components["schemas"]["ArchiveSatisfactionMissionEventSchema"] | components["schemas"]["CloudBlockMissionEventSchema"] | components["schemas"]["BatteryDropMissionEventSchema"] | components["schemas"]["EmergencyTaskMissionEventSchema"] | components["schemas"]["SatelliteOutageMissionEventSchema"] | components["schemas"]["CommunicationOutageMissionEventSchema"];
         /** MissionPlanSchema */
         MissionPlanSchema: {
             /**
@@ -1125,7 +1234,7 @@ export interface components {
          * PlanChangeType
          * @enum {string}
          */
-        PlanChangeType: "UNCHANGED" | "MOVED" | "INSERTED" | "DROPPED" | "COMPLETED";
+        PlanChangeType: "SATISFIED_BY_ARCHIVE" | "UNCHANGED" | "MOVED" | "INSERTED" | "DROPPED" | "COMPLETED";
         /** PlanDiffEntrySchema */
         PlanDiffEntrySchema: {
             /** Request Id */
@@ -1166,7 +1275,7 @@ export interface components {
          * ReasonCode
          * @enum {string}
          */
-        ReasonCode: "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
+        ReasonCode: "SATISFIED_BY_ARCHIVE" | "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
         /** ReplanRequest */
         ReplanRequest: {
             /** Planner */
@@ -1182,7 +1291,7 @@ export interface components {
          * RequestStatus
          * @enum {string}
          */
-        RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired";
+        RequestStatus: "pending" | "scheduled" | "completed" | "dropped" | "expired" | "satisfied_by_archive";
         /** RequesterServiceRowSchema */
         RequesterServiceRowSchema: {
             /** Requester Id */

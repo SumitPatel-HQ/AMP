@@ -20,11 +20,12 @@ export type Coordinate = readonly [number, number];
  * Where a request stands, read off the current plan and the live mission
  * state. Completion wins because the clock has already settled it.
  */
-export type TargetPlanStatus = "completed" | "expired" | "scheduled" | "unscheduled" | "unplanned";
+export type TargetPlanStatus = "satisfied_by_archive" | "completed" | "expired" | "scheduled" | "unscheduled" | "unplanned";
 
 /** One observation target as the map draws it. */
 export interface MapTarget {
   requestId: string;
+  archiveEvent?: MissionEventSchema;
   requesterId?: string | null;
   coordinate: Coordinate;
   priority: number;
@@ -204,16 +205,18 @@ export function buildMissionMapModel(
   const requestPool = missionRequestPool(scenario, events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
   const targets = requestPool.map((request): MapTarget => {
+    const archiveEvent = events.find(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" && e.payload.request_id === request.id);
     const action = plan?.actions.find((candidate) => candidate.request_id === request.id) ?? null;
     const unscheduledReason =
       plan?.unscheduled.find((entry) => entry.request_id === request.id)?.reason_code ?? null;
     return {
       requestId: request.id,
+      archiveEvent,
       requesterId: request.requester_id,
       coordinate: targetCoordinate(request),
       priority: request.priority,
       deadline: request.deadline,
-      status: targetStatus(
+      status: archiveEvent ? "satisfied_by_archive" : targetStatus(
         action,
         unscheduledReason,
         completedIds.has(request.id),

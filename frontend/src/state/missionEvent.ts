@@ -11,6 +11,8 @@ import type { ReplanResult } from "./types";
 /** One line naming what an event's payload carries, in the backend's own terms. */
 export function eventSummary(event: MissionEventSchema): string {
   switch (event.event_type) {
+    case "REQUEST_SATISFIED_BY_ARCHIVE":
+      return `${event.payload.request_id} satisfied by archive · ${event.payload.collection_id} / ${event.payload.item_id}`;
     case "CLOUD_BLOCK": {
       const base = `${event.payload.request_id} / ${event.payload.window_id}`;
       if (

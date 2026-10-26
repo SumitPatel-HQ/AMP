@@ -68,6 +68,7 @@ function PoolMismatch({ view, label }: { view: MetricsView; label: (planId: stri
 }
 
 const RESPONSE_STATE_STYLE: Record<EmergencyResponseState, string> = {
+  archive: "text-violet-300",
   achieved: "text-emerald-300",
   planned: "text-sky-300",
   expired: "text-red-400",
@@ -235,6 +236,11 @@ export function MetricsPanel({
           ? `Request pool: ${view.pool.after} requests`
           : `Request pool: ${view.pool.before} → ${view.pool.after} requests`}
       </p>
+      <section aria-label="Archive and total fulfillment" className="text-[11px] text-neutral-400">
+        <p>Archive fulfillment: {subject.after.archive_satisfied_count ?? 0} requests · utility {subject.after.archive_satisfied_utility ?? 0}</p>
+        <p>Total fulfilled (planned/completed imaging plus archive, unique requests): {subject.after.total_fulfilled_count ?? 0} · utility {subject.after.total_fulfilled_utility ?? 0}</p>
+        <p>Archive adds no simulated acquisition utility, imaging completions, or resource consumption. Historical plans exclude later archive transitions.</p>
+      </section>
       <EmergencyResponseList metrics={subject.after} planLabel={label(view.afterPlanId)} />
       <RequesterService metrics={subject.after} plan={plans?.find((p) => p.id === view.afterPlanId) ?? null} />
     </PanelFrame>

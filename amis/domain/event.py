@@ -10,6 +10,7 @@ from ipaddress import ip_address
 from typing import Any, Literal, Union, get_args
 from urllib.parse import urlsplit
 
+from amis.domain.archive import ArchiveSatisfactionPayload
 from amis.domain.enums import EventType
 from amis.domain.scenario import ObservationRequest
 from amis.domain.window import ObservationWindow
@@ -305,6 +306,7 @@ class CommunicationOutagePayload:
 
 
 EventPayload = Union[
+    ArchiveSatisfactionPayload,
     CloudBlockPayload,
     BatteryDropPayload,
     EmergencyRequestPayload,
@@ -333,8 +335,10 @@ class MissionEvent:
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "MissionEvent":
         event_type = EventType(data["event_type"])
-        if event_type is EventType.CLOUD_BLOCK:
-            payload: EventPayload = CloudBlockPayload.from_dict(data["payload"])
+        if event_type is EventType.REQUEST_SATISFIED_BY_ARCHIVE:
+            payload: EventPayload = ArchiveSatisfactionPayload.from_dict(data["payload"])
+        elif event_type is EventType.CLOUD_BLOCK:
+            payload = CloudBlockPayload.from_dict(data["payload"])
         elif event_type is EventType.BATTERY_DROP:
             payload = BatteryDropPayload.from_dict(data["payload"])
         elif event_type is EventType.EMERGENCY_TASK:

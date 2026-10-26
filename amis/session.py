@@ -19,6 +19,7 @@ from amis.diff import compare_plans
 from amis.dynamics.recharge import recharge_model
 from amis.domain import (
     ActionStatus,
+    ArchiveSatisfactionPayload,
     BatteryDropPayload,
     CloudBlockPayload,
     CommunicationOutagePayload,
@@ -311,7 +312,7 @@ class MissionSession:
             previous_plan=parent_plan,
             diff=self._compare(parent_plan, plan) if parent_plan else None,
             traces=self.get_traces(plan.id),
-            events=self._events,
+            events=self._events_for_plan(plan),
             executed_actions=self._executed_actions(),
         )
 
@@ -452,10 +453,34 @@ class MissionSession:
                 details={"event_type": str(event_type)},
             ) from error
 
-        if parsed_event_type is EventType.CLOUD_BLOCK:
+        if parsed_event_type is EventType.REQUEST_SATISFIED_BY_ARCHIVE:
+            try:
+                if isinstance(payload, ArchiveSatisfactionPayload):
+                    archive_data = payload.to_dict()
+                elif isinstance(payload, dict):
+                    archive_data = payload
+                else:
+                    raise ValueError("archive payload must be an evidence object")
+                archive_payload = ArchiveSatisfactionPayload.from_dict(archive_data)
+                archive_payload.validate(state.simulated_time)
+            except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as error:
+                raise InvalidEventError(f"invalid archive evidence: {error}") from error
+            request = next((r for r in self._request_pool if r.id == archive_payload.request_id), None)
+            if (request is None or request.status not in (RequestStatus.PENDING, RequestStatus.SCHEDULED)
+                    or state.simulated_time > request.deadline
+                    or not scenario.start_time <= state.simulated_time < scenario.end_time):
+                raise InvalidEventError("archive satisfaction requires a pending/scheduled, unexpired pool request")
+            if (archive_payload.target_lat, archive_payload.target_lon) != (request.target_lat, request.target_lon):
+                raise InvalidEventError("archive evidence target does not match the request")
+            if request.id in state.completed_request_ids or any(
+                a.request_id == request.id and not a.is_downlink for a in self._executed_actions()
+            ):
+                raise InvalidEventError("archive satisfaction cannot replace frozen or executed imaging")
+            event_payload: EventPayload = archive_payload
+        elif parsed_event_type is EventType.CLOUD_BLOCK:
             cloud_payload = self._parse_cloud_block_payload(payload)
             self._validate_cloud_block(cloud_payload)
-            event_payload: EventPayload = cloud_payload
+            event_payload = cloud_payload
         elif parsed_event_type is EventType.BATTERY_DROP:
             event_payload = self._parse_battery_drop_payload(payload)
             self._validate_battery_drop(event_payload)
@@ -495,7 +520,14 @@ class MissionSession:
             payload=event_payload,
         )
 
-        if parsed_event_type is EventType.CLOUD_BLOCK:
+        if parsed_event_type is EventType.REQUEST_SATISFIED_BY_ARCHIVE:
+            assert isinstance(event_payload, ArchiveSatisfactionPayload)
+            self._request_pool = tuple(
+                replace(r, status=RequestStatus.SATISFIED_BY_ARCHIVE)
+                if r.id == event_payload.request_id else r for r in self._request_pool
+            )
+            self._state = replace(state, active_event_ids=state.active_event_ids + (event.id,))
+        elif parsed_event_type is EventType.CLOUD_BLOCK:
             assert isinstance(event_payload, CloudBlockPayload)
             self._windows = [
                 replace(
@@ -716,6 +748,9 @@ class MissionSession:
             plan.id: self._request_pool_ids_from_log(plan) for plan in plans
         }
 
+        satisfied_ids = {e.payload.request_id for e in events if isinstance(e.payload, ArchiveSatisfactionPayload)}
+        self._request_pool = tuple(replace(r, status=RequestStatus.SATISFIED_BY_ARCHIVE)
+                                   if r.id in satisfied_ids else r for r in self._request_pool)
         if self._plans:
             latest_plan = self._plans[-1]
             planner_name = latest_plan.planner_name or "greedy"
@@ -742,6 +777,15 @@ class MissionSession:
         remaining_seconds = (scenario.end_time - state.simulated_time).total_seconds()
         elapsed_seconds = min(seconds, remaining_seconds)
         target_time = state.simulated_time + timedelta(seconds=elapsed_seconds)
+
+        satisfied_ids = {r.id for r in self._request_pool if r.status is RequestStatus.SATISFIED_BY_ARCHIVE}
+        obsolete = [a.id for a in plan.actions if not a.is_downlink and a.request_id in satisfied_ids
+                    and state.simulated_time < a.start <= target_time]
+        if obsolete:
+            raise SimulationStateError(
+                "archive satisfaction affects this plan; replan before advancing through obsolete imaging",
+                details={"plan_id": plan.id, "action_ids": obsolete},
+            )
 
         # Wave 7 (ADR-0014): each satellite walks its own actions, its own
         # sunlight recharge, and its own battery/storage independently.
@@ -859,7 +903,7 @@ class MissionSession:
 
         updated_requests = []
         for request in self._request_pool:
-            if request.status in (RequestStatus.COMPLETED, RequestStatus.EXPIRED):
+            if request.status in (RequestStatus.COMPLETED, RequestStatus.EXPIRED, RequestStatus.SATISFIED_BY_ARCHIVE):
                 updated_requests.append(request)
             elif request.id in scheduled_request_ids:
                 updated_requests.append(replace(request, status=RequestStatus.SCHEDULED))
@@ -875,7 +919,9 @@ class MissionSession:
 
         updated_requests = []
         for request in self._request_pool:
-            if request.id in completed_request_ids:
+            if request.status is RequestStatus.SATISFIED_BY_ARCHIVE:
+                status = RequestStatus.SATISFIED_BY_ARCHIVE
+            elif request.id in completed_request_ids:
                 status = RequestStatus.COMPLETED
             elif request.status is RequestStatus.EXPIRED:
                 status = RequestStatus.EXPIRED
@@ -887,10 +933,16 @@ class MissionSession:
         self._request_pool = tuple(updated_requests)
 
     def _compare(self, previous_plan: MissionPlan, plan: MissionPlan) -> PlanDiff:
+        prior_event_ids = {e.id for e in self._events_for_plan(previous_plan, historical=True)}
+        archive_satisfied_ids = {
+            event.payload.request_id for event in self._events_for_plan(plan, historical=True)
+            if isinstance(event.payload, ArchiveSatisfactionPayload) and event.id not in prior_event_ids
+        }
         return compare_plans(
             previous_plan,
             plan,
             reasons_by_request=self._impact_reasons_by_request(previous_plan),
+            archive_satisfied_ids=archive_satisfied_ids,
             previous_request_pool_ids=self._request_pool_ids_by_plan_id.get(
                 previous_plan.id
             ),
@@ -909,9 +961,27 @@ class MissionSession:
             # Fail closed: never the live pool, which would leak arrivals
             # introduced after this plan into its metrics.
             request_ids = self._request_pool_ids_from_log(plan)
+        visible_archive_ids = {e.payload.request_id for e in self._events_for_plan(plan)
+                               if isinstance(e.payload, ArchiveSatisfactionPayload)}
+        scheduled = {a.request_id for a in plan.actions}
+        unscheduled = {u.request_id for u in plan.unscheduled}
         return tuple(
-            request for request in self._request_pool if request.id in request_ids
+            replace(request, status=(RequestStatus.SCHEDULED if request.id in scheduled else
+                                    RequestStatus.DROPPED if request.id in unscheduled else RequestStatus.PENDING))
+            if request.status is RequestStatus.SATISFIED_BY_ARCHIVE and request.id not in visible_archive_ids else request
+            for request in self._request_pool if request.id in request_ids
         )
+
+    def _events_for_plan(self, plan: MissionPlan, *, historical: bool = False) -> tuple[MissionEvent, ...]:
+        # Current fulfillment is visible immediately, before explicit replan.
+        # Historical membership follows impacts, including events at equal clock times.
+        if not historical and plan.id == self.get_plan().id:
+            return tuple(self._events)
+        versions = {p.id: p.version for p in self._plans}
+        prior_event_ids = {i.event_id for i in self._impacts
+                           if versions.get(i.evaluated_plan_id, plan.version) < plan.version}
+        return tuple(e for e in self._events
+                     if not isinstance(e.payload, ArchiveSatisfactionPayload) or e.id in prior_event_ids)
 
     def _request_pool_ids_from_log(self, plan: MissionPlan) -> frozenset[str]:
         """The plan's RequestPool membership rebuilt from the event log.
@@ -1000,6 +1070,11 @@ class MissionSession:
             )
             if causing_impact is not None:
                 result[action.request_id] = causing_impact.event_id
+        for event in self._events:
+            if isinstance(event.payload, ArchiveSatisfactionPayload) and any(
+                impact.event_id == event.id for impact in impacts
+            ):
+                result[event.payload.request_id] = event.id
         return result
 
     def _impact_reasons_by_request(self, plan: MissionPlan) -> dict[str, ReasonCode]:

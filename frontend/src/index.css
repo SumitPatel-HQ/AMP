@@ -331,6 +331,15 @@ body,
   text-shadow: 0 1px 2px #0a0a0b;
 }
 
+.amis-vis-timeline .vis-item.amis-event.amis-archive,
+.amis-vis-timeline .vis-item.amis-response-archive {
+  color: #c4b5fd;
+}
+
+.amis-vis-timeline .vis-item.amis-event.amis-archive .vis-dot {
+  border-color: #a78bfa;
+}
+
 .amis-vis-timeline .vis-item.vis-selected,
 .amis-vis-timeline .vis-item.amis-timeline-selected {
   border-color: var(--timeline-selected);

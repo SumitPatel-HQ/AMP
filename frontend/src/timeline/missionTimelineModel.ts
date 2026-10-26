@@ -1,3 +1,4 @@
+import { eventSummary } from "../state/missionEvent";
 import type { DataGroup, DataItem } from "vis-timeline";
 import {
   ACQUISITION_MEANING,
@@ -73,7 +74,7 @@ export interface MissionResponseTimelineItem extends MissionTimelineItemBase {
   kind: "response";
   requestId: string;
   eventId: string;
-  response: "planned" | "achieved" | "unserved" | "expired";
+  response: "planned" | "achieved" | "unserved" | "expired" | "archive";
 }
 
 export type MissionTimelineItem =
@@ -362,8 +363,8 @@ function buildEventItems(
       content: event.event_type.replaceAll("_", " "),
       selectable: true,
       selected,
-      className: classes("amis-event", selected && "amis-timeline-selected"),
-      title: `${event.id} | ${event.event_type} | ${formatUtc(event.event_time)}`,
+      className: classes("amis-event", event.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" && "amis-archive", selected && "amis-timeline-selected"),
+      title: `${event.id} | ${event.event_type} | ${formatUtc(event.event_time)} | ${eventSummary(event)}`,
     };
   });
 }
@@ -444,7 +445,7 @@ function buildResponseItems(
           `Imaging started ${formatUtc(achievedStart)} on ${row.achieved_satellite_id}`,
         ),
       );
-    } else if (state === "expired" || state === "unserved") {
+    } else if (state === "expired" || state === "unserved" || state === "archive") {
       items.push(
         responseItem(
           row,

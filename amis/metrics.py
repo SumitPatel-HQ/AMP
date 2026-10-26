@@ -21,6 +21,7 @@ from typing import Iterable, Optional
 from amis.constraints.resources import ResourceProjection
 from amis.diff import CHANGED_CHANGE_TYPES, rebuilt_actions
 from amis.domain import (
+    ArchiveSatisfactionPayload,
     DecisionTrace,
     EmergencyRequestPayload,
     EmergencyResponse,
@@ -58,6 +59,7 @@ def compute_metrics(
     a plan's proposed starts are never read as execution, whatever the
     clock says.
     """
+    events = tuple(events)
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
 
@@ -68,6 +70,10 @@ def compute_metrics(
     utility_request_ids.intersection_update(priority_by_id)
     mission_utility = sum(priority_by_id[request_id] for request_id in utility_request_ids)
 
+    archive_ids = {e.payload.request_id for e in events
+                   if isinstance(e.payload, ArchiveSatisfactionPayload)
+                   and e.event_time <= mission_state.simulated_time} & priority_by_id.keys()
+    fulfilled_ids = utility_request_ids | archive_ids
     pool_size = len(pool)
     completed_count = sum(1 for request in pool if request.status is RequestStatus.COMPLETED)
     completion_rate = completed_count / pool_size if pool_size else 0.0
@@ -103,6 +109,10 @@ def compute_metrics(
         plan_id=plan.id,
         requester_service=compute_requester_service(pool, utility_request_ids),
         mission_utility=mission_utility,
+        archive_satisfied_count=len(archive_ids),
+        archive_satisfied_utility=sum(priority_by_id[r] for r in archive_ids),
+        total_fulfilled_count=len(fulfilled_ids),
+        total_fulfilled_utility=sum(priority_by_id[r] for r in fulfilled_ids),
         completion_rate=completion_rate,
         violation_count=plan.violation_count,
         planning_time_ms=plan.planning_time_ms,

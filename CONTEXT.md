@@ -35,8 +35,12 @@ The set of observation requests under consideration at one simulated instant. It
 _Avoid_: Backlog, queue, task list, workload
 
 **Expired**:
-The property of an observation request whose deadline has passed in simulated time with no completed action. Expiry is permanent and no later plan may schedule the request.
+The property of an unfulfilled observation request whose deadline has passed in simulated time. Expiry is permanent and no later plan may schedule the request.
 _Avoid_: Missed, stale, timed out, lapsed
+
+**Satisfied by archive**:
+A terminal ObservationRequest outcome supported by recorded existing-imagery evidence under an explicit suitability profile. It fulfills the need without simulated Satellite acquisition.
+_Avoid_: Completed imaging, dropped, cancelled
 
 **ObservationWindow**:
 A span in which a request's target is observable under the scenario's window policy. It is computed per request and satellite pair and names its satellite. An orbital window is a visible time window that can hold an observation action; it may carry peak geometry and provenance.

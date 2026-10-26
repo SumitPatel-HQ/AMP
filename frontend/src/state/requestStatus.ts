@@ -7,6 +7,7 @@ import type {
 } from "../api/client";
 
 export type RequestState =
+  | "satisfied_by_archive"
   | "completed"
   | "started"
   | "planned"
@@ -27,7 +28,7 @@ export interface RequestStatus {
 }
 
 /** Changes a replan made. COMPLETED is the clock's doing and UNCHANGED is no change. */
-const REPLAN_CHANGES: ReadonlySet<PlanChangeType> = new Set(["MOVED", "INSERTED", "DROPPED"]);
+const REPLAN_CHANGES: ReadonlySet<PlanChangeType> = new Set(["MOVED", "INSERTED", "DROPPED", "SATISFIED_BY_ARCHIVE"]);
 
 export function requestStatus(
   requestId: string,
@@ -35,6 +36,7 @@ export function requestStatus(
     plan,
     completedRequestIds,
     expiredRequestIds,
+    archiveSatisfiedRequestIds = new Set(),
     impact,
     diff,
   }: {
@@ -43,6 +45,7 @@ export function requestStatus(
     completedRequestIds: ReadonlySet<string>;
     /** Expired by the backend's request pool: the deadline passed unserved. */
     expiredRequestIds: ReadonlySet<string>;
+    archiveSatisfiedRequestIds?: ReadonlySet<string>;
     impact: ImpactSchema | null;
     diff: PlanDiffSchema | null;
   },
@@ -59,6 +62,7 @@ export function requestStatus(
     change,
   });
 
+  if (archiveSatisfiedRequestIds.has(requestId)) return status("satisfied_by_archive", "SATISFIED_BY_ARCHIVE");
   const action = plan?.actions.find((candidate) => candidate.request_id === requestId);
   if (completedRequestIds.has(requestId) || action?.status === "completed") {
     return status("completed");

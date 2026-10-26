@@ -11,6 +11,7 @@ import type { ReplanResult } from "./types";
  * the cause clauses in `amis/trace.py` without adding new causality.
  */
 export const REASON_LABELS: Record<ReasonCode, string> = {
+  SATISFIED_BY_ARCHIVE: "Satisfied by recorded archive evidence",
   WINDOW_INVALIDATED: "Observation window invalidated",
   INSUFFICIENT_BATTERY: "Projected battery insufficient",
   INSUFFICIENT_STORAGE: "Projected storage insufficient",
@@ -28,6 +29,7 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
 
 /** Changed decisions first, clock outcomes and non-changes last and quiet. */
 const CHANGE_ORDER: Record<PlanChangeType, number> = {
+  SATISFIED_BY_ARCHIVE: 2,
   MOVED: 0,
   INSERTED: 1,
   DROPPED: 2,
@@ -38,7 +40,7 @@ const CHANGE_ORDER: Record<PlanChangeType, number> = {
 /** The diff statuses that are replan decisions and carry decision traces. */
 export function isChangedDecision(changeType: PlanChangeType): boolean {
   return (
-    changeType === "MOVED" || changeType === "INSERTED" || changeType === "DROPPED"
+    changeType === "SATISFIED_BY_ARCHIVE" || changeType === "MOVED" || changeType === "INSERTED" || changeType === "DROPPED"
   );
 }
 

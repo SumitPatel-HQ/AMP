@@ -153,7 +153,7 @@ class GreedyPlanner:
         eligible_requests = (
             request
             for request in all_requests
-            if request.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)
+            if request.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED, RequestStatus.SATISFIED_BY_ARCHIVE)
             and request.id not in frozen_request_ids
         )
         ordered_requests = sorted(

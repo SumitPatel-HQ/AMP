@@ -395,6 +395,43 @@ class EmergencyTaskPayloadSchema(ApiModel):
         return self
 
 
+class ArchiveSuitabilityProfileSchema(ApiModel):
+    version: str = Field(min_length=1)
+    allowed_collections: list[str] = Field(min_length=1)
+    acquisition_start: str
+    acquisition_end: str
+    max_cloud_cover_pct: float = Field(ge=0, le=100, allow_inf_nan=False, strict=True)
+    max_gsd_m: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    sensor_product_assertion: str = Field(min_length=1)
+    max_view_angle_deg: float | None = Field(default=None, ge=0, le=90, allow_inf_nan=False, strict=True)
+
+
+class ArchiveSatisfactionPayloadSchema(ApiModel):
+    request_id: str = Field(min_length=1)
+    catalogue_source: str = Field(min_length=1)
+    collection_id: str = Field(min_length=1)
+    item_id: str = Field(min_length=1)
+    source_url: str
+    source_response_sha256: str
+    source_credit: str = Field(min_length=1)
+    acquisition_start: str
+    acquisition_end: str
+    retrieved_at: str
+    target_lat: float = Field(ge=-90, le=90, allow_inf_nan=False, strict=True)
+    target_lon: float = Field(ge=-180, le=180, allow_inf_nan=False, strict=True)
+    footprint: dict[str, Any]
+    cloud_cover_pct: float = Field(ge=0, le=100, allow_inf_nan=False, strict=True)
+    gsd_m: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    view_angle_deg: float | None = Field(default=None, ge=0, le=90, allow_inf_nan=False, strict=True)
+    profile: ArchiveSuitabilityProfileSchema
+    policy_version: Literal["archive-point-v1"]
+
+
+class ArchiveSatisfactionEventRequest(ApiModel):
+    event_type: Literal[EventType.REQUEST_SATISFIED_BY_ARCHIVE]
+    payload: ArchiveSatisfactionPayloadSchema
+
+
 class CloudBlockEventRequest(ApiModel):
     event_type: Literal[EventType.CLOUD_BLOCK]
     payload: CloudBlockPayloadSchema
@@ -424,6 +461,7 @@ class MissionEventRequest(
     RootModel[
         Annotated[
             Union[
+                ArchiveSatisfactionEventRequest,
                 CloudBlockEventRequest,
                 BatteryDropEventRequest,
                 EmergencyTaskEventRequest,
@@ -441,6 +479,11 @@ class MissionEventFields(ApiModel):
     id: str
     scenario_id: str
     event_time: datetime
+
+
+class ArchiveSatisfactionMissionEventSchema(MissionEventFields):
+    event_type: Literal[EventType.REQUEST_SATISFIED_BY_ARCHIVE]
+    payload: ArchiveSatisfactionPayloadSchema
 
 
 class CloudBlockMissionEventSchema(MissionEventFields):
@@ -472,6 +515,7 @@ class MissionEventSchema(
     RootModel[
         Annotated[
             Union[
+                ArchiveSatisfactionMissionEventSchema,
                 CloudBlockMissionEventSchema,
                 BatteryDropMissionEventSchema,
                 EmergencyTaskMissionEventSchema,
@@ -548,6 +592,10 @@ class RequesterServiceSchema(ApiModel):
 
 
 class MetricsSchema(ApiModel):
+    archive_satisfied_count: int = 0
+    archive_satisfied_utility: float = 0
+    total_fulfilled_count: int = 0
+    total_fulfilled_utility: float = 0
     requester_service: RequesterServiceSchema | None = None
     plan_id: str
     mission_utility: float

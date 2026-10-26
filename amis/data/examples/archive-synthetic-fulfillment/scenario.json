@@ -1,0 +1,84 @@
+{
+  "id": "SCN-002",
+  "name": "Cloud block replanning demo",
+  "start_time": "2026-09-21T10:00:00+00:00",
+  "end_time": "2026-09-21T14:00:00+00:00",
+  "satellites": [
+    {
+      "id": "SAT-001",
+      "battery_capacity_wh": 500.0,
+      "battery_charge_wh": 500.0,
+      "storage_capacity_mb": 2000.0,
+      "storage_usage_mb": 0.0,
+      "available": true
+    }
+  ],
+  "requests": [
+    {
+      "id": "OBS-A",
+      "target_lat": 12.97,
+      "target_lon": 77.59,
+      "priority": 5,
+      "duration_s": 600.0,
+      "deadline": "2026-09-21T14:00:00+00:00",
+      "energy_cost_wh": 40.0,
+      "storage_cost_mb": 100.0,
+      "status": "pending"
+    },
+    {
+      "id": "OBS-B",
+      "target_lat": 28.61,
+      "target_lon": 77.21,
+      "priority": 4,
+      "duration_s": 600.0,
+      "deadline": "2026-09-21T14:00:00+00:00",
+      "energy_cost_wh": 40.0,
+      "storage_cost_mb": 100.0,
+      "status": "pending"
+    },
+    {
+      "id": "OBS-C",
+      "target_lat": 19.08,
+      "target_lon": 72.88,
+      "priority": 3,
+      "duration_s": 600.0,
+      "deadline": "2026-09-21T14:00:00+00:00",
+      "energy_cost_wh": 40.0,
+      "storage_cost_mb": 100.0,
+      "status": "pending"
+    },
+    {
+      "id": "OBS-D",
+      "target_lat": 13.08,
+      "target_lon": 80.27,
+      "priority": 2,
+      "duration_s": 600.0,
+      "deadline": "2026-09-21T14:00:00+00:00",
+      "energy_cost_wh": 40.0,
+      "storage_cost_mb": 100.0,
+      "status": "pending"
+    },
+    {
+      "id": "OBS-E",
+      "target_lat": 22.57,
+      "target_lon": 88.36,
+      "priority": 1,
+      "duration_s": 600.0,
+      "deadline": "2026-09-21T14:00:00+00:00",
+      "energy_cost_wh": 40.0,
+      "storage_cost_mb": 100.0,
+      "status": "pending"
+    }
+  ],
+  "satellite": {
+    "id": "SAT-001",
+    "battery_capacity_wh": 500.0,
+    "battery_charge_wh": 500.0,
+    "storage_capacity_mb": 2000.0,
+    "storage_usage_mb": 0.0,
+    "available": true
+  },
+  "window_policy": {
+    "provider": "canonical_demo"
+  }
+}

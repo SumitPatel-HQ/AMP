@@ -36,6 +36,7 @@ from amis.domain import (
     ContactWindow,
     MissionPlan,
     ReasonCode,
+    RequestStatus,
     MissionState,
     ObservationRequest,
     ObservationWindow,
@@ -107,6 +108,13 @@ def validate_plan(
                 continue
 
             request = requests_by_id[action.request_id]
+            if request.status is RequestStatus.SATISFIED_BY_ARCHIVE:
+                violations.append(Violation(
+                    reason_code=ReasonCode.SATISFIED_BY_ARCHIVE,
+                    subject_key=action.subject_key,
+                    details={"request_id": request.id},
+                ))
+                continue
             window = windows_by_id[action.window_id]
             other_actions = satellite_actions[:index] + satellite_actions[index + 1 :]
             battery_wh, storage_used_mb = projection.available_at(action.start)

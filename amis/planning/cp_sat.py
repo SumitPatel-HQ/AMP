@@ -422,7 +422,7 @@ class CpSatPlanner:
         frozen = _frozen_actions(previous_plan, mission_state)
         frozen_ids = {a.request_id for a in imaging_actions(frozen)}
         eligible = [r for r in requests if r.id not in frozen_ids
-                    and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED)]
+                    and r.status not in (RequestStatus.COMPLETED, RequestStatus.EXPIRED, RequestStatus.SATISFIED_BY_ARCHIVE)]
         previous = {a.request_id: a for a in imaging_actions(previous_plan.actions)} if previous_plan else {}
         reservations = reserve_downlinks(scenario, mission_state, contacts, frozen)
         releases = [*reservations,

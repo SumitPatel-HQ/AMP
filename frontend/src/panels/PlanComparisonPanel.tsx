@@ -12,6 +12,7 @@ import { fullTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
 
 const CHANGE_STYLE: Record<PlanChangeType, string> = {
+  SATISFIED_BY_ARCHIVE: "text-violet-300",
   MOVED: "text-sky-300",
   INSERTED: "text-emerald-300",
   DROPPED: "text-red-400",

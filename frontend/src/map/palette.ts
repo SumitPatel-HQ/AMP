@@ -4,6 +4,7 @@ export type Rgb = readonly [number, number, number];
 
 /** One colour per target status; the legend and the layers read the same map. */
 export const STATUS_COLORS: Record<TargetPlanStatus, Rgb> = {
+  satisfied_by_archive: [167, 139, 250],
   scheduled: [56, 189, 248],
   completed: [52, 211, 153],
   unscheduled: [251, 191, 36],
@@ -12,6 +13,7 @@ export const STATUS_COLORS: Record<TargetPlanStatus, Rgb> = {
 };
 
 export const STATUS_LABELS: Record<TargetPlanStatus, string> = {
+  satisfied_by_archive: "Archive fulfilled (catalogue imagery)",
   scheduled: "Scheduled",
   completed: "Completed",
   unscheduled: "Unscheduled",

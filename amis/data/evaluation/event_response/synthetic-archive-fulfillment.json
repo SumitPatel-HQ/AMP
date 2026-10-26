@@ -1,0 +1,80 @@
+{
+  "id": "event-response-synthetic-archive-fulfillment",
+  "scenario": "cloud",
+  "planner": "greedy",
+  "steps": [
+    {
+      "advance_seconds": 300
+    },
+    {
+      "event": {
+        "type": "REQUEST_SATISFIED_BY_ARCHIVE",
+        "payload": {
+          "request_id": "OBS-B",
+          "catalogue_source": "synthetic-catalogue",
+          "collection_id": "synthetic-optical",
+          "item_id": "synthetic-scene-001",
+          "source_url": "https://example.org/synthetic-scene-001",
+          "source_response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_credit": "Synthetic fixture; no real catalogue or image product",
+          "acquisition_start": "2026-09-20T10:05:00+00:00",
+          "acquisition_end": "2026-09-20T10:05:00+00:00",
+          "retrieved_at": "2026-09-21T10:04:00+00:00",
+          "target_lat": 28.61,
+          "target_lon": 77.21,
+          "footprint": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  76.21,
+                  27.61
+                ],
+                [
+                  78.21,
+                  27.61
+                ],
+                [
+                  78.21,
+                  29.61
+                ],
+                [
+                  76.21,
+                  29.61
+                ],
+                [
+                  76.21,
+                  27.61
+                ]
+              ]
+            ]
+          },
+          "cloud_cover_pct": 12,
+          "gsd_m": 10,
+          "policy_version": "archive-point-v1",
+          "profile": {
+            "version": "synthetic-profile-v1",
+            "allowed_collections": [
+              "synthetic-optical"
+            ],
+            "acquisition_start": "2026-09-19T10:05:00+00:00",
+            "acquisition_end": "2026-09-21T10:05:00+00:00",
+            "max_cloud_cover_pct": 20,
+            "max_gsd_m": 10,
+            "sensor_product_assertion": "Author accepts synthetic optical product for this demonstration"
+          }
+        }
+      }
+    },
+    {
+      "replan": true
+    }
+  ],
+  "expect": {
+    "max_violations": 0,
+    "reason_codes_include": [
+      "SATISFIED_BY_ARCHIVE"
+    ],
+    "min_explanation_coverage": 1.0
+  }
+}

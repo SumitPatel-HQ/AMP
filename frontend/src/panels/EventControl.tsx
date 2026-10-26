@@ -22,6 +22,7 @@ import { CONTROL_BUTTON, CONTROL_INPUT, EVENT_BUTTON_OPEN } from "./controls";
 import { clockTime } from "./format";
 
 const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
+  { type: "REQUEST_SATISFIED_BY_ARCHIVE", label: "Archive fulfillment" },
   { type: "CLOUD_BLOCK", label: "Cloud block" },
   { type: "BATTERY_DROP", label: "Battery drop" },
   { type: "EMERGENCY_TASK", label: "Emergency request" },
@@ -30,6 +31,7 @@ const EVENT_TYPES: { type: MissionEventType; label: string }[] = [
 ];
 
 const INJECT_LABEL: Record<MissionEventType, string> = {
+  REQUEST_SATISFIED_BY_ARCHIVE: "Record archive fulfillment",
   CLOUD_BLOCK: "Inject cloud block",
   BATTERY_DROP: "Inject battery drop",
   EMERGENCY_TASK: "Inject emergency request",
@@ -44,6 +46,27 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
+}
+
+function ArchiveFields({ onChange }: { onChange: (event: MissionEventRequest | null) => void }) {
+  const [text, setText] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  return <Field label="Archive evidence payload (JSON)">
+    <textarea aria-label="Archive evidence payload (JSON)" className={CONTROL_INPUT} rows={12} value={text}
+      onChange={e => {
+        setText(e.target.value);
+        try {
+          const payload = JSON.parse(e.target.value);
+          if (payload === null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Expected an evidence object");
+          onChange({ event_type: "REQUEST_SATISFIED_BY_ARCHIVE", payload });
+          setProblem(null);
+        } catch {
+          onChange(null);
+          setProblem("Enter a valid evidence JSON object.");
+        }
+      }} />
+    <span>{problem ?? "Record at the current mission clock. Evidence is validated offline. Replanning remains explicit."}</span>
+  </Field>;
 }
 
 /** Request, then one of that request's real windows: the cloud block the API accepts. */
@@ -417,7 +440,9 @@ export function EventControl({
           </button>
         ))}
       </div>
-      {type === "CLOUD_BLOCK" ? (
+      {type === "REQUEST_SATISFIED_BY_ARCHIVE" ? (
+        <ArchiveFields onChange={setConfigured} />
+      ) : type === "CLOUD_BLOCK" ? (
         <CloudBlockFields requestIds={requestIds} windows={windows} onChange={setConfigured} />
       ) : type === "BATTERY_DROP" ? (
         <BatteryDropFields

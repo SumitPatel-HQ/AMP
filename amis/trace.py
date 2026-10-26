@@ -28,12 +28,14 @@ from amis.ids import TRACE_ID_PREFIX, format_id
 _TIME_FORMAT = "%Y-%m-%d %H:%M"
 
 _FRAME_BY_CHANGE_TYPE: dict[PlanChangeType, str] = {
+    PlanChangeType.SATISFIED_BY_ARCHIVE: "{request_id} was satisfied by archive imagery",
     PlanChangeType.MOVED: "{request_id} moved from {old_start} to {new_start}",
     PlanChangeType.INSERTED: "{request_id} was scheduled at {new_start}",
     PlanChangeType.DROPPED: "{request_id} was dropped",
 }
 
 _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
+    ReasonCode.SATISFIED_BY_ARCHIVE: "recorded evidence meets its explicit suitability profile",
     ReasonCode.WINDOW_INVALIDATED: "its observation window was invalidated",
     ReasonCode.INSUFFICIENT_BATTERY: "the projected battery could not cover it",
     ReasonCode.INSUFFICIENT_STORAGE: "the projected storage could not hold its data",

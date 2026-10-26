@@ -1,3 +1,4 @@
+import { ArchiveEvidenceDetails } from "./ArchiveEvidence";
 import type { ImpactSchema, MissionEventSchema, MissionPlanSchema } from "../api/client";
 import { cueEvidence, eventSummary } from "../state/missionEvent";
 import { planLabel } from "../state/planContext";
@@ -115,6 +116,8 @@ export function ImpactPanel({
           )}
         </p>
         {evidence === null ? null : <CueEvidenceDetails evidence={evidence} />}
+        <ArchiveEvidenceDetails event={event} />
+        {!earlier && rows.some(row => row.reasons.includes("SATISFIED_BY_ARCHIVE")) ? <p role="status" className="text-amber-300">Active plan affected: replan required before obsolete archive-fulfilled imaging can execute.</p> : null}
         {onSelectEvent === undefined ? null : (
           <button
             type="button"

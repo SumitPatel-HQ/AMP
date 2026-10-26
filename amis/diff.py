@@ -27,6 +27,7 @@ from amis.domain import (
 )
 
 CHANGED_CHANGE_TYPES = (
+    PlanChangeType.SATISFIED_BY_ARCHIVE,
     PlanChangeType.MOVED,
     PlanChangeType.INSERTED,
     PlanChangeType.DROPPED,
@@ -65,6 +66,7 @@ def compare_plans(
     current: MissionPlan,
     reasons_by_request: Optional[Mapping[str, ReasonCode]] = None,
     previous_request_pool_ids: Optional[AbstractSet[str]] = None,
+    archive_satisfied_ids: AbstractSet[str] = frozenset(),
 ) -> PlanDiff:
     """``previous_request_pool_ids`` names every request the previous plan's
     own request pool knew about (whether scheduled, unscheduled, or
@@ -89,7 +91,8 @@ def compare_plans(
     }
 
     request_ids = sorted(
-        set(previous_actions)
+        set(archive_satisfied_ids)
+        | set(previous_actions)
         | set(current_actions)
         | {entry.request_id for entry in previous.unscheduled}
         | set(current_unscheduled)
@@ -102,6 +105,7 @@ def compare_plans(
             current_actions.get(request_id),
             reasons.get(request_id),
             current_unscheduled.get(request_id),
+            archive_satisfied=request_id in archive_satisfied_ids,
             known_before=(
                 previous_request_pool_ids is None
                 or request_id in previous_request_pool_ids
@@ -121,11 +125,15 @@ def _classify(
     recorded_reason: Optional[ReasonCode],
     unscheduled_reason: Optional[ReasonCode],
     known_before: bool,
+    archive_satisfied: bool,
 ) -> PlanDiffEntry:
     old_start = before.start if before else None
     new_start = after.start if after else None
 
-    if after is not None and after.status is ActionStatus.COMPLETED:
+    if archive_satisfied:
+        change_type = PlanChangeType.SATISFIED_BY_ARCHIVE
+        reason_code = ReasonCode.SATISFIED_BY_ARCHIVE
+    elif after is not None and after.status is ActionStatus.COMPLETED:
         change_type = PlanChangeType.COMPLETED
         reason_code = ReasonCode.REQUEST_UNCHANGED
     elif before is not None and after is not None:
