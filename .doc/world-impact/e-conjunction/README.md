@@ -2,7 +2,7 @@
 
 [Feature specification](spec.md).
 
-Status: approved two-ticket breakdown; implementation pending. Tickets are local and ready for agent implementation.
+Status: ticket 01 implemented and verified; ticket 02 remains ready for implementation. Tickets are local. See the [synthetic replay guide](synthetic-replay.md) for the delivered E-01 flow.
 
 1. [01: Explain conjunction-derived outages](01-explain-conjunction-derived-outages.md) — no blockers beyond the delivered A1+B baseline.
 2. [02: Build a SOCRATES replay Example](02-build-socrates-replay-example.md) — blocked only by this feature's ticket 01.
