@@ -1,0 +1,14 @@
+{
+  "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=62666&FORMAT=json",
+  "retrieved_at": "2026-10-26T07:32:38.371394+00:00",
+  "sha256": "4a2b4f404f76443f2238b7f5351ca82c50f88ecdad3091c985afabe423d376d5",
+  "response_headers": {
+    "Content-Type": "application/json; charset=UTF-8",
+    "Server": "Microsoft-IIS/10.0",
+    "X-Powered-By": "PHP/8.2.35",
+    "Content-Disposition": "filename=\"62666.json\"",
+    "Date": "Mon, 26 Oct 2026 07:32:39 GMT",
+    "Connection": "close",
+    "Content-Length": "422"
+  }
+}

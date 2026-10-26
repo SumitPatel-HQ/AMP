@@ -1,0 +1,141 @@
+{
+  "id": "SCN-SOCRATES-FLOCK-2026-10-27",
+  "name": "FLOCK 4G-1 conjunction outage replay (hypothetical payload)",
+  "start_time": "2026-10-27T04:00:00+00:00",
+  "end_time": "2026-10-27T10:00:00+00:00",
+  "satellites": [
+    {
+      "id": "SAT-FLOCK",
+      "battery_capacity_wh": 1000,
+      "battery_charge_wh": 1000,
+      "storage_capacity_mb": 4000,
+      "storage_usage_mb": 0,
+      "available": true,
+      "orbit": {
+        "norad_id": 62666,
+        "name": "FLOCK 4G-1",
+        "international_designator": "2025-009BK",
+        "epoch": "2026-10-25T11:12:01.939968+00:00",
+        "omm": {
+          "OBJECT_NAME": "FLOCK 4G-1",
+          "OBJECT_ID": "2025-009BK",
+          "EPOCH": "2026-10-25T11:12:01.939968",
+          "MEAN_MOTION": 15.32171498,
+          "ECCENTRICITY": 0.00037443,
+          "INCLINATION": 97.3954,
+          "RA_OF_ASC_NODE": 20.0928,
+          "ARG_OF_PERICENTER": 195.0341,
+          "MEAN_ANOMALY": 165.079,
+          "EPHEMERIS_TYPE": 0,
+          "CLASSIFICATION_TYPE": "U",
+          "NORAD_CAT_ID": 62666,
+          "ELEMENT_SET_NO": 999,
+          "REV_AT_EPOCH": 9884,
+          "BSTAR": 0.00023594694,
+          "MEAN_MOTION_DOT": 7.252e-05,
+          "MEAN_MOTION_DDOT": 0
+        },
+        "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=62666&FORMAT=json",
+        "retrieved_at": "2026-10-26T07:32:38.371394+00:00",
+        "sha256": "bfb907d602c255338dc45d755e1a394fb4fbc605e1dc078c9121f2f7dbf21a5b"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "id": "OBS-1",
+      "target_lat": 53.74661004306415,
+      "target_lon": 108.89457634067264,
+      "priority": 5,
+      "duration_s": 30,
+      "deadline": "2026-10-27T10:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Training target near 2026-10-27T04:30:00+00:00"
+    },
+    {
+      "id": "OBS-2",
+      "target_lat": -44.92085975329593,
+      "target_lon": 61.3619316033342,
+      "priority": 4,
+      "duration_s": 30,
+      "deadline": "2026-10-27T10:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Training target near 2026-10-27T06:30:00+00:00"
+    },
+    {
+      "id": "OBS-3",
+      "target_lat": 81.26776798564268,
+      "target_lon": 110.93759230451269,
+      "priority": 3,
+      "duration_s": 30,
+      "deadline": "2026-10-27T10:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Training target near 2026-10-27T07:30:00+00:00"
+    },
+    {
+      "id": "OBS-4",
+      "target_lat": 77.04659849981084,
+      "target_lon": 177.12141094603598,
+      "priority": 2,
+      "duration_s": 30,
+      "deadline": "2026-10-27T10:00:00+00:00",
+      "energy_cost_wh": 20,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Training target near 2026-10-27T09:00:00+00:00"
+    }
+  ],
+  "satellite": {
+    "id": "SAT-FLOCK",
+    "battery_capacity_wh": 1000,
+    "battery_charge_wh": 1000,
+    "storage_capacity_mb": 4000,
+    "storage_usage_mb": 0,
+    "available": true,
+    "orbit": {
+      "norad_id": 62666,
+      "name": "FLOCK 4G-1",
+      "international_designator": "2025-009BK",
+      "epoch": "2026-10-25T11:12:01.939968+00:00",
+      "omm": {
+        "OBJECT_NAME": "FLOCK 4G-1",
+        "OBJECT_ID": "2025-009BK",
+        "EPOCH": "2026-10-25T11:12:01.939968",
+        "MEAN_MOTION": 15.32171498,
+        "ECCENTRICITY": 0.00037443,
+        "INCLINATION": 97.3954,
+        "RA_OF_ASC_NODE": 20.0928,
+        "ARG_OF_PERICENTER": 195.0341,
+        "MEAN_ANOMALY": 165.079,
+        "EPHEMERIS_TYPE": 0,
+        "CLASSIFICATION_TYPE": "U",
+        "NORAD_CAT_ID": 62666,
+        "ELEMENT_SET_NO": 999,
+        "REV_AT_EPOCH": 9884,
+        "BSTAR": 0.00023594694,
+        "MEAN_MOTION_DOT": 7.252e-05,
+        "MEAN_MOTION_DDOT": 0
+      },
+      "source": "https://celestrak.org/NORAD/elements/gp.php?CATNR=62666&FORMAT=json",
+      "retrieved_at": "2026-10-26T07:32:38.371394+00:00",
+      "sha256": "bfb907d602c255338dc45d755e1a394fb4fbc605e1dc078c9121f2f7dbf21a5b"
+    }
+  },
+  "window_policy": {
+    "provider": "orbital",
+    "max_off_nadir_deg": 30,
+    "min_sun_elevation_deg": null,
+    "settling_time_s": 0.0,
+    "culmination_placement": false,
+    "ground_station_ids": [],
+    "downlink_rate_mb_s": 0.0,
+    "slew_rate_deg_s": 0.0,
+    "recharge_rate_w": 0.0
+  }
+}

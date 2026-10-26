@@ -1,0 +1,24 @@
+{
+  "source": "CelesTrak SOCRATES Plus (Dr. T.S. Kelso)",
+  "source_url": "https://celestrak.org/SOCRATES/sort-minRange.csv",
+  "retrieved_at": "2026-10-26T07:31:09.633806+00:00",
+  "file": "report.csv",
+  "response_filename": "sort-minRange.csv",
+  "sha256": "a1ed99d1c54750caa3803727a3867718191e831717ee986666dd4bfa160aff28",
+  "next_allowed_fetch_at": "2026-10-26T18:31:09.633806+00:00",
+  "usage_policy_url": "https://celestrak.org/usage-policy.php",
+  "usage_policy_verified_on": "2026-10-26",
+  "response_headers": {
+    "Content-Type": "application/octet-stream",
+    "Last-Modified": "Sun, 25 Oct 2026 20:27:41 GMT",
+    "Accept-Ranges": "bytes",
+    "ETag": "\"29531149bf64dd1:0\"",
+    "Server": "Microsoft-IIS/10.0",
+    "Date": "Mon, 26 Oct 2026 07:30:58 GMT",
+    "Connection": "close",
+    "Content-Length": "22187030"
+  },
+  "published_at": null,
+  "coverage_start": null,
+  "coverage_end": null
+}

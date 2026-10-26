@@ -1,6 +1,6 @@
 # E: Conjunction-derived Satellite outages
 
-Status: local specification; E-01 implemented and verified, E-02 archive and real dated Example pending.
+Status: local specification; E-01 and E-02 implemented and verified. Real SOCRATES report archive and dated FLOCK 4G-1 Example bundled.
 Source: AMIS world-impact feature research, section E.
 The requester asked for this specification in the local world-impact folder. No external issue is created. Detailed defaults below are specification proposals, not operational collision-avoidance instructions. Verification seams were confirmed by the requester.
 

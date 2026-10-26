@@ -51,6 +51,7 @@ def examples() -> dict[str, Scenario]:
     result["fairness-strict-utility"] = fairness_strict_utility_example()
     result["cems-crete-2026-10-04"] = cems_crete_example()
     result["archive-athens-2026-10-26"] = archive_athens_example()
+    result["socrates-flock-2026-10-27"] = socrates_flock_example()
     return result
 
 
@@ -64,6 +65,7 @@ def example_briefings() -> dict[str, str]:
     the same static file.
     """
     briefings = {
+        "socrates-flock-2026-10-27": (_CUE_EXAMPLE_DIR.parent / "socrates-flock-2026-10-27" / "briefing.md").read_text(encoding="utf-8"),
         "archive-athens-2026-10-26": (_CUE_EXAMPLE_DIR.parent / "archive-athens-2026-10-26" / "briefing.md").read_text(encoding="utf-8"),
         "usgs-vanuatu-2026-10-08": (_CUE_EXAMPLE_DIR / "briefing.md").read_text(encoding="utf-8"),
         "cems-crete-2026-10-04": (_CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "briefing.md").read_text(encoding="utf-8"),
@@ -97,6 +99,12 @@ def cems_crete_example() -> Scenario:
 def archive_athens_example() -> Scenario:
     """Real catalogue evidence is injected separately into a hypothetical mission."""
     path = _CUE_EXAMPLE_DIR.parent / "archive-athens-2026-10-26" / "scenario.json"
+    return Scenario.from_dict(json.loads(path.read_bytes()))
+
+
+def socrates_flock_example() -> Scenario:
+    """Dated real orbital inputs; archived predictions are injected separately."""
+    path = _CUE_EXAMPLE_DIR.parent / 'socrates-flock-2026-10-27' / 'scenario.json'
     return Scenario.from_dict(json.loads(path.read_bytes()))
 
 

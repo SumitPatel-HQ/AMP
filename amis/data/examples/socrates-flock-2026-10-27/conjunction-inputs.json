@@ -1,0 +1,108 @@
+{
+  "inputs": [
+    {
+      "event_type": "SATELLITE_UNAVAILABLE",
+      "injection_time": "2026-10-27T05:00:00+00:00",
+      "payload": {
+        "conjunction": {
+          "counterpart_norad_id": 58418,
+          "encounter_id": "socrates:58418:62666:2026-10-27T06:13:09.293000+00:00",
+          "matched_norad_id": 62666,
+          "maximum_probability": 0.0002385,
+          "miss_distance_km": 0.518,
+          "policy_version": "socrates-outage-v1",
+          "post_padding_s": 3600.0,
+          "pre_padding_s": 3600.0,
+          "source": "CelesTrak SOCRATES Plus (Dr. T.S. Kelso); https://celestrak.org/SOCRATES/sort-minRange.csv; sha256:a1ed99d1c54750caa3803727a3867718191e831717ee986666dd4bfa160aff28",
+          "tca": "2026-10-27T06:13:09.293000+00:00",
+          "threshold": 0.0001
+        },
+        "outage_end": "2026-10-27T07:13:09.293000+00:00",
+        "outage_start": "2026-10-27T05:13:09.293000+00:00",
+        "satellite_id": "SAT-FLOCK"
+      },
+      "source_objects": [
+        {
+          "name": "STARLINK-30895 [+]",
+          "norad_id": 58418
+        },
+        {
+          "name": "FLOCK 4G-1 [+]",
+          "norad_id": 62666
+        }
+      ]
+    },
+    {
+      "event_type": "SATELLITE_UNAVAILABLE",
+      "injection_time": "2026-10-27T05:00:00+00:00",
+      "payload": {
+        "conjunction": {
+          "counterpart_norad_id": 58418,
+          "encounter_id": "socrates:58418:62666:2026-10-27T07:47:05.620000+00:00",
+          "matched_norad_id": 62666,
+          "maximum_probability": 0.0001888,
+          "miss_distance_km": 0.583,
+          "policy_version": "socrates-outage-v1",
+          "post_padding_s": 3600.0,
+          "pre_padding_s": 3600.0,
+          "source": "CelesTrak SOCRATES Plus (Dr. T.S. Kelso); https://celestrak.org/SOCRATES/sort-minRange.csv; sha256:a1ed99d1c54750caa3803727a3867718191e831717ee986666dd4bfa160aff28",
+          "tca": "2026-10-27T07:47:05.620000+00:00",
+          "threshold": 0.0001
+        },
+        "outage_end": "2026-10-27T08:47:05.620000+00:00",
+        "outage_start": "2026-10-27T06:47:05.620000+00:00",
+        "satellite_id": "SAT-FLOCK"
+      },
+      "source_objects": [
+        {
+          "name": "STARLINK-30895 [+]",
+          "norad_id": 58418
+        },
+        {
+          "name": "FLOCK 4G-1 [+]",
+          "norad_id": 62666
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "injection_time": "2026-10-27T05:00:00+00:00",
+    "mapping": {
+      "62666": "SAT-FLOCK"
+    },
+    "policy_version": "socrates-outage-v1",
+    "post_padding_s": 3600.0,
+    "pre_padding_s": 3600.0,
+    "scenario_id": "SCN-SOCRATES-FLOCK-2026-10-27",
+    "source": {
+      "coverage_end": null,
+      "coverage_start": null,
+      "file": "report.csv",
+      "next_allowed_fetch_at": "2026-10-26T18:31:09.633806+00:00",
+      "published_at": null,
+      "response_filename": "sort-minRange.csv",
+      "response_headers": {
+        "Accept-Ranges": "bytes",
+        "Connection": "close",
+        "Content-Length": "22187030",
+        "Content-Type": "application/octet-stream",
+        "Date": "Mon, 26 Oct 2026 07:30:58 GMT",
+        "ETag": "\"29531149bf64dd1:0\"",
+        "Last-Modified": "Sun, 25 Oct 2026 20:27:41 GMT",
+        "Server": "Microsoft-IIS/10.0"
+      },
+      "retrieved_at": "2026-10-26T07:31:09.633806+00:00",
+      "sha256": "a1ed99d1c54750caa3803727a3867718191e831717ee986666dd4bfa160aff28",
+      "source": "CelesTrak SOCRATES Plus (Dr. T.S. Kelso)",
+      "source_url": "https://celestrak.org/SOCRATES/sort-minRange.csv",
+      "usage_policy_url": "https://celestrak.org/usage-policy.php",
+      "usage_policy_verified_on": "2026-10-26"
+    },
+    "threshold": 0.0001
+  },
+  "summary": {
+    "diagnostics": [],
+    "nonqualifying_encounters": 0,
+    "unmatched_encounters": 0
+  }
+}

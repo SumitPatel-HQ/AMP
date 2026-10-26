@@ -3,3 +3,6 @@ amis/data/cues/crete-emsr933-20261004/response.json -text
 amis/data/examples/cems-crete-2026-10-04/cue-inputs.json -text
 amis/data/imagery/*/page-*.json -text
 amis/data/examples/archive-athens-2026-10-26/archive-inputs.json -text
+amis/data/conjunctions/*/report.csv -text -diff
+amis/data/conjunctions/*/orbit-62666.json -text -diff
+amis/data/examples/socrates-flock-2026-10-27/conjunction-inputs.json -text
