@@ -7,4 +7,6 @@ pytest-of-*/
 venv/
 .mypy_cache/
 node-compile-cache/
-package-lock.json
+package-lock.json
+outputs/
+.archify/
