@@ -101,12 +101,18 @@ def test_api_evidence_group_is_complete_and_round_trips():
         assert SatelliteOutagePayload.from_dict(client.get(route).json()[0]["payload"]).to_dict() == data
         assert client.post(route, json={"event_type": "SATELLITE_UNAVAILABLE", "payload": data}).status_code == 400
 
+        oversized = copy.deepcopy(data)
+        oversized["conjunction"]["pre_padding_s"] = 1e300
+        assert client.post(route, json={"event_type": "SATELLITE_UNAVAILABLE", "payload": oversized}).status_code == 422
+
 
 def test_overlaps_remain_distinct_and_duplicate_is_atomic():
     session = session_for()
     first = payload(session)
     session.inject_event("SATELLITE_UNAVAILABLE", first)
     second = payload(session, "synthetic-2")
+    second.update(outage_start="2026-09-21T10:15:00+00:00", outage_end="2026-09-21T10:35:00+00:00")
+    second["conjunction"].update(pre_padding_s=600, post_padding_s=600)
     session.inject_event("SATELLITE_UNAVAILABLE", second)
     assert len(session.get_events()) == 2
     assert len(session.get_last_impact().invalid_unfrozen_action_ids) == 1
@@ -117,6 +123,17 @@ def test_overlaps_remain_distinct_and_duplicate_is_atomic():
     session.replan()
     trace = next(t for t in session.get_traces() if t.request_id == "OBS-B")
     assert len(trace.metadata["conjunction_events"]) == 2
+
+
+def test_unrelated_resource_failures_retain_constraint_reasons():
+    session = session_for()
+    session.inject_event("SATELLITE_UNAVAILABLE", payload(session))
+    session.inject_battery_drop("SAT-001", 0)
+    session.replan()
+    traces = {t.request_id: t for t in session.get_traces()}
+    assert traces["OBS-B"].reason_code.value == "INSUFFICIENT_BATTERY"
+    assert traces["OBS-C"].reason_code.value == "INSUFFICIENT_BATTERY"
+    assert "conjunction_events" not in traces["OBS-C"].metadata
 
 
 def test_frozen_conflict_is_visible_but_execution_history_is_preserved():

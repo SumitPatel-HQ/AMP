@@ -42,8 +42,12 @@ class ConjunctionEvidence:
             raise ValueError("conjunction padding must be positive")
         if not isinstance(self.tca, datetime) or self.tca.utcoffset() != timedelta(0):
             raise ValueError("conjunction TCA must be UTC")
-        if (start != self.tca - timedelta(seconds=self.pre_padding_s)
-                or end != self.tca + timedelta(seconds=self.post_padding_s)):
+        try:
+            expected_start = self.tca - timedelta(seconds=self.pre_padding_s)
+            expected_end = self.tca + timedelta(seconds=self.post_padding_s)
+        except OverflowError as error:
+            raise ValueError("conjunction padding exceeds the supported datetime range") from error
+        if start != expected_start or end != expected_end:
             raise ValueError("conjunction interval must equal TCA minus/plus padding")
 
     def to_dict(self) -> dict[str, Any]:

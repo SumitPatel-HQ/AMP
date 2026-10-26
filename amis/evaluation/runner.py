@@ -61,6 +61,12 @@ def _block_sockets():
 
 
 def _scenario_and_provider(key: str):
+    if key == "synthetic_conjunction":
+        from amis.demo import CanonicalWindowProvider, build_canonical_replan_scenario
+        from amis.orbital.elements import catalogue
+
+        base = build_canonical_replan_scenario()
+        return replace(base, satellites=(replace(base.satellite, orbit=catalogue()[0]),)), CanonicalWindowProvider()
     if key == "synthetic_demo":
         return build_demo_scenario(), SyntheticWindowProvider()
     if key == "synthetic_demo_unavailable":

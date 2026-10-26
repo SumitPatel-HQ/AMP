@@ -605,25 +605,28 @@ class MissionSession:
         return event
 
     @staticmethod
-    def _conjunction_events(action: ScheduledAction, events: tuple[MissionEvent, ...]) -> tuple[MissionEvent, ...]:
+    def _matching_outages(action: ScheduledAction, events: tuple[MissionEvent, ...]) -> tuple[MissionEvent, ...]:
         return tuple(e for e in events if isinstance(e.payload, SatelliteOutagePayload)
-                     and e.payload.conjunction is not None and not action.is_downlink
+                     and not action.is_downlink
                      and e.payload.satellite_id == action.satellite_id
                      and action.start < e.payload.outage_end and e.payload.outage_start < action.end)
+
+    def _conjunction_events(self, action: ScheduledAction, events: tuple[MissionEvent, ...]) -> tuple[MissionEvent, ...]:
+        return tuple(e for e in self._matching_outages(action, events)
+                     if isinstance(e.payload, SatelliteOutagePayload) and e.payload.conjunction is not None)
 
     def _explain_conjunction_impact(self, impact: Impact, plan: MissionPlan, events: tuple[MissionEvent, ...]) -> Impact:
         reasons = dict(impact.reason_codes)
         for action in plan.actions:
-            if not self._conjunction_events(action, events):
+            matching = self._matching_outages(action, events)
+            if not matching:
                 continue
             existing = reasons.get(action.id, ())
             # An earlier manual outage or base unavailability already prevented
             # this placement; a later prediction must not relabel that cause.
-            first_outage = next((e for e in events if isinstance(e.payload, SatelliteOutagePayload)
-                                 and e.payload.satellite_id == action.satellite_id
-                                 and action.start < e.payload.outage_end and e.payload.outage_start < action.end), None)
+            first_outage = matching[0]
             if (not self.get_state().for_satellite(action.satellite_id).available
-                    or first_outage is None or not isinstance(first_outage.payload, SatelliteOutagePayload)
+                    or not isinstance(first_outage.payload, SatelliteOutagePayload)
                     or first_outage.payload.conjunction is None):
                 continue
             if ReasonCode.SATELLITE_UNAVAILABLE in existing:

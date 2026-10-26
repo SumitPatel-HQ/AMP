@@ -10,6 +10,7 @@ import { planLabel } from "../state/planContext";
 import type { ReplanResult } from "../state/types";
 import { fullTime } from "./format";
 import { PanelFrame } from "./PanelFrame";
+import { ConjunctionTraceEvidence } from "./ConjunctionEvidence";
 
 const CHANGE_STYLE: Record<PlanChangeType, string> = {
   SATISFIED_BY_ARCHIVE: "text-violet-300",
@@ -218,6 +219,7 @@ export function PlanComparisonPanel({
         <ul aria-label="Plan comparison" className="text-xs">
           {changed.map((row) => (
             <li key={row.requestId} data-change={row.changeType}>
+              <ConjunctionTraceEvidence records={row.trace?.metadata.conjunction_events} />
               <ComparisonRowButton
                 row={row}
                 selected={row.requestId === selectedRequestId}

@@ -5,6 +5,7 @@ import type { MissionEventSchema } from "../api/client";
 import { missionState, plan, scenario } from "../test/mapFixtures";
 import { MissionNavPanel } from "./MissionNavPanel";
 import { StatePanel } from "./StatePanel";
+import { PlanComparisonPanel } from "./PlanComparisonPanel";
 
 afterEach(cleanup);
 
@@ -51,4 +52,32 @@ it("shows conjunction evidence for the inspected Satellite only", () => {
   expect(screen.getByLabelText("Conjunction evidence").textContent).toContain("99999");
   view.rerender(<StatePanel {...props} state={{ ...props.state, satellite_id: "SAT-002" }} />);
   expect(screen.queryByLabelText("Conjunction evidence")).toBeNull();
+});
+
+it("renders every recorded encounter alongside the causal comparison trace", () => {
+  const previous = plan.actions[0];
+  const revisedPlan = { ...plan, id: "PLAN-002", parent_plan_id: plan.id, version: 2 };
+  const result = {
+    initialPlan: plan, revisedPlan,
+    diff: { from_plan_id: plan.id, to_plan_id: revisedPlan.id, request_pool_mismatch: false, entries: [{ request_id: previous.request_id!,
+      change_type: "MOVED" as const, reason_code: "COLLISION_AVOIDANCE_OUTAGE" as const,
+      old_start: previous.start, new_start: "2026-09-21T11:00:00Z" }] },
+    traces: [{ id: "TRACE-001", plan_id: revisedPlan.id, event_id: conjunctionEvent.id,
+      request_id: previous.request_id!, reason_code: "COLLISION_AVOIDANCE_OUTAGE" as const,
+      previous_action: previous, new_action: previous, constraint_name: "satellite_availability",
+      message: "Moved because conjunction-derived unavailability blocked previous imaging.",
+      metadata: { conjunction_events: [
+        { event_id: conjunctionEvent.id, ...conjunctionEvent.payload },
+        { event_id: "EVT-002", ...conjunctionEvent.payload, conjunction: {
+          ...conjunctionEvent.payload.conjunction!, encounter_id: "synthetic-2", counterpart_norad_id: 88888 } },
+      ] } }],
+  };
+  render(<PlanComparisonPanel replanResult={result} plans={[plan, revisedPlan]} selectedRequestId={null}
+    onSelectRequest={() => {}} onSelectWindow={() => {}} />);
+  const evidence = screen.getAllByLabelText("Conjunction evidence");
+  expect(evidence).toHaveLength(2);
+  expect(evidence[0].textContent).toContain("10:25:00");
+  expect(evidence[0].textContent).toContain("0.0001");
+  expect(evidence[1].textContent).toContain("88888");
+  expect(evidence[1].textContent).toContain("synthetic training fixture");
 });
