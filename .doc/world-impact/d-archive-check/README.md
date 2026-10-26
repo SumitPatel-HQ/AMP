@@ -2,10 +2,10 @@
 
 [Feature specification](spec.md).
 
-Status: D-01 implemented and verified. D-02 remains ready for implementation; tickets are local.
+Status: D-01 and D-02 implemented and verified; tickets are local.
 
 1. [01: Fulfill requests through recorded archive evidence](01-fulfill-requests-with-archive-evidence.md) — no blockers beyond the delivered A1+B baseline.
-2. [02: Find suitable catalogue imagery offline](02-find-suitable-catalogue-imagery.md) — blocked only by this feature's ticket 01.
+2. [02: Find suitable catalogue imagery offline](02-find-suitable-catalogue-imagery.md) — delivered after D-01.
 
 ## Independent branch contract
 
@@ -21,3 +21,8 @@ Status: D-01 implemented and verified. D-02 remains ready for implementation; ti
 
 The specification governs detailed behavior; these tickets assign delivery ownership. Together, 01 and 02 cover the complete feature, including compatibility, persistence, explanations, frontend behavior, verification, policy ADRs, and a demonstrable Example. Ticket creation does not implement the feature or run tests.
 
+
+Run the real metadata Example with `python -m scripts.run_archive_athens_replay --replan`.
+See [primary-source verification](source-verification.md) and
+`amis/data/examples/archive-athens-2026-10-26/README.md` for rebuild, persistence
+and dashboard inspection instructions.

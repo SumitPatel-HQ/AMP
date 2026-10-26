@@ -55,6 +55,29 @@ def _text(value: Any, name: str) -> None:
         raise ValueError(f"archive evidence requires nonempty {name}")
 
 
+def validate_suitability_profile(profile: Mapping[str, Any]) -> None:
+    """One owner for explicit author requirements, including no-match builds."""
+    profile = _freeze(profile)
+    required = {"version", "allowed_collections", "acquisition_start", "acquisition_end",
+                "max_cloud_cover_pct", "max_gsd_m", "sensor_product_assertion"}
+    if not isinstance(profile, Mapping) or not required <= profile.keys() or profile.keys() - required - {"max_view_angle_deg"}:
+        raise ValueError("archive profile has missing or unsupported requirements")
+    _text(profile["version"], "profile version")
+    _text(profile["sensor_product_assertion"], "sensor/product assertion")
+    collections = profile["allowed_collections"]
+    if not isinstance(collections, tuple) or not collections:
+        raise ValueError("archive profile requires allowed collections")
+    for collection in collections:
+        _text(collection, "allowed collection")
+    if _time(profile["acquisition_start"]) > _time(profile["acquisition_end"]):
+        raise ValueError("archive profile acquisition interval is reversed")
+    _number(profile["max_cloud_cover_pct"], "max_cloud_cover_pct", 0, 100)
+    if _number(profile["max_gsd_m"], "max_gsd_m", 0) <= 0:
+        raise ValueError("archive profile max_gsd_m must be positive")
+    if "max_view_angle_deg" in profile:
+        _number(profile["max_view_angle_deg"], "max_view_angle_deg", 0, 90)
+
+
 @dataclass(frozen=True)
 class ArchiveSatisfactionPayload:
     request_id: str
@@ -103,17 +126,8 @@ class ArchiveSatisfactionPayload:
         if self.policy_version != "archive-point-v1":
             raise ValueError("unsupported archive policy version")
         profile = self.profile
-        required = {"version", "allowed_collections", "acquisition_start", "acquisition_end",
-                    "max_cloud_cover_pct", "max_gsd_m", "sensor_product_assertion"}
-        if not isinstance(profile, Mapping) or not required <= profile.keys() or profile.keys() - required - {"max_view_angle_deg"}:
-            raise ValueError("archive profile has missing or unsupported requirements")
-        _text(profile["version"], "profile version")
-        _text(profile["sensor_product_assertion"], "sensor/product assertion")
+        validate_suitability_profile(profile)
         collections = profile["allowed_collections"]
-        if not isinstance(collections, tuple) or not collections:
-            raise ValueError("archive profile requires allowed collections")
-        for collection in collections:
-            _text(collection, "allowed collection")
         if self.collection_id not in collections:
             raise ValueError("archive collection is not allowed by the profile")
         start, end = _time(self.acquisition_start), _time(self.acquisition_end)

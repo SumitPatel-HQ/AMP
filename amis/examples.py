@@ -50,6 +50,7 @@ def examples() -> dict[str, Scenario]:
     result["fairness-balance"] = fairness_balance_example()
     result["fairness-strict-utility"] = fairness_strict_utility_example()
     result["cems-crete-2026-10-04"] = cems_crete_example()
+    result["archive-athens-2026-10-26"] = archive_athens_example()
     return result
 
 
@@ -63,6 +64,7 @@ def example_briefings() -> dict[str, str]:
     the same static file.
     """
     briefings = {
+        "archive-athens-2026-10-26": (_CUE_EXAMPLE_DIR.parent / "archive-athens-2026-10-26" / "briefing.md").read_text(encoding="utf-8"),
         "usgs-vanuatu-2026-10-08": (_CUE_EXAMPLE_DIR / "briefing.md").read_text(encoding="utf-8"),
         "cems-crete-2026-10-04": (_CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "briefing.md").read_text(encoding="utf-8"),
     }
@@ -89,6 +91,12 @@ def example_briefings() -> dict[str, str]:
 def cems_crete_example() -> Scenario:
     """Load the dated Scenario with its own stored orbital snapshot offline."""
     path = _CUE_EXAMPLE_DIR.parent / "cems-crete-2026-10-04" / "scenario.json"
+    return Scenario.from_dict(json.loads(path.read_bytes()))
+
+
+def archive_athens_example() -> Scenario:
+    """Real catalogue evidence is injected separately into a hypothetical mission."""
+    path = _CUE_EXAMPLE_DIR.parent / "archive-athens-2026-10-26" / "scenario.json"
     return Scenario.from_dict(json.loads(path.read_bytes()))
 
 

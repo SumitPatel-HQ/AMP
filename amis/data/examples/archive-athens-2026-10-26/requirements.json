@@ -1,0 +1,16 @@
+{
+  "OBS-ARCHIVE": {
+    "injection_time": "2026-10-26T07:05:00Z",
+    "profile": {
+      "version": "athens-optical-v1",
+      "allowed_collections": [
+        "sentinel-2-l2a"
+      ],
+      "acquisition_start": "2026-09-01T00:00:00Z",
+      "acquisition_end": "2026-09-10T23:59:59Z",
+      "max_cloud_cover_pct": 20,
+      "max_gsd_m": 10,
+      "sensor_product_assertion": "Scenario author accepts Sentinel-2 L2A optical imagery with item-reported 10 m GSD for this illustrative point need; this is not a claim about all bands or operational image suitability."
+    }
+  }
+}

@@ -27,7 +27,7 @@ postgres = [
 include = ["amis*"]
 
 [tool.setuptools.package-data]
-amis = ["data/evaluation/*/*.json", "data/elements/*.json", "data/ephemeris/*.json", "data/ephemeris/*.bsp", "data/stations/*.json", "data/weather/*.json", "data/cues/README.md", "data/cues/*/*.json", "data/cues/*/*.geojson", "data/examples/*/*.json", "data/examples/*/*.md"]
+amis = ["data/evaluation/*/*.json", "data/elements/*.json", "data/ephemeris/*.json", "data/ephemeris/*.bsp", "data/stations/*.json", "data/weather/*.json", "data/cues/README.md", "data/cues/*/*.json", "data/cues/*/*.geojson", "data/examples/*/*.json", "data/examples/*/*.md", "data/imagery/README.md", "data/imagery/*/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

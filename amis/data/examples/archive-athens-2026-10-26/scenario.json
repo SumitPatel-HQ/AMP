@@ -1,0 +1,73 @@
+{
+  "id": "SCN-ARCHIVE-ATHENS",
+  "name": "Athens archive imagery releases simulated capacity",
+  "start_time": "2026-10-26T07:00:00+00:00",
+  "end_time": "2026-10-26T08:00:00+00:00",
+  "satellites": [
+    {
+      "id": "SAT-SIMULATED",
+      "battery_capacity_wh": 80,
+      "battery_charge_wh": 80,
+      "storage_capacity_mb": 1000,
+      "storage_usage_mb": 0,
+      "available": true
+    }
+  ],
+  "requests": [
+    {
+      "id": "OBS-FROZEN",
+      "target_lat": 38.0,
+      "target_lon": 23.7,
+      "priority": 5,
+      "duration_s": 600,
+      "deadline": "2026-10-26T08:00:00+00:00",
+      "energy_cost_wh": 40,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Already started simulated observation"
+    },
+    {
+      "id": "OBS-ARCHIVE",
+      "target_lat": 37.98,
+      "target_lon": 23.73,
+      "priority": 4,
+      "duration_s": 600,
+      "deadline": "2026-10-26T08:00:00+00:00",
+      "energy_cost_wh": 40,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Athens existing optical imagery need"
+    },
+    {
+      "id": "OBS-COMPETING",
+      "target_lat": 37.96,
+      "target_lon": 23.75,
+      "priority": 3,
+      "duration_s": 600,
+      "deadline": "2026-10-26T08:00:00+00:00",
+      "energy_cost_wh": 40,
+      "storage_cost_mb": 100,
+      "status": "pending",
+      "target_name": "Competing simulated observation"
+    }
+  ],
+  "satellite": {
+    "id": "SAT-SIMULATED",
+    "battery_capacity_wh": 80,
+    "battery_charge_wh": 80,
+    "storage_capacity_mb": 1000,
+    "storage_usage_mb": 0,
+    "available": true
+  },
+  "window_policy": {
+    "provider": "synthetic",
+    "max_off_nadir_deg": 30.0,
+    "min_sun_elevation_deg": 10.0,
+    "settling_time_s": 0.0,
+    "culmination_placement": false,
+    "ground_station_ids": [],
+    "downlink_rate_mb_s": 0.0,
+    "slew_rate_deg_s": 0.0,
+    "recharge_rate_w": 0.0
+  }
+}

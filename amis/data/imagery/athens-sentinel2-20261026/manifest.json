@@ -1,0 +1,119 @@
+{
+  "format": "stac-get-archive-v1",
+  "source": "copernicus-data-space-stac",
+  "source_url": "https://stac.dataspace.copernicus.eu/v1/search?collections=sentinel-2-l2a&bbox=23.72%2C37.97%2C23.74%2C37.99&datetime=2026-09-01T00%3A00%3A00Z%2F2026-09-10T23%3A59%3A59Z&filter-lang=cql2-text&filter=eo%3Acloud_cover+%3C%3D+20&limit=2",
+  "retrieved_at": "2026-10-26T05:55:02.376253+00:00",
+  "pages": [
+    {
+      "file": "page-0001.json",
+      "url": "https://stac.dataspace.copernicus.eu/v1/search?collections=sentinel-2-l2a&bbox=23.72%2C37.97%2C23.74%2C37.99&datetime=2026-09-01T00%3A00%3A00Z%2F2026-09-10T23%3A59%3A59Z&filter-lang=cql2-text&filter=eo%3Acloud_cover+%3C%3D+20&limit=2",
+      "method": "GET",
+      "parameters": [
+        [
+          "collections",
+          "sentinel-2-l2a"
+        ],
+        [
+          "bbox",
+          "23.72,37.97,23.74,37.99"
+        ],
+        [
+          "datetime",
+          "2026-09-01T00:00:00Z/2026-09-10T23:59:59Z"
+        ],
+        [
+          "filter-lang",
+          "cql2-text"
+        ],
+        [
+          "filter",
+          "eo:cloud_cover <= 20"
+        ],
+        [
+          "limit",
+          "2"
+        ]
+      ],
+      "retrieved_at": "2026-10-26T05:55:00.498335+00:00",
+      "sha256": "f792d85f091258a2ade3dc71966439352baa9353368fa13b3919428372f1f6b0"
+    },
+    {
+      "file": "page-0002.json",
+      "url": "https://stac.dataspace.copernicus.eu/v1/search?collections=sentinel-2-l2a&bbox=23.72,37.97,23.74,37.99&datetime=2026-09-01T00:00:00Z/2026-09-10T23:59:59Z&filter-lang=cql2-text&filter=eo:cloud_cover+%3C=+20&limit=2&token=next:sentinel-2-l2a:S2A_MSIL2A_20260908T091331_N0512_R050_T34SGH_20260908T141908",
+      "method": "GET",
+      "parameters": [
+        [
+          "collections",
+          "sentinel-2-l2a"
+        ],
+        [
+          "bbox",
+          "23.72,37.97,23.74,37.99"
+        ],
+        [
+          "datetime",
+          "2026-09-01T00:00:00Z/2026-09-10T23:59:59Z"
+        ],
+        [
+          "filter-lang",
+          "cql2-text"
+        ],
+        [
+          "filter",
+          "eo:cloud_cover <= 20"
+        ],
+        [
+          "limit",
+          "2"
+        ],
+        [
+          "token",
+          "next:sentinel-2-l2a:S2A_MSIL2A_20260908T091331_N0512_R050_T34SGH_20260908T141908"
+        ]
+      ],
+      "retrieved_at": "2026-10-26T05:55:01.407056+00:00",
+      "sha256": "8b570dae4f863fab5079f24c6fc50e9f9d6b92d3305330e098092f7ba0b15567"
+    },
+    {
+      "file": "page-0003.json",
+      "url": "https://stac.dataspace.copernicus.eu/v1/search?collections=sentinel-2-l2a&bbox=23.72,37.97,23.74,37.99&datetime=2026-09-01T00:00:00Z/2026-09-10T23:59:59Z&filter-lang=cql2-text&filter=eo:cloud_cover+%3C=+20&limit=2&token=next:sentinel-2-l2a:S2C_MSIL2A_20260906T090551_N0512_R050_T34SGH_20260906T124208",
+      "method": "GET",
+      "parameters": [
+        [
+          "collections",
+          "sentinel-2-l2a"
+        ],
+        [
+          "bbox",
+          "23.72,37.97,23.74,37.99"
+        ],
+        [
+          "datetime",
+          "2026-09-01T00:00:00Z/2026-09-10T23:59:59Z"
+        ],
+        [
+          "filter-lang",
+          "cql2-text"
+        ],
+        [
+          "filter",
+          "eo:cloud_cover <= 20"
+        ],
+        [
+          "limit",
+          "2"
+        ],
+        [
+          "token",
+          "next:sentinel-2-l2a:S2C_MSIL2A_20260906T090551_N0512_R050_T34SGH_20260906T124208"
+        ]
+      ],
+      "retrieved_at": "2026-10-26T05:55:02.376253+00:00",
+      "sha256": "c2b28e8a5c4a83c31c9137da263f0eaad718d707e5db6c27e684a021cd308ac4"
+    }
+  ],
+  "page_count": 3,
+  "item_count": 6,
+  "pagination_complete": true,
+  "completion_reason": "no-next-link"
+}
