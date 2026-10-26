@@ -48,7 +48,10 @@ def test_success_archives_once_and_preserves_headers(tmp_path):
         response.status = 200
         response.headers = headers
         response.read.return_value = b'original bytes'
-        manifest = fetch_archive(tmp_path / 'report', state_path=state)
-    assert json.loads(manifest.read_bytes())['response_filename'] == 'provider.csv'
+        manifest = fetch_archive(tmp_path / 'report', state_path=state, fetch_interval=timedelta(hours=2))
+    metadata = json.loads(manifest.read_bytes())
+    assert metadata['response_filename'] == 'provider.csv'
+    assert datetime.fromisoformat(metadata['next_allowed_fetch_at']) - datetime.fromisoformat(metadata['retrieved_at']) == timedelta(hours=2)
+    assert json.loads(state.read_bytes())['next_allowed_fetch_at'] == metadata['next_allowed_fetch_at']
     assert (manifest.parent / 'report.csv').read_bytes() == b'original bytes'
     assert json.loads(state.read_bytes())['status'] == 'archived'

@@ -112,7 +112,7 @@ def test_overlaps_remain_distinct_and_duplicate_is_atomic():
     session.inject_event("SATELLITE_UNAVAILABLE", first)
     second = payload(session, "synthetic-2")
     second.update(outage_start="2026-09-21T10:15:00+00:00", outage_end="2026-09-21T10:35:00+00:00")
-    second["conjunction"].update(pre_padding_s=600, post_padding_s=600)
+    second["conjunction"].update(pre_padding_s=600, post_padding_s=600, counterpart_norad_id=88888)
     session.inject_event("SATELLITE_UNAVAILABLE", second)
     assert len(session.get_events()) == 2
     assert len(session.get_last_impact().invalid_unfrozen_action_ids) == 1
@@ -123,6 +123,11 @@ def test_overlaps_remain_distinct_and_duplicate_is_atomic():
     session.replan()
     trace = next(t for t in session.get_traces() if t.request_id == "OBS-B")
     assert len(trace.metadata["conjunction_events"]) == 2
+    records = trace.metadata['conjunction_events']
+    assert [record['event_id'] for record in records] == ['EVT-001', 'EVT-002']
+    assert [record['conjunction']['counterpart_norad_id'] for record in records] == [99999, 88888]
+    assert 'EVT-001 (counterpart NORAD 99999)' in trace.message
+    assert 'EVT-002 (counterpart NORAD 88888)' in trace.message
 
 
 def test_unrelated_resource_failures_retain_constraint_reasons():
@@ -136,7 +141,7 @@ def test_unrelated_resource_failures_retain_constraint_reasons():
     assert "conjunction_events" not in traces["OBS-C"].metadata
 
 
-def test_frozen_conflict_is_visible_but_execution_history_is_preserved():
+def test_frozen_action_violation_is_visible_and_frozen_actions_are_preserved():
     session = session_for()
     session.step(60)
     frozen = next(a for a in session.get_plan().actions if a.request_id == "OBS-A")

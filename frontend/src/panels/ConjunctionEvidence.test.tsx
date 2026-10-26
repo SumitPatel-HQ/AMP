@@ -6,10 +6,24 @@ import { missionState, plan, scenario } from "../test/mapFixtures";
 import { MissionNavPanel } from "./MissionNavPanel";
 import { StatePanel } from "./StatePanel";
 import { PlanComparisonPanel } from "./PlanComparisonPanel";
+import { ConjunctionTraceEvidence } from "./ConjunctionEvidence";
 
 afterEach(cleanup);
 
-const conjunctionEvent: MissionEventSchema = {
+it("omits malformed trace evidence while retaining complete schema records", () => {
+  const record = { event_id: conjunctionEvent.id, ...conjunctionEvent.payload };
+  render(<ConjunctionTraceEvidence records={[
+    null, [], { ...record, event_id: 42 },
+    { ...record, conjunction: { ...record.conjunction, counterpart_norad_id: "99999" } },
+    { ...record, conjunction: { ...record.conjunction, tca: undefined } },
+    { ...record, conjunction: { ...record.conjunction, maximum_probability: Infinity } },
+    record,
+  ]} />);
+  expect(screen.getAllByLabelText("Conjunction evidence")).toHaveLength(1);
+  expect(screen.getByLabelText("Conjunction evidence").textContent).toContain("EVT-001");
+});
+
+const conjunctionEvent: Extract<MissionEventSchema, { event_type: "SATELLITE_UNAVAILABLE" }> = {
   id: "EVT-001", scenario_id: "SCN-001", event_type: "SATELLITE_UNAVAILABLE",
   event_time: "2026-09-21T10:00:00Z",
   payload: {

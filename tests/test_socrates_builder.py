@@ -1,6 +1,7 @@
 """Public developer archive/builder seam; rows here are synthetic unit fixtures."""
 from datetime import datetime, timedelta, timezone
 from dataclasses import replace
+import json
 
 import pytest
 
@@ -38,6 +39,88 @@ def test_bytes_integrity_before_parse_and_no_overwrite(tmp_path):
     (path.parent / 'report.csv').write_bytes(b'not CSV')
     with pytest.raises(ValueError, match='checksum'):
         load_archive(path)
+
+
+def test_archive_load_does_not_reinterpret_recorded_fetch_cadence(tmp_path):
+    path = archive(tmp_path)
+    metadata = json.loads(path.read_bytes())
+    metadata['next_allowed_fetch_at'] = NOW.isoformat()  # One hour after retrieval.
+    path.write_text(json.dumps(metadata))
+    assert load_archive(path).metadata['next_allowed_fetch_at'] == NOW.isoformat()
+
+
+def test_per_encounter_policy_preserves_distinct_timing_and_sorted_output(tmp_path):
+    from amis.conjunctions.builder import EncounterOutagePolicy
+    path = archive(tmp_path, ROW + ROW.replace('10:25:00.000', '10:40:00.000'))
+    first = 'socrates:39084:99999:2026-09-21T10:25:00+00:00'
+    second = 'socrates:39084:99999:2026-09-21T10:40:00+00:00'
+    policies = {
+        second: EncounterOutagePolicy(NOW, 120, 180),
+        first: EncounterOutagePolicy(NOW + timedelta(minutes=1), 300, 600),
+    }
+    result = build_inputs(load_archive(path), scenario(), encounter_policies=policies)
+    entries = result['inputs']
+    assert [entry['payload']['conjunction']['encounter_id'] for entry in entries] == [second, first]
+    assert entries[0]['payload']['outage_start'] == '2026-09-21T10:38:00+00:00'
+    assert entries[0]['payload']['outage_end'] == '2026-09-21T10:43:00+00:00'
+    assert entries[1]['payload']['outage_end'] == '2026-09-21T10:35:00+00:00'
+    assert result['metadata']['encounter_policies'][first]['injection_time'] == '2026-09-21T10:01:00+00:00'
+
+
+def test_missing_per_encounter_policy_fails(tmp_path):
+    from amis.conjunctions.builder import EncounterOutagePolicy
+    path = archive(tmp_path, ROW + ROW.replace('10:25:00.000', '10:40:00.000'))
+    first = 'socrates:39084:99999:2026-09-21T10:25:00+00:00'
+    second = 'socrates:39084:99999:2026-09-21T10:40:00+00:00'
+    with pytest.raises(ValueError, match='missing outage policy'):
+        build_inputs(load_archive(path), scenario(), encounter_ids=(first, second),
+                     encounter_policies={first: EncounterOutagePolicy(NOW, 300, 300)})
+
+
+@pytest.mark.parametrize('injection, pre, post, message', [
+    (NOW + timedelta(minutes=21), 300, 300, 'later'),
+    (NOW, 300, 100000, 'horizon'),
+    (NOW, 0, 300, 'positive'),
+    (NOW.replace(tzinfo=None), 300, 300, 'timezone'),
+    (NOW - timedelta(hours=2), 300, 300, 'horizon'),
+    (NOW, float('inf'), 300, 'finite'),
+])
+def test_per_encounter_policy_validation(tmp_path, injection, pre, post, message):
+    from amis.conjunctions.builder import EncounterOutagePolicy
+    identity = 'socrates:39084:99999:2026-09-21T10:25:00+00:00'
+    with pytest.raises(ValueError, match=message):
+        build_inputs(load_archive(archive(tmp_path)), scenario(),
+                     encounter_policies={identity: EncounterOutagePolicy(injection, pre, post)})
+
+
+def test_encounter_policy_overrides_scalar_defaults_and_rejects_unknown_identity(tmp_path):
+    from amis.conjunctions.builder import EncounterOutagePolicy
+    identity = 'socrates:39084:99999:2026-09-21T10:25:00+00:00'
+    path = archive(tmp_path)
+    overrides = {identity: EncounterOutagePolicy(NOW + timedelta(minutes=1), 60, 120)}
+    result = build(path, encounter_policies=overrides)
+    assert result['inputs'][0]['payload']['outage_start'] == '2026-09-21T10:24:00+00:00'
+    with pytest.raises(ValueError, match='configured encounter not found'):
+        build(path, encounter_policies={'missing': overrides[identity]})
+
+
+def test_cli_publishes_encounter_configuration_without_scalar_defaults(tmp_path, monkeypatch):
+    from scripts.build_socrates_inputs import main
+    path = archive(tmp_path)
+    scenario_path = tmp_path / 'scenario.json'
+    scenario_path.write_text(json.dumps(scenario().to_dict()))
+    policies_path = tmp_path / 'policies.json'
+    identity = 'socrates:39084:99999:2026-09-21T10:25:00+00:00'
+    policies_path.write_text(json.dumps({identity: {'injection_time': NOW.isoformat(),
+                                                    'pre_padding_s': 60, 'post_padding_s': 120}}))
+    output = tmp_path / 'inputs.json'
+    monkeypatch.setattr('sys.argv', ['build_socrates_inputs', '--manifest', str(path),
+                                   '--scenario', str(scenario_path), '--encounter-policies', str(policies_path),
+                                   '--output', str(output)])
+    main()
+    entry = json.loads(output.read_bytes())['inputs'][0]
+    assert entry['payload']['outage_start'] == '2026-09-21T10:24:00+00:00'
+    assert entry['payload']['outage_end'] == '2026-09-21T10:27:00+00:00'
 
 
 def test_threshold_and_orientation_duplicates_are_deterministic(tmp_path):

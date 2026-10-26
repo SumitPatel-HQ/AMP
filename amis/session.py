@@ -234,9 +234,14 @@ class MissionSession:
             if trace.reason_code is ReasonCode.COLLISION_AVOIDANCE_OUTAGE and trace.previous_action is not None:
                 evidence_events = self._conjunction_events(trace.previous_action, tuple(self._events))
                 records = [{"event_id": e.id, **e.payload.to_dict()} for e in evidence_events]
-                counterparts = ", ".join(str(r["conjunction"]["counterpart_norad_id"]) for r in records)
+                event_links = ", ".join(
+                    f"{record['event_id']} (counterpart NORAD {record['conjunction']['counterpart_norad_id']})"
+                    for record in records
+                )
+                # The singular field remains the primary link for compatibility;
+                # every overlapping event and its evidence is inspectable below.
                 trace = replace(trace, event_id=evidence_events[0].id,
-                                message=trace.message + f" Counterpart NORAD {counterparts}; assumed payload outage, not a confirmed maneuver.",
+                                message=trace.message + f" Conjunction events {event_links}; assumed payload outage, not a confirmed maneuver.",
                                 metadata={**trace.metadata, "conjunction_events": records})
             explained_traces.append(trace)
         self._plans.append(plan)
@@ -632,7 +637,7 @@ class MissionSession:
             if ReasonCode.SATELLITE_UNAVAILABLE in existing:
                 reasons[action.id] = tuple(ReasonCode.COLLISION_AVOIDANCE_OUTAGE if r is ReasonCode.SATELLITE_UNAVAILABLE else r for r in existing)
             elif action.id in impact.frozen_action_ids:
-                # Visible historical conflict, outside forward-plan validation (ADR-0003).
+                # Visible frozen action violation, outside forward-plan validation (ADR-0003).
                 reasons[action.id] = (*existing, ReasonCode.COLLISION_AVOIDANCE_OUTAGE)
         return replace(impact, reason_codes=reasons)
 

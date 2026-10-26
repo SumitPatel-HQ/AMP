@@ -50,7 +50,7 @@ def test_injection_exposes_overlap_impact_and_replan_remains_explicit():
     assert first['outage_end'] > second['outage_start']
 
 
-def test_offline_persisted_replay_keeps_evidence_trace_and_frozen_history(tmp_path, monkeypatch):
+def test_offline_persisted_replay_keeps_evidence_traces_frozen_actions_and_determinism(tmp_path, monkeypatch):
     from sqlalchemy import create_engine
     from amis.db.repositories import build_repositories
     from amis.repositories import MissionSessionStore
@@ -69,7 +69,7 @@ def test_offline_persisted_replay_keeps_evidence_trace_and_frozen_history(tmp_pa
     assert result['state_after'] == result['state_at_injection']
     before = {a['request_id']: a for a in result['baseline_at_injection']['actions']}
     after = {a['request_id']: a for a in result['replanned_plan']['actions']}
-    assert after['OBS-1'] == before['OBS-1']  # Executed before injection; immutable history.
+    assert after['OBS-1'] == before['OBS-1']  # Completed before injection; frozen action is unchanged.
     assert set(after) == {'OBS-1', 'OBS-3', 'OBS-4'}
     assert after['OBS-3']['start'] >= result['events'][1]['payload']['outage_end']
     traces = {t['request_id']: t for t in result['traces']}

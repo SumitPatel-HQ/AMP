@@ -5,6 +5,14 @@ import math
 from typing import Any
 
 
+def outage_interval(tca: datetime, pre_padding_s: float, post_padding_s: float) -> tuple[datetime, datetime]:
+    """Derive the assumed interval once for event validation and source conversion."""
+    try:
+        return tca - timedelta(seconds=pre_padding_s), tca + timedelta(seconds=post_padding_s)
+    except OverflowError as error:
+        raise ValueError('conjunction padding exceeds the supported datetime range') from error
+
+
 @dataclass(frozen=True)
 class ConjunctionEvidence:
     source: str
@@ -42,11 +50,7 @@ class ConjunctionEvidence:
             raise ValueError("conjunction padding must be positive")
         if not isinstance(self.tca, datetime) or self.tca.utcoffset() != timedelta(0):
             raise ValueError("conjunction TCA must be UTC")
-        try:
-            expected_start = self.tca - timedelta(seconds=self.pre_padding_s)
-            expected_end = self.tca + timedelta(seconds=self.post_padding_s)
-        except OverflowError as error:
-            raise ValueError("conjunction padding exceeds the supported datetime range") from error
+        expected_start, expected_end = outage_interval(self.tca, self.pre_padding_s, self.post_padding_s)
         if start != expected_start or end != expected_end:
             raise ValueError("conjunction interval must equal TCA minus/plus padding")
 

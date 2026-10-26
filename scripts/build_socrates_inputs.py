@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from amis.conjunctions.archive import instant, load_archive
-from amis.conjunctions.builder import build_inputs
+from amis.conjunctions.builder import EncounterOutagePolicy, build_inputs
 from amis.domain import Scenario
 
 
@@ -12,9 +12,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--scenario', type=Path, required=True)
-    parser.add_argument('--injection-time', required=True)
-    parser.add_argument('--pre-padding-s', type=float, required=True)
-    parser.add_argument('--post-padding-s', type=float, required=True)
+    parser.add_argument('--injection-time', help='scalar default; provide with both padding defaults')
+    parser.add_argument('--pre-padding-s', type=float)
+    parser.add_argument('--post-padding-s', type=float)
+    parser.add_argument('--encounter-policies', type=Path,
+                        help='JSON object keyed by canonical encounter id, with injection_time, pre_padding_s, post_padding_s')
     parser.add_argument('--threshold', type=float, default=0.0001)
     parser.add_argument('--satellite', action='append')
     parser.add_argument('--encounter', action='append')
@@ -23,12 +25,22 @@ def main() -> None:
     args = parser.parse_args()
     try:
         mapping = {int(k): v for k, v in json.loads(args.mapping.read_bytes()).items()} if args.mapping else None
+        policies = None
+        if args.encounter_policies:
+            data = json.loads(args.encounter_policies.read_bytes())
+            if not isinstance(data, dict) or not data:
+                raise ValueError('encounter policies must be a nonempty JSON object')
+            policies = {}
+            for identity, timing in data.items():
+                if not isinstance(timing, dict):
+                    raise ValueError(f'encounter policy {identity} must be an object')
+                policies[identity] = EncounterOutagePolicy(**{**timing, 'injection_time': instant(timing['injection_time'])})
         result = build_inputs(load_archive(args.manifest), Scenario.from_dict(json.loads(args.scenario.read_bytes())),
-                              injection_time=instant(args.injection_time), pre_padding_s=args.pre_padding_s,
+                              injection_time=instant(args.injection_time) if args.injection_time else None, pre_padding_s=args.pre_padding_s,
                               post_padding_s=args.post_padding_s, threshold=args.threshold,
                               satellite_ids=tuple(args.satellite) if args.satellite else None,
                               encounter_ids=tuple(args.encounter) if args.encounter else None,
-                              identity_mapping=mapping)
+                              identity_mapping=mapping, encounter_policies=policies)
         publish(args.output, result)
     except (OSError, ValueError, TypeError, KeyError) as error:
         parser.exit(2, f'SOCRATES conversion failed: {error}\n')

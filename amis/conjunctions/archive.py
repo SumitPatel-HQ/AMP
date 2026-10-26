@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -12,8 +12,6 @@ from typing import Any
 
 SOURCE_URL = 'https://celestrak.org/SOCRATES/sort-minRange.csv'
 POLICY_URL = 'https://celestrak.org/usage-policy.php'
-# Verified 2026-10-26: once per update, currently 10–11 hours. Recheck before refresh.
-FETCH_INTERVAL = timedelta(hours=11)
 
 
 def instant(value: str) -> datetime:
@@ -39,8 +37,12 @@ def store_archive(directory: Path, raw: bytes, *, source_url: str,
                   published_at: datetime | None = None,
                   coverage_start: datetime | None = None,
                   coverage_end: datetime | None = None,
-                  response_headers: dict[str, str] | None = None) -> Path:
+                  response_headers: dict[str, str] | None = None,
+                  next_allowed_fetch_at: datetime | None = None) -> Path:
     retrieved_at = instant(retrieved_at.isoformat())
+    next_fetch = instant((next_allowed_fetch_at or retrieved_at).isoformat())
+    if next_fetch < retrieved_at:
+        raise ValueError('next allowed fetch time cannot precede retrieval')
     if source_url != SOURCE_URL:
         raise ValueError('unsupported SOCRATES source URL')
     metadata: dict[str, Any] = {
@@ -48,7 +50,7 @@ def store_archive(directory: Path, raw: bytes, *, source_url: str,
         'source_url': source_url, 'retrieved_at': retrieved_at.isoformat(),
         'file': 'report.csv', 'response_filename': response_filename,
         'sha256': hashlib.sha256(raw).hexdigest(),
-        'next_allowed_fetch_at': (retrieved_at + FETCH_INTERVAL).isoformat(),
+        'next_allowed_fetch_at': next_fetch.isoformat(),
         'usage_policy_url': POLICY_URL, 'usage_policy_verified_on': '2026-10-26',
         'response_headers': response_headers or {},
     }
@@ -86,7 +88,7 @@ def load_archive(path: Path) -> ReportArchive:
         if metadata.get('file') != 'report.csv' or metadata['source_url'] != SOURCE_URL:
             raise ValueError('unsupported report file or source URL')
         retrieved = instant(metadata['retrieved_at'])
-        if instant(metadata['next_allowed_fetch_at']) < retrieved + FETCH_INTERVAL:
+        if instant(metadata['next_allowed_fetch_at']) < retrieved:
             raise ValueError('invalid next allowed fetch time')
         if metadata.get('published_at') and instant(metadata['published_at']) > retrieved:
             raise ValueError('publication cannot follow retrieval')
