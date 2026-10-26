@@ -1,3 +1,4 @@
+import { ConjunctionEvidenceDetails } from "./ConjunctionEvidence";
 import { ArchiveEvidenceDetails } from "./ArchiveEvidence";
 import { useState } from "react";
 import type {
@@ -233,6 +234,7 @@ function EventList({
                 {activeIds.has(event.id) ? <span className="text-amber-400">active</span> : null}
               </span>
             </button>
+            {selected ? <ConjunctionEvidenceDetails event={event} /> : null}
             {selected ? <ArchiveEvidenceDetails event={event} /> : null}
             {selected && evidence !== null ? (
               <div className="px-2 pb-1">

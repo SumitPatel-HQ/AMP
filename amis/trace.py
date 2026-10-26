@@ -41,6 +41,7 @@ _CAUSE_BY_REASON_CODE: dict[ReasonCode, str] = {
     ReasonCode.INSUFFICIENT_STORAGE: "the projected storage could not hold its data",
     ReasonCode.DEADLINE_VIOLATION: "no remaining window ends before its deadline",
     ReasonCode.TIME_OVERLAP: "every remaining window overlapped an action already scheduled",
+    ReasonCode.COLLISION_AVOIDANCE_OUTAGE: "a conjunction-derived simulated payload outage overlaps its previous imaging placement",
     ReasonCode.SATELLITE_UNAVAILABLE: "the satellite is unavailable",
     ReasonCode.DISPLACED_BY_COMPETING_REQUEST: "a competing request took its window",
     ReasonCode.ALTERNATIVE_WINDOW_AVAILABLE: "an alternative window was available",
@@ -60,6 +61,7 @@ _CONSTRAINT_BY_REASON_CODE: dict[ReasonCode, Optional[str]] = {
     ReasonCode.DEADLINE_VIOLATION: "deadline",
     ReasonCode.TIME_OVERLAP: "overlap",
     ReasonCode.DISPLACED_BY_COMPETING_REQUEST: "overlap",
+    ReasonCode.COLLISION_AVOIDANCE_OUTAGE: "satellite_availability",
     ReasonCode.SATELLITE_UNAVAILABLE: "satellite_availability",
     ReasonCode.REBALANCED_FOR_REQUESTER_SHARE: "requester_share",
 }

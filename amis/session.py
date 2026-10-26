@@ -229,8 +229,18 @@ class MissionSession:
             ),
         )
 
+        explained_traces = []
+        for trace in traces:
+            if trace.reason_code is ReasonCode.COLLISION_AVOIDANCE_OUTAGE and trace.previous_action is not None:
+                evidence_events = self._conjunction_events(trace.previous_action, tuple(self._events))
+                records = [{"event_id": e.id, **e.payload.to_dict()} for e in evidence_events]
+                counterparts = ", ".join(str(r["conjunction"]["counterpart_norad_id"]) for r in records)
+                trace = replace(trace, event_id=evidence_events[0].id,
+                                message=trace.message + f" Counterpart NORAD {counterparts}; assumed payload outage, not a confirmed maneuver.",
+                                metadata={**trace.metadata, "conjunction_events": records})
+            explained_traces.append(trace)
         self._plans.append(plan)
-        self._traces.extend(traces)
+        self._traces.extend(explained_traces)
         self._update_request_statuses_from_plan()
         self._record_request_pool_for(plan)
         return plan
@@ -589,9 +599,39 @@ class MissionSession:
                 pending=event if parsed_event_type is EventType.COMMUNICATION_OUTAGE else None
             ),
         )
+        impact = self._explain_conjunction_impact(impact, plan, (*self._events, event))
         self._events.append(event)
         self._impacts.append(impact)
         return event
+
+    @staticmethod
+    def _conjunction_events(action: ScheduledAction, events: tuple[MissionEvent, ...]) -> tuple[MissionEvent, ...]:
+        return tuple(e for e in events if isinstance(e.payload, SatelliteOutagePayload)
+                     and e.payload.conjunction is not None and not action.is_downlink
+                     and e.payload.satellite_id == action.satellite_id
+                     and action.start < e.payload.outage_end and e.payload.outage_start < action.end)
+
+    def _explain_conjunction_impact(self, impact: Impact, plan: MissionPlan, events: tuple[MissionEvent, ...]) -> Impact:
+        reasons = dict(impact.reason_codes)
+        for action in plan.actions:
+            if not self._conjunction_events(action, events):
+                continue
+            existing = reasons.get(action.id, ())
+            # An earlier manual outage or base unavailability already prevented
+            # this placement; a later prediction must not relabel that cause.
+            first_outage = next((e for e in events if isinstance(e.payload, SatelliteOutagePayload)
+                                 and e.payload.satellite_id == action.satellite_id
+                                 and action.start < e.payload.outage_end and e.payload.outage_start < action.end), None)
+            if (not self.get_state().for_satellite(action.satellite_id).available
+                    or first_outage is None or not isinstance(first_outage.payload, SatelliteOutagePayload)
+                    or first_outage.payload.conjunction is None):
+                continue
+            if ReasonCode.SATELLITE_UNAVAILABLE in existing:
+                reasons[action.id] = tuple(ReasonCode.COLLISION_AVOIDANCE_OUTAGE if r is ReasonCode.SATELLITE_UNAVAILABLE else r for r in existing)
+            elif action.id in impact.frozen_action_ids:
+                # Visible historical conflict, outside forward-plan validation (ADR-0003).
+                reasons[action.id] = (*existing, ReasonCode.COLLISION_AVOIDANCE_OUTAGE)
+        return replace(impact, reason_codes=reasons)
 
     def inject_cloud_block(self, request_id: str, window_id: str) -> MissionEvent:
         return self.inject_event(
@@ -1218,6 +1258,21 @@ class MissionSession:
 
     def _validate_satellite_outage(self, payload: SatelliteOutagePayload) -> None:
         scenario = self._require_scenario()
+        if payload.conjunction is not None:
+            try:
+                payload.conjunction.validate(payload.outage_start, payload.outage_end)
+            except (TypeError, ValueError, OverflowError, AttributeError) as error:
+                raise InvalidEventError(f"invalid conjunction evidence: {error}") from error
+            satellite = next((s for s in scenario.satellites if s.id == payload.satellite_id), None)
+            if satellite is None or satellite.orbit is None or satellite.orbit.norad_id != payload.conjunction.matched_norad_id:
+                raise InvalidEventError("conjunction matched NORAD identity must match the selected Satellite orbit")
+            now = self.get_state().simulated_time
+            if not scenario.start_time <= now <= payload.outage_start < payload.outage_end <= scenario.end_time:
+                raise InvalidEventError("conjunction injection and full outage must lie inside the mission; inject no later than outage start")
+            if any(isinstance(e.payload, SatelliteOutagePayload) and e.payload.conjunction is not None
+                   and e.payload.satellite_id == payload.satellite_id
+                   and e.payload.conjunction.encounter_id == payload.conjunction.encounter_id for e in self._events):
+                raise InvalidEventError("duplicate conjunction encounter for Satellite")
         satellite_ids = {satellite.id for satellite in scenario.satellites}
         if payload.satellite_id not in satellite_ids:
             raise InvalidEventError(

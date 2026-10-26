@@ -1,3 +1,4 @@
+import { ConjunctionEvidenceDetails } from "./ConjunctionEvidence";
 import type { ReactNode } from "react";
 import type { MissionEventSchema, MissionPlanSchema, MissionStateSchema } from "../api/client";
 import { eventSummary } from "../state/missionEvent";
@@ -168,6 +169,7 @@ export function StatePanel({
             )}
           </Row>
         </dl>
+        {activeEvents.filter(event => event.event_type === "SATELLITE_UNAVAILABLE" && event.payload.satellite_id === state.satellite_id).map(event => <ConjunctionEvidenceDetails key={event.id} event={event} />)}
       </div>
     </PanelFrame>
   );

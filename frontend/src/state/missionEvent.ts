@@ -37,7 +37,9 @@ export function eventSummary(event: MissionEventSchema): string {
         : `${base} · ${evidence.alertLevel} alert ${evidence.sourceEventId} (${evidence.sourceLabel})`;
     }
     case "SATELLITE_UNAVAILABLE":
-      return `${event.payload.satellite_id} payload outage`;
+      return event.payload.conjunction
+        ? `${event.payload.satellite_id} conjunction outage \u00b7 counterpart NORAD ${event.payload.conjunction.counterpart_norad_id}`
+        : `${event.payload.satellite_id} payload outage`;
     case "COMMUNICATION_OUTAGE":
       return `${event.payload.station_id} comm outage`;
   }

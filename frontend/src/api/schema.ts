@@ -710,6 +710,34 @@ export interface components {
              */
             outage_end: string;
         };
+        /** ConjunctionEvidenceSchema */
+        ConjunctionEvidenceSchema: {
+            /** Source */
+            source: string;
+            /** Encounter Id */
+            encounter_id: string;
+            /** Matched Norad Id */
+            matched_norad_id: number;
+            /** Counterpart Norad Id */
+            counterpart_norad_id: number;
+            /**
+             * Tca
+             * Format: date-time
+             */
+            tca: string;
+            /** Miss Distance Km */
+            miss_distance_km: number;
+            /** Maximum Probability */
+            maximum_probability: number;
+            /** Threshold */
+            threshold: number;
+            /** Policy Version */
+            policy_version: string;
+            /** Pre Padding S */
+            pre_padding_s: number;
+            /** Post Padding S */
+            post_padding_s: number;
+        };
         /** ContactWindowSchema */
         ContactWindowSchema: {
             /** Id */
@@ -1275,7 +1303,7 @@ export interface components {
          * ReasonCode
          * @enum {string}
          */
-        ReasonCode: "SATISFIED_BY_ARCHIVE" | "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
+        ReasonCode: "SATISFIED_BY_ARCHIVE" | "WINDOW_INVALIDATED" | "INSUFFICIENT_BATTERY" | "INSUFFICIENT_STORAGE" | "DEADLINE_VIOLATION" | "TIME_OVERLAP" | "COLLISION_AVOIDANCE_OUTAGE" | "SATELLITE_UNAVAILABLE" | "DISPLACED_BY_COMPETING_REQUEST" | "ALTERNATIVE_WINDOW_AVAILABLE" | "NO_ALTERNATIVE_WINDOW" | "NO_OBSERVATION_WINDOW" | "REQUEST_UNCHANGED" | "HIGHER_PRIORITY_TASK_INSERTED" | "REBALANCED_FOR_REQUESTER_SHARE";
         /** ReplanRequest */
         ReplanRequest: {
             /** Planner */
@@ -1424,6 +1452,7 @@ export interface components {
              * Format: date-time
              */
             outage_end: string;
+            conjunction?: components["schemas"]["ConjunctionEvidenceSchema"] | null;
         };
         /** SatelliteSchema */
         SatelliteSchema: {

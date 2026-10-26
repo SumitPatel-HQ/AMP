@@ -17,6 +17,7 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
   INSUFFICIENT_STORAGE: "Projected storage insufficient",
   DEADLINE_VIOLATION: "No window before deadline",
   TIME_OVERLAP: "Overlapped a scheduled action",
+  COLLISION_AVOIDANCE_OUTAGE: "Conjunction-derived outage",
   SATELLITE_UNAVAILABLE: "Satellite unavailable",
   DISPLACED_BY_COMPETING_REQUEST: "Displaced by competing request",
   ALTERNATIVE_WINDOW_AVAILABLE: "Alternative window available",

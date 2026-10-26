@@ -158,7 +158,11 @@ def _classify(
     elif before is not None:
         change_type = PlanChangeType.DROPPED
         reason_code = (
-            unscheduled_reason or recorded_reason or ReasonCode.NO_ALTERNATIVE_WINDOW
+            recorded_reason
+            if recorded_reason is ReasonCode.COLLISION_AVOIDANCE_OUTAGE
+            and unscheduled_reason in (ReasonCode.SATELLITE_UNAVAILABLE, ReasonCode.DEADLINE_VIOLATION,
+                                       ReasonCode.NO_ALTERNATIVE_WINDOW, ReasonCode.NO_OBSERVATION_WINDOW)
+            else unscheduled_reason or recorded_reason or ReasonCode.NO_ALTERNATIVE_WINDOW
         )
     else:
         # Unscheduled in both versions (or, for a request outside

@@ -11,6 +11,7 @@ from typing import Any, Literal, Union, get_args
 from urllib.parse import urlsplit
 
 from amis.domain.archive import ArchiveSatisfactionPayload
+from amis.domain.conjunction import ConjunctionEvidence
 from amis.domain.enums import EventType
 from amis.domain.scenario import ObservationRequest
 from amis.domain.window import ObservationWindow
@@ -265,12 +266,18 @@ class SatelliteOutagePayload:
     outage_start: datetime
     outage_end: datetime
 
+    conjunction: ConjunctionEvidence | None = None
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result: dict[str, Any] = {
             "satellite_id": self.satellite_id,
             "outage_start": self.outage_start.isoformat(),
             "outage_end": self.outage_end.isoformat(),
         }
+
+        if self.conjunction is not None:
+            result["conjunction"] = self.conjunction.to_dict()
+        return result
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SatelliteOutagePayload":
@@ -278,6 +285,7 @@ class SatelliteOutagePayload:
             satellite_id=data["satellite_id"],
             outage_start=datetime.fromisoformat(data["outage_start"]),
             outage_end=datetime.fromisoformat(data["outage_end"]),
+            conjunction=ConjunctionEvidence.from_dict(data["conjunction"]) if data.get("conjunction") is not None else None,
         )
 
 

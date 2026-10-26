@@ -328,10 +328,25 @@ class BatteryDropPayloadSchema(ApiModel):
     new_battery_wh: float = Field(ge=0, allow_inf_nan=False)
 
 
+class ConjunctionEvidenceSchema(ApiModel):
+    source: str
+    encounter_id: str
+    matched_norad_id: int = Field(strict=True, gt=0)
+    counterpart_norad_id: int = Field(strict=True, gt=0)
+    tca: datetime
+    miss_distance_km: float = Field(strict=True, ge=0, allow_inf_nan=False)
+    maximum_probability: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    threshold: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    policy_version: str
+    pre_padding_s: float = Field(strict=True, gt=0, allow_inf_nan=False)
+    post_padding_s: float = Field(strict=True, gt=0, allow_inf_nan=False)
+
+
 class SatelliteOutagePayloadSchema(ApiModel):
     satellite_id: str = Field(min_length=1)
     outage_start: datetime
     outage_end: datetime
+    conjunction: ConjunctionEvidenceSchema | None = None
 
     @model_validator(mode="after")
     def validate_outage_interval(self) -> Self:
@@ -339,6 +354,9 @@ class SatelliteOutagePayloadSchema(ApiModel):
             raise ValueError("payload outage interval must include a timezone")
         if self.outage_end <= self.outage_start:
             raise ValueError("payload outage end must be after outage start")
+        if self.conjunction is not None:
+            from amis.domain.conjunction import ConjunctionEvidence
+            ConjunctionEvidence(**self.conjunction.model_dump()).validate(self.outage_start, self.outage_end)
         return self
 
 
