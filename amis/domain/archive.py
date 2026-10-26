@@ -11,10 +11,28 @@ from __future__ import annotations
 import copy
 import math
 import re
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, fields
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
+
+
+def _freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _json_value(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_value(item) for item in value]
+    return value
 
 
 def _number(value: Any, name: str, low: float, high: float = math.inf) -> float:
@@ -51,15 +69,19 @@ class ArchiveSatisfactionPayload:
     retrieved_at: str
     target_lat: float
     target_lon: float
-    footprint: dict[str, Any]
+    footprint: Mapping[str, Any]
     cloud_cover_pct: float
     gsd_m: float
-    profile: dict[str, Any]
+    profile: Mapping[str, Any]
     policy_version: str
     view_angle_deg: float | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "footprint", _freeze(self.footprint))
+        object.__setattr__(self, "profile", _freeze(self.profile))
+
     def to_dict(self) -> dict[str, Any]:
-        result = asdict(self)
+        result = {field.name: _json_value(getattr(self, field.name)) for field in fields(self)}
         if self.view_angle_deg is None:
             result.pop("view_angle_deg")
         return result
@@ -83,12 +105,12 @@ class ArchiveSatisfactionPayload:
         profile = self.profile
         required = {"version", "allowed_collections", "acquisition_start", "acquisition_end",
                     "max_cloud_cover_pct", "max_gsd_m", "sensor_product_assertion"}
-        if not isinstance(profile, dict) or not required <= profile.keys() or profile.keys() - required - {"max_view_angle_deg"}:
+        if not isinstance(profile, Mapping) or not required <= profile.keys() or profile.keys() - required - {"max_view_angle_deg"}:
             raise ValueError("archive profile has missing or unsupported requirements")
         _text(profile["version"], "profile version")
         _text(profile["sensor_product_assertion"], "sensor/product assertion")
         collections = profile["allowed_collections"]
-        if not isinstance(collections, list) or not collections:
+        if not isinstance(collections, tuple) or not collections:
             raise ValueError("archive profile requires allowed collections")
         for collection in collections:
             _text(collection, "allowed collection")
@@ -132,17 +154,17 @@ def _intersects(a: list[float], b: list[float], c: list[float], d: list[float]) 
             or (_cross(a, b, c) * _cross(a, b, d) < 0 and _cross(c, d, a) * _cross(c, d, b) < 0))
 
 
-def _covers(geometry: dict[str, Any], x: float, y: float) -> bool:
-    if not isinstance(geometry, dict) or geometry.get("type") != "Polygon":
+def _covers(geometry: Mapping[str, Any], x: float, y: float) -> bool:
+    if not isinstance(geometry, Mapping) or geometry.get("type") != "Polygon":
         raise ValueError("archive coverage supports simple geographic Polygon footprints only")
     rings = geometry.get("coordinates")
-    if not isinstance(rings, list) or len(rings) != 1 or not isinstance(rings[0], list):
+    if not isinstance(rings, tuple) or len(rings) != 1 or not isinstance(rings[0], tuple):
         raise ValueError("archive coverage requires one exterior ring without holes")
     ring = rings[0]
     if len(ring) < 4 or ring[0] != ring[-1]:
         raise ValueError("archive footprint must be a closed polygon")
     for point in ring:
-        if not isinstance(point, list) or len(point) != 2:
+        if not isinstance(point, tuple) or len(point) != 2:
             raise ValueError("archive footprint positions must contain longitude and latitude")
         _number(point[0], "footprint longitude", -180, 180)
         _number(point[1], "footprint latitude", -90, 90)

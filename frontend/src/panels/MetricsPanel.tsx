@@ -240,6 +240,7 @@ export function MetricsPanel({
         <p>Archive fulfillment: {subject.after.archive_satisfied_count ?? 0} requests · utility {subject.after.archive_satisfied_utility ?? 0}</p>
         <p>Total fulfilled (planned/completed imaging plus archive, unique requests): {subject.after.total_fulfilled_count ?? 0} · utility {subject.after.total_fulfilled_utility ?? 0}</p>
         <p>Archive adds no simulated acquisition utility, imaging completions, or resource consumption. Historical plans exclude later archive transitions.</p>
+        <p>Current fulfillment includes accepted archive arrivals since planning; acquisition membership stays with the selected plan.</p>
       </section>
       <EmergencyResponseList metrics={subject.after} planLabel={label(view.afterPlanId)} />
       <RequesterService metrics={subject.after} plan={plans?.find((p) => p.id === view.afterPlanId) ?? null} />

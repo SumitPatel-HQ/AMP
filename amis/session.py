@@ -314,6 +314,8 @@ class MissionSession:
             traces=self.get_traces(plan.id),
             events=self._events_for_plan(plan),
             executed_actions=self._executed_actions(),
+            fulfillment_request_pool=(self._request_pool if plan.id == self.get_plan().id
+                                      else self._request_pool_for_plan(plan)),
         )
 
     def _executed_actions(self) -> tuple[ScheduledAction, ...]:

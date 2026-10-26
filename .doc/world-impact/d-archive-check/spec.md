@@ -1,6 +1,6 @@
 # D: Archive-first imagery satisfaction
 
-Status: local specification; implementation pending.
+Status: D-01 implemented; D-02 catalogue workflow and real Example pending.
 Source: AMIS world-impact feature research, section D; archive-first boundaries follow ADR-0012.
 The requester asked for this specification in the local world-impact folder. No external issue is created. Satisfaction and accounting policies below are proposed defaults requiring an ADR during implementation. Verification seams were confirmed by the requester.
 

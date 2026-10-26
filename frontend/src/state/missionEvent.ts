@@ -43,6 +43,12 @@ export function eventSummary(event: MissionEventSchema): string {
   }
 }
 
+/** One accepted archive event per request; shared by request and map inspection. */
+export function archiveEventsByRequest(events: readonly MissionEventSchema[]) {
+  return new Map(events.flatMap(event => event.event_type === "REQUEST_SATISFIED_BY_ARCHIVE"
+    ? [[event.payload.request_id, event] as const] : []));
+}
+
 /** Display names for evidence sources; any other source shows as recorded. */
 const SOURCE_LABELS: Record<string, string> = { usgs: "U.S. Geological Survey", cems: "Copernicus Emergency Management Service" };
 

@@ -2,7 +2,7 @@
 
 [Feature specification](spec.md).
 
-Status: approved two-ticket breakdown; implementation pending. Tickets are local and ready for agent implementation.
+Status: D-01 implemented and verified. D-02 remains ready for implementation; tickets are local.
 
 1. [01: Fulfill requests through recorded archive evidence](01-fulfill-requests-with-archive-evidence.md) — no blockers beyond the delivered A1+B baseline.
 2. [02: Find suitable catalogue imagery offline](02-find-suitable-catalogue-imagery.md) — blocked only by this feature's ticket 01.

@@ -53,6 +53,7 @@ def compute_metrics(
     traces: Iterable[DecisionTrace] = (),
     events: Iterable[MissionEvent] = (),
     executed_actions: Iterable[ScheduledAction] = (),
+    fulfillment_request_pool: Iterable[ObservationRequest] | None = None,
 ) -> MetricsResult:
     """``executed_actions`` is the session's authoritative history of
     actions that have actually started. Without it nothing is achieved:
@@ -62,6 +63,8 @@ def compute_metrics(
     events = tuple(events)
     pool = tuple(request_pool)
     priority_by_id = {request.id: request.priority for request in pool}
+    fulfillment_pool = tuple(fulfillment_request_pool) if fulfillment_request_pool is not None else pool
+    fulfillment_priority_by_id = {**priority_by_id, **{r.id: r.priority for r in fulfillment_pool}}
 
     utility_request_ids = {action.request_id for action in imaging_actions(plan.actions) if action.request_id is not None} | set(
         mission_state.completed_request_ids
@@ -72,7 +75,7 @@ def compute_metrics(
 
     archive_ids = {e.payload.request_id for e in events
                    if isinstance(e.payload, ArchiveSatisfactionPayload)
-                   and e.event_time <= mission_state.simulated_time} & priority_by_id.keys()
+                   and e.event_time <= mission_state.simulated_time} & fulfillment_priority_by_id.keys()
     fulfilled_ids = utility_request_ids | archive_ids
     pool_size = len(pool)
     completed_count = sum(1 for request in pool if request.status is RequestStatus.COMPLETED)
@@ -95,8 +98,10 @@ def compute_metrics(
         if per_satellite else 0.0
     )
 
+    response_pool = {request.id: request for request in pool}
+    response_pool.update((request.id, request) for request in fulfillment_pool if request.id in archive_ids)
     responses = compute_emergency_response(
-        events, pool, plan, executed_actions, mission_state.simulated_time
+        events, response_pool.values(), plan, executed_actions, mission_state.simulated_time
     )
     planned_mean, planned_count = _mean_of_known(
         item.planned_latency_s for item in responses
@@ -110,9 +115,9 @@ def compute_metrics(
         requester_service=compute_requester_service(pool, utility_request_ids),
         mission_utility=mission_utility,
         archive_satisfied_count=len(archive_ids),
-        archive_satisfied_utility=sum(priority_by_id[r] for r in archive_ids),
+        archive_satisfied_utility=sum(fulfillment_priority_by_id[r] for r in archive_ids),
         total_fulfilled_count=len(fulfilled_ids),
-        total_fulfilled_utility=sum(priority_by_id[r] for r in fulfilled_ids),
+        total_fulfilled_utility=sum(fulfillment_priority_by_id[r] for r in fulfilled_ids),
         completion_rate=completion_rate,
         violation_count=plan.violation_count,
         planning_time_ms=plan.planning_time_ms,

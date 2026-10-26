@@ -162,6 +162,12 @@ def test_pending_emergency_fulfillment_has_explanation_and_no_invented_acquisiti
     _, arrival = build_emergency_replan_fixture()
     session.inject_event("EMERGENCY_TASK", arrival.to_dict())
     archive = session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session, arrival.request.id))
+    immediate = session.get_metrics()
+    assert immediate.archive_satisfied_count == 1
+    assert immediate.archive_satisfied_utility == arrival.request.priority
+    assert arrival.request.id not in immediate.request_pool_ids
+    assert immediate.emergency_response[0].request_status == "satisfied_by_archive"
+    assert immediate.emergency_response[0].achieved_latency_s is None
     revised = session.replan()
     trace = next(t for t in session.get_traces(revised.id) if t.request_id == arrival.request.id)
     assert trace.event_id == archive.id
@@ -333,3 +339,17 @@ def test_optional_required_viewing_limit_accepts_measured_boundary():
     payload["profile"]["max_view_angle_deg"] = 30
     payload["view_angle_deg"] = 30
     assert session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", payload)
+
+
+def test_public_event_evidence_cannot_be_mutated_after_validation():
+    session = planned_session()
+    accepted = session.inject_event("REQUEST_SATISFIED_BY_ARCHIVE", evidence(session))
+    original = accepted.to_dict()
+    for event in (accepted, session.get_events()[0]):
+        with pytest.raises(TypeError):
+            event.payload.profile["max_cloud_cover_pct"] = 0
+        with pytest.raises(TypeError):
+            event.payload.footprint["coordinates"][0][0][0] = 0
+    serialized = accepted.to_dict()
+    serialized["payload"]["profile"]["allowed_collections"].clear()
+    assert session.get_events()[0].to_dict() == original

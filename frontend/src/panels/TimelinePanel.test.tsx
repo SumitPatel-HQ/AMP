@@ -71,6 +71,10 @@ function metrics(planId: string, rows: EmergencyResponseSchema[]): MetricsSchema
   return {
     plan_id: planId,
     mission_utility: 0,
+    archive_satisfied_count: 0,
+    archive_satisfied_utility: 0,
+    total_fulfilled_count: 0,
+    total_fulfilled_utility: 0,
     completion_rate: 0,
     violation_count: 0,
     planning_time_ms: 0,

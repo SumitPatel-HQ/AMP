@@ -10,7 +10,7 @@ import type {
   ScheduledActionSchema,
   GroundTrackPointSchema,
 } from "../api/client";
-import { cueEvidence, missionRequestPool, type CueEvidence } from "../state/missionEvent";
+import { archiveEventsByRequest, cueEvidence, missionRequestPool, type CueEvidence } from "../state/missionEvent";
 import { eventAnchorRequestId } from "../timeline/missionTimelineModel";
 
 /** Longitude then latitude, the order every map library here takes. */
@@ -203,9 +203,10 @@ export function buildMissionMapModel(
   contacts: readonly ContactWindowSchema[] = [],
 ): MissionMapModel {
   const requestPool = missionRequestPool(scenario, events);
+  const archiveEvents = archiveEventsByRequest(events);
   const completedIds = new Set(missionState?.completed_request_ids ?? []);
   const targets = requestPool.map((request): MapTarget => {
-    const archiveEvent = events.find(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" && e.payload.request_id === request.id);
+    const archiveEvent = archiveEvents.get(request.id);
     const action = plan?.actions.find((candidate) => candidate.request_id === request.id) ?? null;
     const unscheduledReason =
       plan?.unscheduled.find((entry) => entry.request_id === request.id)?.reason_code ?? null;

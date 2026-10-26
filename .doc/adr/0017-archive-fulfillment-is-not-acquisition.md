@@ -33,6 +33,10 @@ after injection. A historical plan includes archive events only if their
 impact evaluated an earlier version, even when several versions share the
 same simulated timestamp. Historical RequestPool membership never gains
 later arrivals. Current acquisition completion semantics remain unchanged.
+Active-plan fulfillment also includes archive-satisfied arrivals accepted
+since planning, without adding those arrivals to that plan's acquisition
+membership or acquisition accounting. Historical fulfillment uses only the
+measured plan's original membership and preceding archive transitions.
 
 Archive-satisfied emergency arrivals remain visible; after replan they have
 null planned acquisition and always null achieved acquisition/Satellite.

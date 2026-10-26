@@ -229,6 +229,10 @@ async function renderLoadedDashboard(user: ReturnType<typeof userEvent.setup>) {
   api.fetchMetrics.mockResolvedValue({
     plan_id: plan.id,
     mission_utility: plan.mission_utility,
+    archive_satisfied_count: 0,
+    archive_satisfied_utility: 0,
+    total_fulfilled_count: 0,
+    total_fulfilled_utility: 0,
     completion_rate: 0,
     violation_count: plan.violation_count,
     planning_time_ms: plan.planning_time_ms,

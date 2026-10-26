@@ -10,7 +10,7 @@ import type {
   PlanDiffSchema,
   ScenarioSchema,
 } from "../api/client";
-import { cueEvidence, eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
+import { archiveEventsByRequest, cueEvidence, eventSummary, introducedRequests, type IntroducedRequest } from "../state/missionEvent";
 import { CueEvidenceDetails } from "./CueEvidence";
 import { planLabel } from "../state/planContext";
 import { expiredRequestIds, requestStatus, type RequestState } from "../state/requestStatus";
@@ -76,6 +76,8 @@ function RequestList({
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string | null) => void;
 }) {
+  const archiveEvents = archiveEventsByRequest(events);
+  const archiveSatisfiedRequestIds = new Set(archiveEvents.keys());
   const rows = [
     ...scenario.requests.map((request) => ({ request, eventId: null as string | null })),
     ...introduced.map(({ request, eventId }) => ({ request, eventId })),
@@ -88,7 +90,7 @@ function RequestList({
           plan,
           completedRequestIds,
           expiredRequestIds,
-          archiveSatisfiedRequestIds: new Set(events.flatMap(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" ? [e.payload.request_id] : [])),
+          archiveSatisfiedRequestIds,
           impact,
           diff,
         });
@@ -124,7 +126,7 @@ function RequestList({
                 </span>
               )}
             </button>
-            {selected ? <ArchiveEvidenceDetails event={events.find(e => e.event_type === "REQUEST_SATISFIED_BY_ARCHIVE" && e.payload.request_id === request.id)} /> : null}
+            {selected ? <ArchiveEvidenceDetails event={archiveEvents.get(request.id)} /> : null}
           </li>
         );
       })}

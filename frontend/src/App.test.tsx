@@ -215,6 +215,10 @@ const planDiff = {
   metrics_before: {
     plan_id: plan.id,
     mission_utility: 8,
+    archive_satisfied_count: 0,
+    archive_satisfied_utility: 0,
+    total_fulfilled_count: 0,
+    total_fulfilled_utility: 0,
     completion_rate: 0,
     violation_count: 1,
     planning_time_ms: 1,
@@ -237,6 +241,10 @@ const planDiff = {
   metrics_after: {
     plan_id: revisedPlan.id,
     mission_utility: 9,
+    archive_satisfied_count: 0,
+    archive_satisfied_utility: 0,
+    total_fulfilled_count: 0,
+    total_fulfilled_utility: 0,
     completion_rate: 0,
     violation_count: 1,
     planning_time_ms: 1,
