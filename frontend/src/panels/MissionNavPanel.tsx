@@ -38,7 +38,7 @@ function rowTone(selected: boolean, related = false): string {
 }
 
 function Empty({ children }: { children: string }) {
-  return <p className="px-2 py-1.5 text-xs text-neutral-500">{children}</p>;
+  return <p className="px-2 py-1.5 text-xs text-neutral-400">{children}</p>;
 }
 
 const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: string }> = {
@@ -47,9 +47,9 @@ const STATE_STYLE: Record<RequestState, { dot: string; text: string; label: stri
   started: { dot: "bg-amber-400", text: "text-amber-300", label: "started" },
   planned: { dot: "bg-sky-400", text: "text-sky-300", label: "planned" },
   invalid: { dot: "bg-red-500", text: "text-red-400", label: "invalid" },
-  expired: { dot: "bg-neutral-600", text: "text-neutral-500", label: "expired" },
+  expired: { dot: "bg-neutral-600", text: "text-neutral-400", label: "expired" },
   unscheduled: { dot: "bg-neutral-500", text: "text-neutral-400", label: "unscheduled" },
-  "not-planned": { dot: "bg-neutral-700", text: "text-neutral-600", label: "not planned" },
+  "not-planned": { dot: "bg-neutral-700", text: "text-neutral-400", label: "not planned" },
 };
 
 function RequestList({
@@ -115,14 +115,14 @@ function RequestList({
             >
               <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
               <span className="truncate font-semibold">{request.id}</span>
-              <span className="text-[10px] text-neutral-500" title="priority">
+              <span className="text-[12px] text-neutral-400" title="priority">
                 P{request.priority}
               </span>
-              <span className={`truncate text-[10px] uppercase tracking-wide ${style.text}`}>
+              <span className={`truncate text-[12px]  ${style.text}`}>
                 {style.label}
               </span>
               {detail.length === 0 ? null : (
-                <span className="col-span-3 col-start-2 truncate text-[10px] text-neutral-500">
+                <span className="col-span-3 col-start-2 truncate text-[12px] text-neutral-400">
                   {detail.join(" · ")}
                 </span>
               )}
@@ -169,11 +169,11 @@ function WindowList({
               className={`${ROW} grid-cols-[1fr_auto] ${rowTone(selected, related)}`}
             >
               <span className="truncate">{window.id}</span>
-              <span className="text-[10px] tabular-nums text-neutral-500">
+              <span className="text-[12px] tabular-nums text-neutral-400">
                 {clockTime(window.start)}–{clockTime(window.end)}
               </span>
-              <span className="col-span-2 flex gap-2 truncate text-[10px]">
-                <span className="text-neutral-500">{window.request_id}</span>
+              <span className="col-span-2 flex gap-2 truncate text-[12px]">
+                <span className="text-neutral-400">{window.request_id}</span>
                 {plannedWindowIds.has(window.id) ? (
                   <span className="text-sky-300">in plan</span>
                 ) : null}
@@ -183,7 +183,7 @@ function WindowList({
                   </span>
                 )}
               </span>
-              {window.peak_elevation_deg != null && <span className="col-span-2 truncate text-[10px] text-orange-300" title={window.source ?? undefined}>
+              {window.peak_elevation_deg != null && <span className="col-span-2 truncate text-[12px] text-orange-300" title={window.source ?? undefined}>
                 peak {window.peak_elevation_deg.toFixed(1)}° · off-nadir {window.min_off_nadir_deg?.toFixed(1)}°
                 {window.sun_elevation_deg == null ? "" : ` · Sun ${window.sun_elevation_deg.toFixed(1)}°`}
               </span>}
@@ -225,12 +225,12 @@ function EventList({
               className={`${ROW} grid-cols-[1fr_auto] ${rowTone(selected)}`}
             >
               <span className="truncate font-semibold">{event.id}</span>
-              <span className="text-[10px] tabular-nums text-neutral-500">
+              <span className="text-[12px] tabular-nums text-neutral-400">
                 {clockTime(event.event_time)}
               </span>
-              <span className="col-span-2 flex gap-2 truncate text-[10px]">
+              <span className="col-span-2 flex gap-2 truncate text-[12px]">
                 <span className="text-amber-300">{event.event_type}</span>
-                <span className="truncate text-neutral-500">{eventSummary(event)}</span>
+                <span className="truncate text-neutral-400">{eventSummary(event)}</span>
                 {activeIds.has(event.id) ? <span className="text-amber-400">active</span> : null}
               </span>
             </button>
@@ -277,13 +277,13 @@ function PlanList({
               className={`${ROW} grid-cols-[auto_1fr_auto] ${rowTone(selected)}`}
             >
               <span className="font-semibold">{planLabel(candidate.id, plans)}</span>
-              <span className="truncate text-[10px] text-neutral-500">{candidate.id}</span>
+              <span className="truncate text-[12px] text-neutral-400">{candidate.id}</span>
               {current ? (
-                <span className="text-[10px] uppercase text-emerald-400">current</span>
+                <span className="text-[12px] uppercase text-emerald-400">current</span>
               ) : (
                 <span />
               )}
-              <span className="col-span-3 text-[10px] text-neutral-400">
+              <span className="col-span-3 text-[12px] text-neutral-400">
                 {candidate.actions.length} actions · {candidate.unscheduled.length} unscheduled ·
                 utility {candidate.mission_utility.toFixed(1)}
               </span>
@@ -350,13 +350,13 @@ export function MissionNavPanel({
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`flex-1 whitespace-nowrap border-b-2 px-1 py-1 text-[10px] uppercase tracking-wide ${
+            className={`flex-1 whitespace-nowrap border-b-2 px-1 py-1 text-[12px]  ${
               tab === id
                 ? "border-neutral-300 text-neutral-100"
-                : "border-transparent text-neutral-500 hover:text-neutral-300"
+                : "border-transparent text-neutral-400 hover:text-neutral-300"
             }`}
           >
-            {label} <span className="amis-tab-count text-neutral-600">{counts[id]}</span>
+            {label} <span className="amis-tab-count text-neutral-400">{counts[id]}</span>
           </button>
         ))}
       </div>

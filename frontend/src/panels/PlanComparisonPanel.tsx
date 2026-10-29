@@ -18,7 +18,7 @@ const CHANGE_STYLE: Record<PlanChangeType, string> = {
   INSERTED: "text-emerald-300",
   DROPPED: "text-red-400",
   COMPLETED: "text-neutral-400",
-  UNCHANGED: "text-neutral-500",
+  UNCHANGED: "text-neutral-400",
 };
 
 /**
@@ -49,7 +49,7 @@ function placement(row: PlanComparisonRow): string {
 function TraceLine({ row }: { row: PlanComparisonRow }) {
   if (row.trace === null) {
     return (
-      <span className="text-[11px] text-neutral-500">
+      <span className="text-[12px] text-neutral-400">
         {row.changeType === "COMPLETED"
           ? "Completed by the mission clock, not a replan decision, so no trace."
           : row.changeType === "UNCHANGED"
@@ -63,9 +63,9 @@ function TraceLine({ row }: { row: PlanComparisonRow }) {
       ? "planning decision · no triggering event"
       : `decision for ${row.traceEventId}`;
   return (
-    <span className="text-[11px] text-neutral-400">
+    <span className="text-[12px] text-neutral-400">
       <span className="text-neutral-300">{row.trace.message}</span>
-      <span className="text-neutral-500">
+      <span className="text-neutral-400">
         {` · ${row.trace.id} · ${origin}`}
         {row.trace.constraint_name === null ? "" : ` · ${row.trace.constraint_name}`}
       </span>
@@ -100,19 +100,19 @@ function ComparisonRowButton({
       <span className={`truncate font-semibold ${quiet ? "text-neutral-400" : "text-neutral-100"}`}>
         {row.requestId}
       </span>
-      <span className={`text-[10px] font-semibold uppercase tracking-wide ${CHANGE_STYLE[row.changeType]}`}>
+      <span className={`text-[12px] font-semibold  ${CHANGE_STYLE[row.changeType]}`}>
         {row.changeType}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[11px] text-neutral-300">
+        <span className="block truncate text-[12px] text-neutral-300">
           {placement(row)}
           {row.newlyArrivedUnscheduled ? (
             <span className="text-amber-300"> · new in pool · still unscheduled</span>
           ) : null}
         </span>
-        <span className="block truncate text-[11px]">
+        <span className="block truncate text-[12px]">
           <span className="text-neutral-400">{row.reasonLabel}</span>
-          <span className="ml-1 rounded-sm bg-amber-500/10 px-1 text-[10px] text-amber-400">
+          <span className="ml-1 rounded-sm bg-amber-500/10 px-1 text-[12px] text-amber-400">
             {row.reasonCode}
           </span>
         </span>
@@ -159,7 +159,7 @@ export function PlanComparisonPanel({
     const comparisonMissing = currentPlan?.parent_plan_id !== null && currentPlan?.parent_plan_id !== undefined;
     return (
       <PanelFrame title="Plan comparison">
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-400">
           {comparisonMissing
             ? `${loading ? "Loading" : "Comparison unavailable for"} V${currentPlan.version} and its parent plan.`
             : "Replan to compare plan versions. Each changed request shows its previous placement, new placement, change classification and the backend reason."}
@@ -200,7 +200,7 @@ export function PlanComparisonPanel({
         type="button"
         aria-pressed={selectedEventId === row.traceEventId}
         onClick={() => onSelectEvent(selectedEventId === row.traceEventId ? null : row.traceEventId)}
-        className="ml-2 text-[10px] text-rose-300 hover:text-rose-100"
+        className="ml-2 text-[12px] text-rose-300 hover:text-rose-100"
       >
         Follow event {row.traceEventId}
       </button>
@@ -208,11 +208,11 @@ export function PlanComparisonPanel({
 
   return (
     <PanelFrame title="Plan comparison" meta={`${context} · ${comparisonMeta(summary)}`}>
-      <p className="px-2 pb-1 text-[10px] text-neutral-600">
+      <p className="px-2 pb-1 text-[12px] text-neutral-400">
         What replanning changed. Impact, beside this panel, says what the event invalidated.
       </p>
       {changed.length === 0 ? (
-        <p className="px-2 py-1 text-xs text-neutral-500">
+        <p className="px-2 py-1 text-xs text-neutral-400">
           This replan changed no request, so it recorded no decision traces.
         </p>
       ) : (
@@ -233,7 +233,7 @@ export function PlanComparisonPanel({
       )}
       {completed.length === 0 ? null : (
         <div className="mt-1 border-t border-white/[0.04] pt-1">
-          <h3 className="px-2 text-[10px] uppercase tracking-widest text-neutral-600">
+          <h3 className="px-2 text-[12px]  text-neutral-400">
             Completed by the mission clock
           </h3>
           <ul aria-label="Completed plan entries" className="text-xs">
@@ -253,7 +253,7 @@ export function PlanComparisonPanel({
       )}
       {unchanged.length === 0 ? null : (
         <div className="mt-1 border-t border-white/[0.04] pt-1">
-          <h3 className="px-2 text-[10px] uppercase tracking-widest text-neutral-600">
+          <h3 className="px-2 text-[12px]  text-neutral-400">
             Unchanged
           </h3>
           <ul aria-label="Unchanged plan entries" className="text-xs">

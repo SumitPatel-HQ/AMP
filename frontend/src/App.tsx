@@ -1,5 +1,8 @@
 import { useMissionSession } from "./state/useMissionSession";
+import { AnalysisDock } from "./panels/AnalysisDock";
+import { StorageProfileChart } from "./panels/StorageProfileChart";
 import { useState } from "react";
+import { useDialogHistory } from "./state/useDialogHistory";
 import { missionTransition, type MissionTransition } from "./state/missionTransition";
 import { eventSummary } from "./state/missionEvent";
 import { planLabel } from "./state/planContext";
@@ -122,7 +125,7 @@ function MissionWorkspace({
         onSelectWindow={session.selectWindow}
         onSelectEvent={session.selectEvent}
       />
-      <div className="col-span-3 grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-1">
+      <AnalysisDock impactRevision={session.impact} comparisonRevision={replanResult} impact={
         <ImpactPanel
           impact={session.impact}
           events={session.events}
@@ -135,7 +138,7 @@ function MissionWorkspace({
           onSelectWindow={session.selectWindow}
           onSelectEvent={session.selectEvent}
         />
-        <PlanComparisonPanel
+        } comparison={<PlanComparisonPanel
           replanResult={replanResult}
           currentPlan={session.plan}
           loading={session.loading}
@@ -146,22 +149,24 @@ function MissionWorkspace({
           onSelectRequest={session.selectRequest}
           onSelectWindow={session.selectWindow}
           onSelectEvent={session.selectEvent}
-        />
-        <MetricsPanel
+        />} evaluation={<><MetricsPanel
           currentPlanId={session.plan?.id ?? null}
           metrics={session.metrics}
           diff={replanResult?.diff ?? null}
           plans={plans}
           selectedPlanId={selection.planId}
         />
-      </div>
+        {session.scenario !== null && session.plan !== null && <StorageProfileChart scenario={session.scenario} plan={session.plan} missionState={session.missionState} />}
+      </>} />
     </main>
   );
 }
 
 function App() {
   const session = useMissionSession();
-  const [dialog, setDialog] = useState<"builder" | "load" | "examples" | "feasibility" | null>(null);
+  const navigation = useDialogHistory();
+  const dialog = navigation.view;
+  const [builderVisited, setBuilderVisited] = useState(false);
   const transition = missionTransition({
     scenario: session.scenario,
     plan: session.plan,
@@ -177,7 +182,7 @@ function App() {
   const previousVersion = previousStage?.kind === "plan" ? previousStage.version : null;
 
   return (
-    <div className="flex h-dvh min-h-[640px] min-w-[900px] flex-col overflow-hidden">
+    <div className="flex amis-app h-dvh flex-col overflow-hidden">
       <MissionBar
         scenario={session.scenario}
         plan={session.plan}
@@ -191,10 +196,13 @@ function App() {
         replanBlocked={session.stalePlan}
         missionContextStale={session.stalePlan}
         onLoadDemo={session.loadDemoScenario}
-        onNewMission={() => setDialog("builder")}
-        onLoadMission={() => setDialog("load")}
-        onExamples={() => setDialog("examples")}
-        onFeasibility={() => setDialog("feasibility")}
+        settingsOpen={dialog === "settings" || dialog === "load" || dialog === "examples"}
+        onOpenSettings={() => navigation.open("settings")}
+        onCloseSettings={navigation.close}
+        onNewMission={() => { setBuilderVisited(true); navigation.open("builder"); }}
+        onLoadMission={() => navigation.open("load")}
+        onExamples={() => navigation.open("examples")}
+        onFeasibility={() => navigation.open("feasibility")}
         onGeneratePlan={session.generatePlan}
         onResetMission={session.resetMission}
         onStep={session.step}
@@ -215,12 +223,15 @@ function App() {
       />
       <ErrorBanner error={session.error} onDismiss={session.dismissError} />
       <MissionWorkspace session={session} transition={transition} />
-      {dialog === "builder" && <MissionBuilder onClose={() => setDialog(null)} onCreate={session.createMission} />}
+      {builderVisited && <div hidden={dialog !== "builder"}>
+        <MissionBuilder onClose={navigation.close} onCreate={session.createMission}
+          onCreated={() => { navigation.complete(); setBuilderVisited(false); }} />
+      </div>}
       {/* Keyed by Scenario id: loading another mission drops the previous answer. */}
       {dialog === "feasibility" && session.scenario !== null && (
-        <FeasibilityDialog key={session.scenario.id} scenario={session.scenario} onClose={() => setDialog(null)} />
+        <FeasibilityDialog key={session.scenario.id} scenario={session.scenario} onClose={navigation.close} />
       )}
-      {(dialog === "load" || dialog === "examples") && <MissionLibrary mode={dialog} onClose={() => setDialog(null)} onChoose={dialog === "load" ? session.loadMission : session.loadExample} />}
+      {(dialog === "load" || dialog === "examples") && <MissionLibrary mode={dialog} onClose={navigation.close} error={session.error?.message} onChoose={async (id) => { const loaded = await (dialog === "load" ? session.loadMission(id) : session.loadExample(id)); if (loaded) navigation.complete(); return loaded; }} />}
     </div>
   );
 }

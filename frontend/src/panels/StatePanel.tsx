@@ -57,7 +57,7 @@ function Resource({
         <span className="w-16 shrink-0 text-neutral-400">{label}</span>
         <span className={`tabular-nums ${valueClassName}`}>{`${value.toFixed(1)} ${unit}`}</span>
         {capacity === null ? null : (
-          <span className="ml-auto truncate tabular-nums text-[10px] text-neutral-500">
+          <span className="ml-auto truncate tabular-nums text-[12px] text-neutral-400">
             {`/ ${capacity.toFixed(0)} ${unit}`}
             {fraction === null ? "" : ` · ${Math.round(fraction * 100)}%`}
           </span>
@@ -99,7 +99,7 @@ export function StatePanel({
   if (state === null) {
     return (
       <PanelFrame title="Mission state">
-        <p className="text-xs text-neutral-500">Load a scenario to read satellite telemetry.</p>
+        <p className="text-xs text-neutral-400">Load a scenario to read satellite telemetry.</p>
       </PanelFrame>
     );
   }
@@ -141,13 +141,13 @@ export function StatePanel({
           </Row>
           <Row label="Active event">
             {activeEvents.length === 0 ? (
-              <span className="text-neutral-500">none</span>
+              <span className="text-neutral-400">none</span>
             ) : (
               <span className="flex flex-col items-end">
                 {activeEvents.map((event) => (
                   <span key={event.id} className="text-red-300">
                     {`${event.event_type} · ${event.id}`}
-                    <span className="block text-[10px] text-neutral-500">
+                    <span className="block text-[12px] text-neutral-400">
                       {eventSummary(event)}
                     </span>
                   </span>
@@ -158,13 +158,13 @@ export function StatePanel({
           <Row label="Sim time">{`${iso.slice(0, 10)} ${iso.slice(11, 19)}`}</Row>
           <Row label="Plan">
             {plan === null ? (
-              <span className="text-neutral-500">none</span>
+              <span className="text-neutral-400">none</span>
             ) : (
               <span title={plan.id}>
                 <span className={replanned ? "text-emerald-400" : "text-sky-300"}>
                   {`V${plan.version}${replanned ? " (replanned)" : ""}`}
                 </span>
-                <span className="block text-[10px] text-neutral-500">{shortPlanId(plan.id)}</span>
+                <span className="block text-[12px] text-neutral-400">{shortPlanId(plan.id)}</span>
               </span>
             )}
           </Row>

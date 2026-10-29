@@ -70,9 +70,9 @@ function UnscheduledList({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <h4 className="text-[10px] uppercase tracking-widest text-neutral-500">Unscheduled</h4>
+      <h4 className="text-[12px]  text-neutral-400">Unscheduled</h4>
       {entries.length === 0 ? (
-        <p className="text-xs text-neutral-500">This plan fitted every request in the pool.</p>
+        <p className="text-xs text-neutral-400">This plan fitted every request in the pool.</p>
       ) : (
         <ul aria-label={`${label} unscheduled requests`} className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
           {entries.map((entry) => {
@@ -109,7 +109,6 @@ function UnscheduledList({
 }
 
 function timelineOptions(
-  groupCount: number,
   start: string,
   end: string,
   onSelectRequest: (requestId: string | null) => void,
@@ -120,7 +119,7 @@ function timelineOptions(
     end,
     min: start,
     max: end,
-    height: Math.min(Math.max(groupCount * 32 + 50, 115), 350),
+    height: "100%",
     orientation: "top",
     editable: false,
     selectable: true,
@@ -278,13 +277,14 @@ export function PlanTimeline({
       [],
       [],
       timelineOptions(
-        model.groups.length,
         model.bounds.start,
         model.bounds.end,
         onSelectRequest,
       ),
     );
     timelineRef.current = timeline;
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => timeline.redraw());
+    resizeObserver?.observe(containerRef.current);
     const container = containerRef.current;
 
     const selectElement = (element: HTMLElement) => {
@@ -349,6 +349,7 @@ export function PlanTimeline({
       container.removeEventListener("keydown", handleKeyDown);
       timeline.off("changed", handleChanged);
       timeline.off("click", handleClick);
+      resizeObserver?.disconnect();
       timeline.destroy();
       timelineRef.current = null;
       hasMissionNowRef.current = false;
@@ -412,10 +413,10 @@ export function PlanTimeline({
   }, [model]);
 
   return (
-    <div role="group" aria-label={label} className="flex min-w-0 flex-col gap-1.5">
-      <h3 className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-400">
-        {label} <span className="text-neutral-500">V{plan.version}</span>
-        <span className="normal-case tracking-normal text-neutral-600">UTC · drag to inspect · wheel to zoom</span>
+    <div role="group" aria-label={label} className="flex h-full min-h-0 min-w-0 flex-col gap-1.5">
+      <h3 className="flex items-center gap-2 text-[12px]  text-neutral-400">
+        {label} <span className="text-neutral-400">V{plan.version}</span>
+        <span className="normal-case tracking-normal text-neutral-400">UTC · drag to inspect · wheel to zoom</span>
       </h3>
       <div
         ref={containerRef}

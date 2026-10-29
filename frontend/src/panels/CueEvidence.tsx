@@ -12,12 +12,12 @@ export function CueEvidenceDetails({ evidence }: { evidence: CueEvidence }) {
     evidence.sig === null ? null : `sig ${evidence.sig}`,
   ].filter((part) => part !== null);
   return (
-    <div aria-label="Cue evidence" className="text-[10px] text-neutral-400">
+    <div aria-label="Cue evidence" className="text-[12px] text-neutral-400">
       <p>
         <span className="text-neutral-200">{evidence.sourceLabel}</span>
         {` · ${evidence.sourceEventId} · ${facts.join(" · ")}`}
       </p>
-      <p className="text-neutral-500">{`Cue arrival for ${evidence.requestId} · ${evidence.eventId}`}</p>
+      <p className="text-neutral-400">{`Cue arrival for ${evidence.requestId} · ${evidence.eventId}`}</p>
       {evidence.source === "cems" && (
         <>
           <p>{`Category: ${evidence.category}`}</p>

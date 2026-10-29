@@ -25,7 +25,7 @@ import { RequesterService } from "./RequesterService";
 const TREND_STYLE: Record<MetricTrend, string> = {
   better: "text-emerald-400",
   worse: "text-red-400",
-  same: "text-neutral-500",
+  same: "text-neutral-400",
 };
 
 function DeltaCell({ row }: { row: MetricRow }) {
@@ -41,7 +41,7 @@ function DeltaCell({ row }: { row: MetricRow }) {
         {row.delta}
       </span>
       {row.deltaNote === null ? null : (
-        <span className="ml-1 text-[10px] text-amber-400/80">{row.deltaNote}</span>
+        <span className="ml-1 text-[12px] text-amber-400/80">{row.deltaNote}</span>
       )}
     </>
   );
@@ -59,7 +59,7 @@ function PoolMismatch({ view, label }: { view: MetricsView; label: (planId: stri
     ...view.pool.onlyAfter.map((id) => `${id} only in ${after}`),
   ];
   return (
-    <p role="alert" className="mb-1 text-[11px] text-red-400">
+    <p role="alert" className="mb-1 text-[12px] text-red-400">
       {`${before} and ${after} were measured against different request pools (${view.pool.before} vs ${view.pool.after} requests`}
       {differences.length === 0 ? ")" : `: ${differences.join(", ")})`}
       . Utility and completion changes are not like for like.
@@ -102,9 +102,9 @@ function EmergencyResponseList({ metrics, planLabel }: { metrics: MetricsSchema;
   return (
     <section
       aria-label="Emergency response"
-      className="mt-1 border-t border-white/[0.04] pt-1 text-[11px]"
+      className="mt-1 border-t border-white/[0.04] pt-1 text-[12px]"
     >
-      <p className="text-neutral-500">{`Emergency response for ${planLabel}. ${ACQUISITION_MEANING}`}</p>
+      <p className="text-neutral-400">{`Emergency response for ${planLabel}. ${ACQUISITION_MEANING}`}</p>
       <ul className="flex flex-col gap-0.5">
         {rows.map((row) => {
           const state = emergencyResponseState(row);
@@ -166,7 +166,7 @@ export function MetricsPanel({
   if (subject === null) {
     return (
       <PanelFrame title="Mission evaluation">
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-400">
           {currentPlanId === null
             ? "Generate a plan to evaluate it."
             : `Evaluating ${label(currentPlanId)}…`}
@@ -190,7 +190,7 @@ export function MetricsPanel({
       <PoolMismatch view={view} label={label} />
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+          <tr className="text-left text-[12px]  text-neutral-400">
             <th className="py-0.5 font-normal">Metric</th>
             {view.beforePlanId === null ? null : (
               <th className={`py-0.5 font-normal ${selectedPlanId === view.beforePlanId ? "bg-fuchsia-400/10 text-fuchsia-200" : ""}`} title={view.beforePlanId}>
@@ -227,11 +227,11 @@ export function MetricsPanel({
       <p
         aria-label="Mission state readings"
         title={`Read from the mission state at ${fullTime(view.measuredAt)}, not from either plan`}
-        className="mt-1 border-t border-white/[0.04] pt-1 text-[11px] text-neutral-500"
+        className="mt-1 border-t border-white/[0.04] pt-1 text-[12px] text-neutral-400"
       >
         {`Mission state at ${clockTime(view.measuredAt)} UTC: battery used ${view.resources.battery} · storage used ${view.resources.storage}`}
       </p>
-      <p className="text-[11px] text-neutral-500">
+      <p className="text-[12px] text-neutral-400">
         {view.pool.before === null || view.pool.before === view.pool.after
           ? `Request pool: ${view.pool.after} requests`
           : `Request pool: ${view.pool.before} → ${view.pool.after} requests`}

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -348,6 +348,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function analysisView(label: string) {
+ const name = label === "Mission evaluation" ? "Mission Evaluation" : label === "Plan comparison" ? "Plan Comparison" : "Impact";
+ fireEvent.click(screen.getByRole("tab", {name: new RegExp(name)}));
+}
+
 describe("mission dashboard", () => {
   it("sends the explicit Greedy selection after a CP-SAT fairness plan", async () => {
     installSuccessfulApi();
@@ -561,6 +566,7 @@ describe("mission dashboard", () => {
       event_type: "CLOUD_BLOCK",
       payload: { request_id: "OBS-A", window_id: "WIN-OBS-A-1" },
     });
+    analysisView("Impact");
     const impactRow = within(await screen.findByRole("list", { name: "Event impact" })).getByText(
       "OBS-A",
     ).closest("li");
@@ -743,6 +749,7 @@ describe("mission dashboard", () => {
     await loadDemoAndGeneratePlan(user);
 
     // Before any replan the current plan is evaluated on its own.
+    analysisView("Mission evaluation");
     const evaluation = () => screen.getByRole("region", { name: "Mission evaluation" });
     expect(api.fetchMetrics).toHaveBeenCalledWith(plan.id);
     expect(within(evaluation()).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
@@ -777,6 +784,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    analysisView("Plan comparison");
     const entry = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
       "button",
       { name: /OBS-A/ },
@@ -788,6 +796,7 @@ describe("mission dashboard", () => {
     expect(entry.textContent).toContain("ALTERNATIVE_WINDOW_AVAILABLE");
     expect(entry.textContent).toContain(traces[0].message);
 
+    analysisView("Plan comparison");
     const dropped = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
       "button",
       { name: /OBS-C/ },
@@ -804,6 +813,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    analysisView("Plan comparison");
     await user.click(
       within(screen.getByRole("list", { name: "Plan comparison" })).getByRole("button", {
         name: /OBS-A/,
@@ -893,6 +903,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    analysisView("Mission evaluation");
     const evaluation = screen.getByRole("region", { name: "Mission evaluation" });
     await waitFor(() =>
       expect(
@@ -937,7 +948,9 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    analysisView("Plan comparison");
     await user.click(await screen.findByRole("button", { name: "Retry comparison" }));
+    analysisView("Plan comparison");
     expect(await screen.findByRole("list", { name: "Plan comparison" })).toBeTruthy();
   });
 
@@ -952,8 +965,11 @@ describe("mission dashboard", () => {
     await screen.findByLabelText("Current plan V2");
     expect(screen.getByText("Evaluating V2…")).toBeTruthy();
 
+    analysisView("Plan comparison");
     await user.click(await screen.findByRole("button", { name: "Retry comparison" }));
+    analysisView("Plan comparison");
     expect(await screen.findByRole("list", { name: "Plan comparison" })).toBeTruthy();
+    analysisView("Mission evaluation");
     expect(
       within(screen.getByRole("region", { name: "Mission evaluation" }))
         .getAllByRole("columnheader")
@@ -1239,16 +1255,21 @@ describe("mission dashboard", () => {
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    analysisView("Impact");
     await screen.findByRole("list", { name: "Event impact" });
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
     const section = (name: string) => screen.getByRole("region", { name });
+    analysisView("Impact");
     expect(section("Impact").textContent).toContain("EVT-1 on V1");
+    analysisView("Plan comparison");
     expect(section("Plan comparison").textContent).toContain("V1 → V2");
+    analysisView("Mission evaluation");
     expect(section("Mission evaluation").textContent).toContain("V1 → V2");
     // Impact actions belong to the plan the event evaluated, not the revised one.
+    analysisView("Impact");
     const impactRow = within(section("Impact")).getByText("OBS-A").closest("li");
     expect(impactRow?.textContent).toContain("WINDOW_INVALIDATED");
   });
@@ -1281,10 +1302,12 @@ describe("mission dashboard", () => {
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    analysisView("Impact");
     await screen.findByRole("list", { name: "Event impact" });
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
+    analysisView("Impact");
     expect(screen.getByRole("region", { name: "Impact" }).textContent).not.toContain(
       "earlier transition",
     );
@@ -1292,6 +1315,7 @@ describe("mission dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V3");
 
+    analysisView("Impact");
     expect(screen.getByRole("region", { name: "Impact" }).textContent).toContain(
       "earlier transition",
     );
@@ -1329,6 +1353,7 @@ describe("mission dashboard", () => {
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    analysisView("Impact");
     await screen.findByRole("list", { name: "Event impact" });
 
     expect(screen.getByLabelText("Current plan V2").textContent).toBe("Plan V2");
@@ -1375,6 +1400,7 @@ describe("mission dashboard", () => {
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    analysisView("Impact");
     await screen.findByRole("list", { name: "Event impact" });
 
     const requestRow = within(screen.getByRole("list", { name: "Observation requests" })).getByRole(
@@ -1389,6 +1415,7 @@ describe("mission dashboard", () => {
         .querySelector('.amis-timeline-group-button[data-request-id="OBS-A"]')
         ?.getAttribute("data-selected"),
     ).toBe("true");
+    analysisView("Impact");
     const impactRow = within(screen.getByRole("list", { name: "Event impact" }))
       .getByText("OBS-A")
       .closest("li");
@@ -1443,6 +1470,7 @@ describe("mission dashboard", () => {
       payload: { satellite_id: "SAT-001", new_battery_wh: 60 },
     });
     expect(await screen.findByText("60.0 Wh")).toBeTruthy();
+    analysisView("Impact");
     const impactRow = within(await screen.findByRole("list", { name: "Event impact" }))
       .getByText("OBS-C")
       .closest("li");
@@ -1536,6 +1564,7 @@ describe("mission dashboard", () => {
         name: /WIN-OBS-EMERGENCY-1-1/,
       }),
     ).toBeTruthy();
+    analysisView("Impact");
     expect(screen.getByRole("region", { name: "Impact" }).textContent).toContain(
       "No scheduled actions became invalid.",
     );
@@ -1616,17 +1645,21 @@ describe("mission dashboard", () => {
     await user.selectOptions(screen.getByLabelText("Request"), "OBS-A");
     await user.selectOptions(screen.getByLabelText("Window"), "WIN-OBS-A-1");
     await user.click(screen.getByRole("button", { name: "Inject cloud block" }));
+    analysisView("Impact");
     await screen.findByRole("list", { name: "Event impact" });
 
     await user.click(screen.getByRole("button", { name: "Replan" }));
     await screen.findByLabelText("Current plan V2");
 
+    analysisView("Impact");
     const impact = screen.getByRole("region", { name: "Impact" });
     expect(impact.textContent).toContain("What became invalid in V1 because of this event");
     // The replan's comparison sits beside Impact, not inside it.
     expect(within(impact).queryByRole("region", { name: "Plan comparison" })).toBeNull();
+    analysisView("Plan comparison");
     const comparison = screen.getByRole("region", { name: "Plan comparison" });
     expect(comparison.textContent).toContain("V1 → V2");
+    analysisView("Plan comparison");
     const dropped = within(screen.getByRole("list", { name: "Plan comparison" })).getByRole(
       "button",
       { name: /OBS-C/ },
@@ -1691,6 +1724,7 @@ describe("mission dashboard", () => {
     render(<App />);
     await loadDemoAndGeneratePlan(user);
 
+    analysisView("Mission evaluation");
     expect(screen.getByRole("region", { name: "Emergency response" })).toBeTruthy();
     const resetButton = screen.getByRole("button", { name: "Reset mission" });
     expect((resetButton as HTMLButtonElement).disabled).toBe(false);
@@ -1708,5 +1742,37 @@ describe("mission dashboard", () => {
     expect(await screen.findByText("no plan")).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Emergency response" })).toBeNull();
     expect((resetButton as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+describe("dialog history navigation", () => {
+  function setup() {
+    installSuccessfulApi();
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Mission & settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "New mission" }));
+  }
+  it("restores settings with Cancel and keeps the draft on Forward", async () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Mission name"), { target: { value: "Draft to preserve" } });
+    fireEvent.click(screen.getByRole("button", { name: "Back / Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "New mission" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "Mission & Settings" })).toBeTruthy();
+    window.history.forward();
+    await screen.findByRole("dialog", { name: "New mission" });
+    expect((screen.getByLabelText("Mission name") as HTMLInputElement).value).toBe("Draft to preserve");
+    fireEvent.keyDown(screen.getByLabelText("Mission name"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "New mission" })).toBeNull());
+  });
+  it("successful creation loads the mission and closes both dialogs", async () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Add target" }));
+    const create = screen.getByRole("button", { name: "Create mission" });
+    await waitFor(() => expect((create as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(create);
+    await screen.findByText(scenario.name);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.createScenario).toHaveBeenCalledTimes(1);
   });
 });

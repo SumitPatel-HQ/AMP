@@ -1,0 +1,33 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it } from "vitest";
+import { AnalysisDock } from "./AnalysisDock";
+afterEach(cleanup);
+it("starts collapsed, opens one panel, supports keyboard navigation and preserves mounted content", async () => {
+ const user = userEvent.setup();
+ render(<AnalysisDock impact={<input aria-label="Evidence filter" />} comparison={<p>Comparison evidence</p>} evaluation={<p>Evaluation metrics</p>} impactRevision={null} comparisonRevision={null} />);
+ expect(screen.queryByRole("tabpanel")).toBeNull();
+ await user.click(screen.getByRole("tab", {name: "Impact"}));
+ await user.type(screen.getByLabelText("Evidence filter"), "OBS-A");
+ await user.click(screen.getByRole("tab", {name: "Plan Comparison"}));
+ expect(screen.getByRole("tabpanel").textContent).toContain("Comparison evidence");
+ await user.keyboard("{ArrowRight}");
+ expect(screen.getByRole("tabpanel").textContent).toContain("Evaluation metrics");
+ await user.keyboard("{Home}");
+ expect((screen.getByLabelText("Evidence filter") as HTMLInputElement).value).toBe("OBS-A");
+ await user.click(screen.getByRole("button", {name: "Collapse analysis"}));
+ expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+it("announces new results without reopening after mission actions or reset", async () => {
+ const user = userEvent.setup();
+ const props = {impact: <p>Impact evidence</p>, comparison: <p>Replan evidence</p>, evaluation: <p>Metrics</p>};
+ const {rerender} = render(<AnalysisDock {...props} impactRevision={null} comparisonRevision={null} />);
+ rerender(<AnalysisDock {...props} impactRevision={{id: "event"}} comparisonRevision={{id: "replan"}} />);
+ expect(screen.queryByRole("tabpanel")).toBeNull();
+ expect(screen.getByRole("tab", {name: "ImpactNew"})).toBeTruthy();
+ await user.click(screen.getByRole("tab", {name: "Plan ComparisonNew"}));
+ expect(screen.getByRole("tabpanel").textContent).toContain("Replan evidence");
+ await user.click(screen.getByRole("button", {name: "Collapse analysis"}));
+ rerender(<AnalysisDock {...props} impactRevision={null} comparisonRevision={null} />);
+ expect(screen.queryByRole("tabpanel")).toBeNull();
+});

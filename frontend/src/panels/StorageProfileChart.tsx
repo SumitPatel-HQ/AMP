@@ -30,7 +30,7 @@ export function StorageProfileChart({
   const downlinks = plan.actions.filter((action) => action.kind === "downlink").length;
   return (
     <figure className="flex flex-col gap-1" aria-label="Storage profile">
-      <figcaption className="text-[10px] uppercase tracking-wide text-neutral-500">
+      <figcaption className="text-[12px]  text-neutral-400">
         {`Storage · capacity ${capacity.toFixed(0)} MB · ${downlinks} downlink${downlinks === 1 ? "" : "s"}`}
       </figcaption>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" className="h-14 w-full">

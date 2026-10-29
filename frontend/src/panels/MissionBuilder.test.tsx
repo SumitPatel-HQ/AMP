@@ -1,0 +1,52 @@
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { MissionBuilder } from "./MissionBuilder";
+import { fakeMap } from "../test/fakeMapEngine";
+import type { ScenarioPreviewSchema, ScenarioSchema } from "../api/client";
+const api = vi.hoisted(() => ({validateScenario: vi.fn(), fetchOrbitalElements: vi.fn(), fetchGroundStations: vi.fn()}));
+vi.mock("../api/amis", () => api);
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+function setup() {
+ api.fetchGroundStations.mockResolvedValue([]);
+ api.fetchOrbitalElements.mockResolvedValue([]);
+ api.validateScenario.mockResolvedValue({errors: [], warnings: [], windows: [], window_counts: {}, ground_track: []} satisfies ScenarioPreviewSchema);
+ const create = vi.fn<(draft: ScenarioSchema) => Promise<boolean>>().mockResolvedValue(true);
+ const close = vi.fn();
+ render(<MissionBuilder onClose={close} onCreate={create} />);
+ return {create, close, user: userEvent.setup()};
+}
+it("keeps creation disabled without targets, preserves map picking and exposes map controls", async () => {
+ const {user, create, close} = setup();
+ const submit = screen.getByRole("button", {name:"Create mission"}) as HTMLButtonElement;
+ await screen.findByText("Add at least one target to create your mission.");
+ expect(submit.disabled).toBe(true);
+ await waitFor(() => expect(fakeMap.handlers).not.toBeNull());
+ act(() => fakeMap.handlers?.onPickCoordinate?.(12.5, 48.3));
+ await screen.findByText("Ready to create · 1 target");
+ expect(submit.disabled).toBe(false);
+ await user.click(screen.getByRole("button", {name:"Show orbit track"}));
+ expect(screen.getByRole("button", {name:"Hide orbit track"}).getAttribute("aria-pressed")).toBe("true");
+ await user.click(screen.getByRole("button", {name:"Fit targets"}));
+ await user.click(screen.getByRole("button", {name:"Zoom in"}));
+ expect(fakeMap.fits).toBe(1); expect(fakeMap.zooms).toEqual([1]);
+ await user.click(submit);
+ expect(create.mock.calls[0]?.[0].requests[0]).toMatchObject({target_lat:48.3,target_lon:12.5});
+ expect(close).toHaveBeenCalledOnce();
+});
+it("waits for validation of changed configuration and recovers from creation failure", async () => {
+ const {user, create, close} = setup();
+ await user.click(screen.getByRole("button", {name:"Add target"}));
+ await screen.findByText("Ready to create · 1 target");
+ let resolve!: (preview: ScenarioPreviewSchema) => void;
+ api.validateScenario.mockImplementationOnce(() => new Promise<ScenarioPreviewSchema>(done => {resolve = done;}));
+ await user.type(screen.getByLabelText("Mission name"), " revised");
+ const submit = screen.getByRole("button", {name:"Create mission"}) as HTMLButtonElement;
+ expect(submit.disabled).toBe(true);
+ await waitFor(() => expect(resolve).toBeDefined());
+ await act(async () => resolve({errors:[],warnings:[],windows:[],window_counts:{},ground_track:[]}));
+ create.mockRejectedValueOnce(new Error("Mission could not be created"));
+ await user.click(submit);
+ expect(await screen.findByRole("alert")).toBeTruthy();
+ expect(close).not.toHaveBeenCalled(); expect(submit.disabled).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import type {
   EventStage,
@@ -36,17 +37,17 @@ function Stage({
       aria-label={label}
       className={`flex min-w-0 flex-1 flex-col justify-center border-l-2 bg-white/[0.02] px-2.5 leading-4 ${TONES[tone]}`}
     >
-      <p className="truncate text-xs font-semibold uppercase tracking-wide">{title}</p>
-      <p className="truncate text-[11px] text-neutral-200">{line}</p>
-      <p className="truncate text-[11px] text-neutral-500">{note}</p>
+      <p className="truncate text-xs font-semibold ">{title}</p>
+      <p className="truncate text-[12px] text-neutral-200">{line}</p>
+      <p className="truncate text-[12px] text-neutral-400">{note}</p>
     </li>
   );
 }
 
 function Arrow() {
   return (
-    <li aria-hidden="true" className="flex shrink-0 items-center px-1.5 text-neutral-600">
-      →
+    <li aria-hidden="true" className="flex shrink-0 items-center px-1.5 text-neutral-400">
+      <ArrowRight size={14} aria-hidden="true" />
     </li>
   );
 }
@@ -66,7 +67,7 @@ function PlanCell({ stage, afterReplan }: { stage: PlanStage; afterReplan: boole
       tone={stage.role === "current" && afterReplan ? "current" : "plan"}
       title={
         <>
-          Plan V{stage.version} <span className="font-normal normal-case text-neutral-500">({role})</span>
+          Plan V{stage.version} <span className="font-normal normal-case text-neutral-400">({role})</span>
         </>
       }
       line={`${stage.scheduled} / ${stage.requestCount} scheduled`}
@@ -176,7 +177,7 @@ export function MissionTransitionStrip({
       className="flex h-[58px] shrink-0 items-stretch gap-1 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-1 py-1"
     >
       {transition.stages.length === 0 ? (
-        <p className="flex items-center px-2 text-xs text-neutral-500">
+        <p className="flex items-center px-2 text-xs text-neutral-400">
           {hasScenario
             ? "No plan yet. Generate plan to build Plan V1 for this mission."
             : "Load a scenario to start a mission."}
@@ -191,7 +192,7 @@ export function MissionTransitionStrip({
           {transition.phase === "planned" ? (
             <>
               <Arrow />
-              <li className="flex min-w-0 flex-[3] items-center px-2.5 text-[11px] text-neutral-500">
+              <li className="flex min-w-0 flex-[3] items-center px-2.5 text-[12px] text-neutral-400">
                 No event yet. Step the clock or inject an event to disrupt this plan.
               </li>
             </>

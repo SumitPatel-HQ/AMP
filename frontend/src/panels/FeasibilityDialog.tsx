@@ -55,7 +55,7 @@ function Results({ result }: { result: FeasibilitySchema }) {
           : `Earliest suitable satellite: ${result.earliest_satellite_id}`}
       </p>
       <table className="w-full border-collapse text-left">
-        <thead className="text-[10px] uppercase tracking-wide text-neutral-500">
+        <thead className="text-[12px]  text-neutral-400">
           <tr>
             <th className="py-1 pr-2 font-normal">Satellite</th>
             <th className="py-1 pr-2 font-normal">Result</th>
@@ -75,7 +75,7 @@ function Results({ result }: { result: FeasibilitySchema }) {
                   {row.window_id === null ? "—" : (
                     <>
                       <span className="block font-mono">{row.window_id}</span>
-                      <span className="text-[10px] text-neutral-500">{`${formatTime(row.window_start)} – ${formatTime(row.window_end)}`}</span>
+                      <span className="text-[12px] text-neutral-400">{`${formatTime(row.window_start)} – ${formatTime(row.window_end)}`}</span>
                     </>
                   )}
                 </td>
@@ -153,17 +153,17 @@ function CandidateWindowComparison({ scenario, onClose }: { scenario: ScenarioSc
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-8" role="dialog" aria-label="Window-only feasibility">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-8" role="dialog" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }} aria-label="Window-only feasibility">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded border border-neutral-700 bg-[#101318] p-4 text-neutral-100 shadow-2xl">
         <div className="mb-2 flex justify-between">
           <h2 className="font-semibold">Window-only feasibility</h2>
-          <button type="button" onClick={onClose}>Close</button>
+          <button type="button" onClick={onClose}>Back / Cancel</button>
         </div>
-        <p aria-label="Feasibility scope" className="mb-3 rounded-sm border border-amber-900 bg-amber-950/30 p-2 text-[11px] text-amber-100">
+        <p aria-label="Feasibility scope" className="mb-3 rounded-sm border border-amber-900 bg-amber-950/30 p-2 text-[12px] text-amber-100">
           {`Compares each satellite's earliest suitable observation window for ${scenario.name}. Accounts for ${FEASIBILITY_INCLUDES}. Excludes ${FEASIBILITY_EXCLUDES}. ${FEASIBILITY_PROMISE}`}
         </p>
         <form
-          className="flex flex-wrap items-end gap-2 text-[10px] uppercase text-neutral-500"
+          className="flex flex-wrap items-end gap-2 text-[12px] uppercase text-neutral-400"
           onSubmit={(event) => {
             event.preventDefault();
             void compare();
