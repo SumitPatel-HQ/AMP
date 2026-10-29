@@ -567,11 +567,8 @@ body:has(.amis-settings-modal[open]) { overflow: hidden; }
 .amis-builder-form :is(input:not([type=checkbox]), select) { border-color: var(--color-mission-control-border); }
 
 /* Library dialogs share the settings surface and native modal top layer. */
-.amis-library-modal { overflow: hidden; padding: 24px; min-width: min(var(--library-parent-width, 720px), calc(100vw - 32px)); min-height: min(var(--library-parent-height, 0px), calc(100dvh - 32px)); }
+.amis-library-modal { width: min(600px, calc(100vw - 32px)); max-height: min(600px, calc(100dvh - 48px)); overflow: hidden; padding: 20px; }
 .amis-library-modal[open] { display: flex; flex-direction: column; }
-.amis-library-search { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 10px 12px; border: 1px solid var(--color-mission-control-border); border-radius: var(--radius-panel); background: var(--amis-bg); color: var(--color-mission-muted); }
-.amis-library-search:focus-within { outline: 2px solid var(--color-mission-accent); outline-offset: 2px; }
-.amis-library-search input { width: 100%; min-width: 0; outline: none; font-size: 14px; color: var(--color-mission-text); }
 .amis-library-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-top: 16px; padding: 3px; }
 .amis-library-content > p { padding: 24px 0; color: var(--color-mission-muted); font-size: 14px; }
 .amis-library-list { display: grid; gap: 12px; }

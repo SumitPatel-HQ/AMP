@@ -7,14 +7,12 @@ HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", 
 HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const items = ["first", "second"].map(id => ({ id, name: "Same name", provider: "orbital", start_time: "2026-09-21T00:00:00Z", end_time: "2026-09-22T00:00:00Z", briefing: "Full briefing ".repeat(200) }));
-it("distinguishes duplicate names, filters IDs and retains full briefings", async () => {
+it("distinguishes duplicate names and retains full briefings", async () => {
  api.fetchMissions.mockResolvedValue(items);
  const choose = vi.fn().mockResolvedValue(false);
  render(<MissionLibrary mode="load" onClose={vi.fn()} onChoose={choose} />);
  await screen.findByRole("button", {name: "Load Same name (second)"});
- fireEvent.change(screen.getByRole("searchbox"), {target: {value: "second"}});
- expect(screen.queryByRole("button", {name: "Load Same name (first)"})).toBeNull();
- expect(screen.getByText("Full briefing").parentElement?.textContent).toContain(items[1].briefing);
+ expect(screen.getAllByText("Full briefing")[1].parentElement?.textContent).toContain(items[1].briefing);
  fireEvent.click(screen.getByRole("button", {name: "Load Same name (second)"}));
  await waitFor(() => expect(choose).toHaveBeenCalledWith("second"));
  expect(screen.getByRole("dialog")).toBeTruthy();
