@@ -84,7 +84,7 @@ export function ImpactPanel({
   if (impact === null) {
     return (
       <PanelFrame title="Impact" className={className}>
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-400">
           No event yet. Use Event in the mission bar to inject a cloud block, battery drop or
           emergency request; what it invalidates in the current plan appears here.
         </p>
@@ -105,7 +105,7 @@ export function ImpactPanel({
       bodyClassName="flex flex-col"
       className={className}
     >
-      <div className="shrink-0 border-b border-[var(--amis-border)] px-2 py-1 text-[11px] text-neutral-400">
+      <div className="shrink-0 border-b border-[var(--amis-border)] px-2 py-1 text-[12px] text-neutral-400">
         <p aria-label="Impact event">
           {event === undefined ? (
             impact.event_id
@@ -130,9 +130,9 @@ export function ImpactPanel({
             Follow event {impact.event_id}
           </button>
         )}
-        <p className="text-neutral-500">
+        <p className="text-neutral-400">
           {`What became invalid in ${evaluatedLabel} because of this event · `}
-          <span className="text-neutral-600" title={impact.evaluated_plan_id}>
+          <span className="text-neutral-400" title={impact.evaluated_plan_id}>
             {`evaluated ${shortPlanId(impact.evaluated_plan_id)} · ${impact.id}`}
           </span>
         </p>
@@ -144,7 +144,7 @@ export function ImpactPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {rows.length === 0 ? (
-          <p className="px-2 py-1.5 text-xs text-neutral-500">The evaluated plan had no actions.</p>
+          <p className="px-2 py-1.5 text-xs text-neutral-400">The evaluated plan had no actions.</p>
         ) : (
           <ul aria-label="Event impact" className="text-xs">
             {rows.map((row) => {
@@ -175,10 +175,10 @@ export function ImpactPanel({
                     >
                       {row.requestId ?? row.actionId}
                     </span>
-                    <span className={`text-[10px] uppercase tracking-wide ${KIND_STYLE[row.kind].className}`}>
+                    <span className={`text-[12px]  ${KIND_STYLE[row.kind].className}`}>
                       {KIND_STYLE[row.kind].label}
                     </span>
-                    <span className="truncate text-[10px] text-neutral-400">
+                    <span className="truncate text-[12px] text-neutral-400">
                       {[row.reasons.join(", "), row.actionId, row.windowId]
                         .filter((part) => part !== null && part !== "")
                         .join(" · ")}

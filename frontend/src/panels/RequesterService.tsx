@@ -1,13 +1,20 @@
+import { usePanelPresentation } from "./panelPresentation";
+import { EvaluationBar } from "./EvaluationCharts";
 import type { MetricsSchema, MissionPlanSchema } from "../api/client";
 import { formatPercent } from "../state/metricsView";
 
 export function RequesterService({
   metrics,
   plan,
+  compactCards = false,
 }: {
   metrics: MetricsSchema;
   plan?: MissionPlanSchema | null;
+  compactCards?: boolean;
 }) {
+  const { mode } = usePanelPresentation();
+  const expanded = mode === "expanded";
+  const AccountingNote = expanded ? "details" : "div";
   const service = metrics.requester_service;
   if (!service) return null;
 
@@ -24,10 +31,10 @@ export function RequesterService({
   const fairnessOptimal = stages.some((stage) => stage.stage === "fairness" && stage.status === "OPTIMAL");
 
   return (
-    <section aria-label="Requester service" className="mt-3 space-y-2 text-[11px] text-neutral-400">
+    <section aria-label="Requester service" className="mt-3 space-y-2 text-[12px] text-neutral-400">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/[0.04] pb-1">
         <h3 className="font-medium text-neutral-200">Requester service &middot; {service.metric_version}</h3>
-        <span className="text-[10px] text-neutral-400">
+        <span className="text-[12px] text-neutral-400">
           Policy:{" "}
           <strong className="text-neutral-200">
             {isFairnessPolicy ? "Utility-then-Fairness" : "Pure Utility"}
@@ -46,9 +53,9 @@ export function RequesterService({
       )}
 
       {solverDetails && (
-        <div className="rounded border border-white/[0.06] bg-black/20 p-2 space-y-1 text-[10px]">
+        <div className="rounded border border-white/[0.06] bg-black/20 p-2 space-y-1 text-[12px]">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-neutral-500">Solver status: </span>
+            <span className="text-neutral-400">Solver status: </span>
             <span className="font-semibold text-neutral-200">{String(solverDetails.status ?? "UNKNOWN")}</span>
             {plan?.mission_utility !== undefined && (
               <span className="text-neutral-300">
@@ -90,8 +97,16 @@ export function RequesterService({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
+      {(expanded || compactCards) && <div className="requester-card-grid">{[...service.requesters, service.unattributed].map(row => <article className="requester-service-card evaluation-comparison" aria-label={row.requester_id ?? "Unattributed"} key={row.requester_id ?? "__unattributed"}>
+        <header><h4>{row.requester_id ?? "Unattributed"}</h4><span>{row.requester_id === null ? "No requester ID" : "Requester"}</span></header>
+        {compactCards ? <p>Acquisition fulfillment: {row.fulfillment_ratio === null ? "N/A" : `${Number((row.fulfillment_ratio * 100).toPrecision(15))}%`}</p> : <EvaluationBar label="Acquisition fulfillment" value={row.fulfillment_ratio} text={formatPercent(row.fulfillment_ratio)} tone="green" />}
+        <dl className="requester-card-stats"><div><dt>Served utility</dt><dd>{row.served_utility} <small>/ {row.demand_utility} demanded</small></dd></div><div><dt>Served requests</dt><dd>{row.served_request_count} <small>/ {row.request_count}</small></dd></div><div><dt>Service share</dt><dd>{formatPercent(row.service_share)}</dd></div><div><dt>Archive fulfillment</dt><dd>{row.archive_satisfied_count ?? "N/A"} <small>requests · {row.archive_satisfied_utility ?? "N/A"} utility</small></dd></div></dl>
+        <p>Service share uses {service.total_served_utility} total served priority units, including unattributed service. Archive fulfillment is counted separately.</p>
+      </article>)}</div>}
+      <AccountingNote className={expanded ? "requester-definitions requester-accounting-note" : "overflow-x-auto"}>
+      {expanded && <summary>Metric definitions &amp; accounting</summary>}
+      <div className={expanded ? "evaluation-disclosure-content" : undefined}>
+        {!expanded && !compactCards && <table className="w-full text-left">
           <caption className="text-left">
             Service share denominator: {service.total_served_utility} total served priority units, including unattributed service. Fulfillment: acquisition served / demand utility. Archive count and utility are separate.
           </caption>
@@ -108,8 +123,8 @@ export function RequesterService({
                 <th scope="row" className="pr-2">
                   {row.requester_id === null ? "Unattributed (no requester id)" : row.requester_id}
                 </th>
-                <td>{row.archive_satisfied_count ?? 0}</td>
-                <td>{row.archive_satisfied_utility ?? 0}</td>
+                <td>{row.archive_satisfied_count ?? "N/A"}</td>
+                <td>{row.archive_satisfied_utility ?? "N/A"}</td>
                 <td>{row.request_count}</td>
                 <td>{row.demand_utility}</td>
                 <td>{row.served_request_count}</td>
@@ -119,18 +134,18 @@ export function RequesterService({
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </table>}
 
       <p>{service.scope}</p>
       <p>{service.limitations}</p>
       <p>{service.measured_at_convention} Measured at: {metrics.measured_at}.</p>
       {isFairnessPolicy && (
-        <p className="text-[10px] text-neutral-400 italic">
+        <p className="text-[12px] text-neutral-400 italic">
           Fairness balancing runs only after primary utility is proven optimal and keeps that utility fixed.
         </p>
       )}
       <p>Requester ids are author labels, not entitlements.</p>
+      </div></AccountingNote>
     </section>
   );
 }

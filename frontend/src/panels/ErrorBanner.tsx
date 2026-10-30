@@ -49,7 +49,7 @@ export function ErrorBanner({
       <span>
         <span className="font-mono text-red-400">{error.code}</span>: {error.message}
         {lines.length === 0 ? null : (
-          <span className="ml-2 font-mono text-[10px] text-red-300/70">{lines.join(" · ")}</span>
+          <span className="ml-2 font-mono text-[12px] text-red-300/70">{lines.join(" · ")}</span>
         )}
       </span>
       <button
@@ -91,7 +91,7 @@ export function PlanConflictBanner({
       className="flex shrink-0 items-start justify-between gap-4 border-b border-amber-800 bg-amber-950/50 px-3 py-1 text-xs text-amber-100"
     >
       <span>
-        <span className="font-semibold uppercase tracking-wide text-amber-300">Stale plan</span>
+        <span className="font-semibold  text-amber-300">Stale plan</span>
         <span className="ml-2 font-mono text-amber-400">PLAN_VERSION_CONFLICT</span>
         {`: ${conflict.message} · replan named ${shortPlanId(conflict.expectedPlanId)}, but the backend's current plan is ${
           conflict.currentPlanId === null ? "unknown" : shortPlanId(conflict.currentPlanId)

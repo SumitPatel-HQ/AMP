@@ -41,7 +41,7 @@ const INJECT_LABEL: Record<ManualEventType, string> = {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
+    <label className="flex flex-col gap-0.5 text-[12px]  text-neutral-400">
       {label}
       {children}
     </label>
@@ -133,7 +133,7 @@ function BatteryDropFields({
   const [value, setValue] = useState("");
   return (
     <div className="flex flex-wrap items-end gap-3">
-      <p className="text-[11px] text-neutral-400">
+      <p className="text-[12px] text-neutral-400">
         {`${satelliteId} battery now `}
         <span className="tabular-nums text-neutral-200">{`${batteryWh.toFixed(1)} Wh`}</span>
         {` of ${capacityWh.toFixed(0)} Wh`}
@@ -254,7 +254,7 @@ function SatelliteOutageFields({
           className={CONTROL_INPUT}
         />
       </Field>
-      <p className="text-[10px] text-neutral-500">
+      <p className="text-[12px] text-neutral-400">
         {stationIds
           ? "Contacts at the station overlapping the span are lost; their downlinks fail validation."
           : `Actions overlapping the span on ${satelliteId} fail validation; frozen actions stay exempt.`}
@@ -322,7 +322,7 @@ function EmergencyRequestFields({
         ))}
       </div>
       <fieldset className="grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-[var(--amis-border)] pt-1.5">
-        <legend className="text-[10px] uppercase tracking-wide text-neutral-500">Cue evidence (optional)</legend>
+        <legend className="text-[12px]  text-neutral-400">Cue evidence (optional)</legend>
         {EVIDENCE_FIELDS.slice(0, 2).map(({ key, label, type }) => (
           <Field key={key} label={label}>
             <input aria-label={label} type={type} value={form[key] ?? ""} onChange={(event) => update(key, event.target.value)} className={CONTROL_INPUT} />
@@ -342,12 +342,12 @@ function EmergencyRequestFields({
           </Field>
         ))}
       </fieldset>
-      <p className={`text-[10px] ${"problem" in evidence ? "text-amber-300" : "text-neutral-500"}`}>
+      <p className={`text-[12px] ${"problem" in evidence ? "text-amber-300" : "text-neutral-400"}`}>
         {"problem" in evidence
           ? evidence.problem
           : "Leave blank for a manual arrival. With evidence: " + CUE_POLICY_NOTICE}
       </p>
-      <p className="text-[10px] text-neutral-500">
+      <p className="text-[12px] text-neutral-400">
         {orbital ? "Observation windows are computed from the stored orbit before the event is recorded." : `Enters through the event log with window ${windowId} on ${satelliteId}; the scenario itself stays unchanged.`}
       </p>
     </div>
@@ -400,8 +400,8 @@ export function EventControl({
   return (
     <div role="dialog" aria-label="Configure event" className="flex w-[30rem] flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-[10px] uppercase tracking-wider text-neutral-400">Configure event</h3>
-        <span className="text-[10px] text-neutral-500">
+        <h3 className="text-[12px]  text-neutral-400">Configure event</h3>
+        <span className="text-[12px] text-neutral-400">
           {`evaluated against Plan V${plan.version} at ${clockTime(missionState.simulated_time)} UTC`}
         </span>
       </div>
@@ -453,7 +453,7 @@ export function EventControl({
         />
       )}
       <div className="flex items-center justify-between gap-2 border-t border-[var(--amis-border)] pt-2">
-        <span className="text-[10px] text-neutral-500">
+        <span className="text-[12px] text-neutral-400">
           {configured === null ? "Complete the event to inject it." : "Event configured."}
         </span>
         <button

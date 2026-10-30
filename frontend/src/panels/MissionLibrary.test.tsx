@@ -1,0 +1,30 @@
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { MissionLibrary } from "./MissionLibrary";
+const api = vi.hoisted(() => ({ fetchExamples: vi.fn(), fetchMissions: vi.fn() }));
+vi.mock("../api/amis", () => api);
+HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+const items = ["first", "second"].map(id => ({ id, name: "Same name", provider: "orbital", start_time: "2026-09-21T00:00:00Z", end_time: "2026-09-22T00:00:00Z", briefing: "Full briefing ".repeat(200) }));
+it("distinguishes duplicate names and retains full briefings", async () => {
+ api.fetchMissions.mockResolvedValue(items);
+ const choose = vi.fn().mockResolvedValue(false);
+ render(<MissionLibrary mode="load" onClose={vi.fn()} onChoose={choose} />);
+ await screen.findByRole("button", {name: "Load Same name (second)"});
+ expect(screen.getAllByText("Full briefing")[1].parentElement?.textContent).toContain(items[1].briefing);
+ fireEvent.click(screen.getByRole("button", {name: "Load Same name (second)"}));
+ await waitFor(() => expect(choose).toHaveBeenCalledWith("second"));
+ expect(screen.getByRole("dialog")).toBeTruthy();
+});
+it("keeps failures open and restores focus to the opener on dismissal", async () => {
+ api.fetchExamples.mockResolvedValue(items);
+ const opener = document.createElement("button"); document.body.append(opener); opener.focus();
+ const close = vi.fn();
+ const {unmount} = render(<MissionLibrary mode="examples" onClose={close} onChoose={vi.fn().mockRejectedValue(new Error("Load failed"))} />);
+ fireEvent.click(await screen.findByRole("button", {name: "Load Same name (first)"}));
+ expect((await screen.findByRole("alert")).textContent).toContain("Load failed");
+ fireEvent(screen.getByRole("dialog"), new Event("cancel", {cancelable: true}));
+ expect(close).toHaveBeenCalledTimes(1);
+ unmount(); expect(document.activeElement).toBe(opener); opener.remove();
+});

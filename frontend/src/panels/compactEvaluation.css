@@ -1,0 +1,47 @@
+.compact-evaluation { min-width: 0; color: var(--color-mission-text); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.compact-context { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 12px; }
+.compact-context > span:first-child { font-weight: 600; }
+.compact-context time, .compact-context > span + span { color: var(--color-mission-muted); font-size: 11px; }
+.compact-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.compact-metric { min-width: 0; padding: 10px; border: 1px solid var(--amis-border); border-radius: var(--radius-panel); background: var(--amis-bg); }
+.compact-metric h3 { color: var(--color-mission-muted); font-size: 11px; font-weight: 500; }
+.compact-metric > strong { display: block; font-size: 22px; font-weight: 600; line-height: 1.3; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.compact-metric [data-warning="true"] { color: var(--timeline-started-border); }
+.compact-comparison { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--color-mission-muted); margin-top: 6px; }
+.compact-comparison [data-trend="better"] { color: var(--timeline-completed-border); }
+.compact-comparison [data-trend="worse"] { color: var(--timeline-impacted); }
+.compact-caution { color: var(--timeline-started-border); font-size: 11px; margin-bottom: 8px; }
+.compact-secondary { margin-top: 8px; }
+.compact-metric-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 8px; background: transparent; border: 0; border-bottom: 1px solid var(--amis-border); border-radius: 0; padding: 8px 2px; }
+.compact-metric-row > strong { font-size: 13px; margin: 0; }
+.compact-metric-row .compact-comparison { grid-column: 1 / -1; margin: 0; }
+.compact-block { margin: 14px 0; }
+.compact-block > h3 { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.compact-block > p, .compact-resource > p { color: var(--color-mission-muted); font-size: 11px; margin-top: 8px; }
+.compact-resource { margin-top: 10px; }
+.compact-resource > div { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.compact-resource strong { font-weight: 500; font-variant-numeric: tabular-nums; }
+.compact-resource progress { display: block; width: 100%; height: 5px; appearance: none; border: 0; border-radius: 3px; overflow: hidden; background: var(--amis-border); accent-color: var(--color-mission-accent); }
+.compact-resource progress::-webkit-progress-bar { background: var(--amis-border); }
+.compact-resource progress::-webkit-progress-value { background: var(--color-mission-accent); border-radius: 3px; }
+.compact-resource progress::-moz-progress-bar { background: var(--color-mission-accent); border-radius: 3px; }
+.compact-facts { display: flex; flex-direction: column; gap: 8px; }
+.compact-facts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.compact-facts dt { color: var(--color-mission-muted); }
+.compact-facts dd { text-align: right; font-variant-numeric: tabular-nums; }
+.compact-facts small { display: block; color: var(--color-mission-muted); font-size: 11px; }
+.compact-disclosure { border-top: 1px solid var(--amis-border); padding: 10px 0; }
+.compact-disclosure > summary { cursor: pointer; font-weight: 500; font-size: 12px; }
+.compact-disclosure > summary:focus-visible { outline: 2px solid var(--color-mission-accent); outline-offset: 3px; }
+.compact-disclosure[open] > summary { margin-bottom: 10px; }
+.compact-methodology { display: flex; flex-direction: column; gap: 12px; color: var(--color-mission-muted); }
+.compact-methodology h4 { color: var(--color-mission-text); font-weight: 500; }
+.compact-evaluation .requester-card-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; }
+.compact-evaluation .requester-service-card { padding: 10px; background: var(--amis-bg); }
+.compact-evaluation .requester-service-card header { gap: 4px; }
+.compact-evaluation .requester-service-card h4 { font-size: 12px; }
+.compact-evaluation .requester-card-stats { gap: 10px; padding: 10px 0; }
+.compact-evaluation .requester-card-stats dd { font-size: 14px; }
+.compact-evaluation .requester-card-stats dt, .compact-evaluation .requester-card-stats small { font-size: 11px; }
+.compact-evaluation .requester-service-card p { font-size: 11px; }
+.compact-evaluation [aria-label="Emergency response"] li { padding: 8px 0; border-bottom: 1px solid var(--amis-border); }

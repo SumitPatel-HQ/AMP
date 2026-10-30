@@ -1,7 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as testingRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissionBar } from "./MissionBar";
+// jsdom does not implement the browser's native dialog methods.
+HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+const render = (ui: import("react").ReactNode) => {
+  const view = testingRender(ui);
+  fireEvent.click(screen.getByRole("button", { name: "Mission & settings" }));
+  return view;
+};
 import type {
   MissionPlanSchema,
   MissionStateSchema,
@@ -252,7 +260,7 @@ describe("MissionBar reset button", () => {
 
 
 describe("MissionBar planner and policy controls", () => {
-  it("renders planner and policy selects with correct options", () => {
+  it("renders planner and policy selects with correct options", async () => {
     render(
       <MissionBar
         scenario={baseScenario}

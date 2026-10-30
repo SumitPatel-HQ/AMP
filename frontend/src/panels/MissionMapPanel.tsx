@@ -1,4 +1,5 @@
 import { ArchiveEvidenceDetails } from "./ArchiveEvidence";
+import { ChevronDown, ChevronRight, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContactWindowSchema,
@@ -36,7 +37,7 @@ const LAYER_TOGGLES: { key: keyof LayerVisibility; label: string }[] = [
 ];
 
 const OVERLAY_BOX =
-  "border border-[var(--amis-border)] bg-[#0b0d10]/90 text-[10px] text-neutral-300 backdrop-blur-sm";
+  "border border-[var(--amis-border)] bg-[#0b0d10]/90 text-[12px] text-neutral-300 backdrop-blur-sm";
 
 function LayersBox({
   visibility,
@@ -47,20 +48,20 @@ function LayersBox({
 }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className={`${OVERLAY_BOX} absolute left-2 top-2 w-36`}>
+    <div className={`${OVERLAY_BOX} absolute left-2 top-2 w-36 max-h-[calc(100%-4rem)] overflow-y-auto`}>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between px-2 py-1 uppercase tracking-wider text-neutral-400 hover:text-neutral-200"
+        className="flex w-full items-center justify-between px-2 py-1  text-neutral-400 hover:text-neutral-200"
       >
-        Layers <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        Layers {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
       </button>
       {open ? (
         <ul aria-label="Map layers" className="border-t border-[var(--amis-border)] py-1">
           {LAYER_TOGGLES.map(({ key, label }) => (
             <li key={key}>
-              <label className="flex cursor-pointer items-center gap-2 px-2 py-0.5 uppercase tracking-wide hover:bg-white/[0.04]">
+              <label className="flex cursor-pointer items-center gap-2 px-2 py-0.5  hover:bg-white/[0.04]">
                 <input
                   type="checkbox"
                   checked={visibility[key]}
@@ -83,13 +84,13 @@ function MapControls({ engine }: { engine: MissionMapEngine | null }) {
   return (
     <div className={`${OVERLAY_BOX} absolute right-2 top-2 flex flex-col divide-y divide-[var(--amis-border)]`}>
       <button type="button" aria-label="Zoom in" disabled={engine === null} onClick={() => engine?.zoomBy(1)} className={button}>
-        +
+        <Plus size={15} aria-hidden="true" />
       </button>
       <button type="button" aria-label="Zoom out" disabled={engine === null} onClick={() => engine?.zoomBy(-1)} className={button}>
-        −
+        <Minus size={15} aria-hidden="true" />
       </button>
       <button type="button" aria-label="Fit targets" disabled={engine === null} onClick={() => engine?.fitTargets()} className={button}>
-        ⌂
+        <Maximize size={15} aria-hidden="true" />
       </button>
     </div>
   );
@@ -109,7 +110,7 @@ function Legend() {
   return (
     <ul
       aria-label="Map legend"
-      className={`${OVERLAY_BOX} absolute bottom-2 left-2 flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1 uppercase tracking-wide`}
+      className={`${OVERLAY_BOX} absolute bottom-2 left-2 flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1 `}
     >
       {(Object.keys(STATUS_COLORS) as (keyof typeof STATUS_COLORS)[]).map((status) => (
         <li key={status} className="flex items-center gap-1.5">
@@ -151,7 +152,7 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
             ? model.groundTrack?.length ? "orbit-derived position" : "at the last target its plan visited"
             : `observing ${satellite.overRequestId}`}
         </p>
-        <p className="text-neutral-600">{model.groundTrack?.length ? "computed from the stored orbit" : "position inferred from the plan"}</p>
+        <p className="text-neutral-400">{model.groundTrack?.length ? "computed from the stored orbit" : "position inferred from the plan"}</p>
       </div>
     );
   }
@@ -162,7 +163,7 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
       <div role="tooltip" style={style} className={`${OVERLAY_BOX} pointer-events-none absolute min-w-40 max-w-64 px-2 py-1.5`}>
         <p className="font-semibold text-red-300">{`Cue arrival · ${cue.evidence.eventId}`}</p>
         <CueEvidenceDetails evidence={cue.evidence} />
-        <p className="text-neutral-600">arrival point, not an acquisition</p>
+        <p className="text-neutral-400">arrival point, not an acquisition</p>
       </div>
     );
   }
@@ -172,7 +173,7 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
     <div role="tooltip" style={style} className={`${OVERLAY_BOX} pointer-events-none absolute min-w-40 px-2 py-1.5`}>
       <p className="flex items-center justify-between gap-3">
         <span className="font-semibold text-neutral-100">{target.requestId}</span>
-        <span className="text-neutral-500">P{target.priority}</span>
+        <span className="text-neutral-400">P{target.priority}</span>
       </p>
       <p className="text-neutral-400">Requester: {target.requesterId ?? "Unattributed"}</p>
       <ArchiveEvidenceDetails event={target.archiveEvent} />
@@ -188,7 +189,7 @@ function HoverCard({ hover, model }: { hover: MapHover; model: MissionMapModel }
       {target.unscheduledReason === null ? null : (
         <p className="text-amber-300">{target.unscheduledReason}</p>
       )}
-      <p className="text-neutral-500">deadline {clockTime(target.deadline)}</p>
+      <p className="text-neutral-400">deadline {clockTime(target.deadline)}</p>
       {target.eventIds.length === 0 ? null : (
         <p className="text-red-300">{target.eventIds.join(", ")}</p>
       )}
@@ -330,7 +331,7 @@ export function MissionMapPanel({
           Map unavailable: {failure}
         </p>
       ) : scenario === null ? (
-        <p className="absolute inset-x-0 top-1/2 text-center text-xs text-neutral-500">
+        <p className="absolute inset-x-0 top-1/2 text-center text-xs text-neutral-400">
           Load a scenario to see its observation targets.
         </p>
       ) : null}

@@ -150,15 +150,24 @@ export function createMissionMapEngine(
   const fitTargets = () => {
     const bounds = scene?.model.bounds;
     if (bounds === null || bounds === undefined) {
+      map.easeTo({ center: [20, 15], zoom: 1.2, duration: 600 });
       return;
     }
     const [west, south, east, north] = bounds;
     // A lone target has no extent to fit, so it gets a regional zoom instead.
     if (west === east && south === north) {
-      map.easeTo({ center: [west, south], zoom: 4, duration: 600 });
+      map.easeTo({ center: [west, south], zoom: 5, duration: 600 });
       return;
     }
-    map.fitBounds(bounds, { padding: 70, maxZoom: 6, duration: 600 });
+    const padX = west === east ? 0.5 : 0;
+    const padY = south === north ? 0.5 : 0;
+    map.fitBounds(
+      [
+        [west - padX, south - padY],
+        [east + padX, north + padY],
+      ],
+      { padding: 70, maxZoom: 8, duration: 600 },
+    );
   };
 
   return {
@@ -170,7 +179,9 @@ export function createMissionMapEngine(
       const key = JSON.stringify(nextScene.model.bounds);
       if (key !== fittedBounds) {
         fittedBounds = key;
-        fitTargets();
+        if (nextScene.model.bounds !== null) {
+          fitTargets();
+        }
       }
     },
     fitTargets,

@@ -85,8 +85,8 @@ export interface MissionSessionState {
   setPlanner: (planner: "greedy" | "cp_sat") => void;
   setPolicy: (policy: "utility" | "utility_then_fairness") => void;
   loadDemoScenario: () => Promise<void>;
-  loadExample: (id: string) => Promise<void>;
-  loadMission: (id: string) => Promise<void>;
+  loadExample: (id: string) => Promise<boolean>;
+  loadMission: (id: string) => Promise<boolean>;
   createMission: (draft: ScenarioSchema) => Promise<boolean>;
   generatePlan: () => Promise<void>;
   replan: () => Promise<void>;
@@ -286,8 +286,8 @@ export function useMissionSession(): MissionSessionState {
   const loadMission = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
-    try { await openLoaded(await fetchScenario(id)); }
-    catch (caught) { clearMission(); setError(describeError(caught)); }
+    try { await openLoaded(await fetchScenario(id)); return true; }
+    catch (caught) { clearMission(); setError(describeError(caught)); return false; }
     finally { setLoading(false); }
   }, [openLoaded, clearMission]);
 
@@ -297,7 +297,8 @@ export function useMissionSession(): MissionSessionState {
     try {
       const example = await fetchExample(id);
       await openLoaded(await createScenario({ ...example, id: `${example.id}-${crypto.randomUUID()}` }));
-    } catch (caught) { clearMission(); setError(describeError(caught)); }
+      return true;
+    } catch (caught) { clearMission(); setError(describeError(caught)); return false; }
     finally { setLoading(false); }
   }, [openLoaded, clearMission]);
 

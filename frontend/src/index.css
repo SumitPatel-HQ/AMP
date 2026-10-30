@@ -1,4 +1,19 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@theme {
+ --font-sans: "Inter Variable", sans-serif;
+ --font-mono: "JetBrains Mono Variable", monospace;
+ --color-mission-bg: #0d121b;
+ --color-mission-surface: #151d29;
+ --color-mission-elevated: #1e2938;
+ --color-mission-border: #303d50;
+ --color-mission-control-border: color-mix(in srgb, #303d50 60%, transparent);
+ --color-mission-text: #e5eaf2;
+ --color-mission-muted: #a4b1c4;
+ --color-mission-accent: #7dd3fc;
+ --radius-panel: 6px;
+}
 @import "vis-timeline/styles/vis-timeline-graph2d.min.css";
 
 /*
@@ -9,9 +24,9 @@
  */
 :root {
   color-scheme: dark;
-  --amis-bg: #0a0a0b;
-  --amis-surface: #121316;
-  --amis-border: #25272c;
+  --amis-bg: #0d121b;
+  --amis-surface: #151d29;
+  --amis-border: #303d50;
   --timeline-window: rgba(56, 189, 248, 0.1);
   --timeline-window-border: rgba(56, 189, 248, 0.28);
   --timeline-planned: #1d4ed8;
@@ -33,7 +48,9 @@ body,
   margin: 0;
   background-color: var(--amis-bg);
   color: #d4d6dc;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 * {
@@ -43,13 +60,13 @@ body,
 
 .amis-workspace {
   grid-template-columns: minmax(210px, 17rem) minmax(0, 1fr) minmax(220px, 18rem);
-  grid-template-rows: minmax(220px, 1.25fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.2fr) auto;
 }
 
 @media (max-width: 1280px) {
   .amis-workspace {
     grid-template-columns: minmax(185px, 14rem) minmax(0, 1fr) minmax(190px, 15rem);
-    grid-template-rows: minmax(200px, 1.2fr) minmax(190px, 1fr) minmax(145px, 0.8fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1.2fr) auto;
   }
 
   .amis-object-tabs .amis-tab-count {
@@ -62,6 +79,15 @@ body,
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Keep button and dropdown affordances consistent across panels and dialogs. */
+:is(button, select, summary, [role="button"], [role="combobox"], input[type="button"], input[type="submit"], input[type="reset"]):not(:disabled):not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+:is(button, select, summary, [role="button"], [role="combobox"], input[type="button"], input[type="submit"], input[type="reset"]):is(:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
 }
 
 :where(button, input, select, textarea, [role="button"]):focus-visible {
@@ -214,12 +240,12 @@ body,
 
 .amis-vis-timeline .vis-time-axis .vis-text {
   color: #858b97;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .amis-vis-timeline .vis-time-axis .vis-text.vis-major {
   color: #c0c4cd;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -233,15 +259,26 @@ body,
 
 .amis-vis-timeline .vis-item {
   border-radius: 2px;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 17px;
 }
 
 .amis-vis-timeline .vis-item .vis-item-content {
-  overflow: hidden;
-  padding: 0 5px;
-  text-overflow: ellipsis;
+  overflow: visible;
+  padding: 2px 6px;
   white-space: nowrap;
+}
+
+/* Let vis-timeline measure the full label for collision detection. Keep the
+   range itself at its true duration, even when the label needs more room. */
+.amis-vis-timeline .vis-item.vis-range,
+.amis-vis-timeline .vis-item.vis-range .vis-item-overflow {
+  overflow: visible;
+}
+
+.amis-vis-timeline .vis-item.vis-range .vis-item-content {
+  border-radius: 2px;
+  background: rgb(10 10 11 / 0.65);
 }
 
 .amis-vis-timeline .vis-item.amis-window {
@@ -263,7 +300,7 @@ body,
 
 .amis-vis-timeline .vis-item.amis-action {
   z-index: 2;
-  height: 19px;
+  min-height: 23px;
   border: 1px solid var(--timeline-planned-border);
   background: var(--timeline-planned);
   color: #eff6ff;
@@ -315,7 +352,7 @@ body,
   border: 0;
   background: transparent;
   color: #fda4af;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -369,7 +406,7 @@ body,
   background: #3b0a2a;
   color: #fbcfe8;
   content: "MISSION NOW";
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -398,10 +435,10 @@ body,
 /* Emergency response (ADR-0015): arrival to imaging start, from backend metrics. */
 .amis-vis-timeline .vis-item.amis-response {
   z-index: 3;
-  height: 14px;
+  min-height: 23px;
   color: #e5e7eb;
-  font-size: 9px;
-  line-height: 12px;
+  font-size: 11px;
+  line-height: 17px;
 }
 
 .amis-vis-timeline .vis-item.amis-response-planned {
@@ -425,3 +462,189 @@ body,
 .amis-vis-timeline .vis-item.amis-response-expired {
   color: #f87171;
 }
+
+.amis-app { min-width: 0; }
+.amis-workspace { padding: 8px; gap: 8px; }
+.amis-workspace:has(.is-expanded) { grid-template-rows: minmax(0, .85fr) minmax(0, 1.4fr) minmax(0, .7fr); }
+.amis-panel { border-radius: var(--radius-panel); overflow: hidden; }
+.amis-panel-header { flex-wrap: wrap; height: auto; padding: 7px 12px; row-gap: 4px; }
+.amis-panel-header > div { max-width: 100%; overflow-x: auto; }
+.amis-analysis-dock { min-height: 38px; min-width: 0; display: flex; flex-direction: column; background: var(--amis-surface); border: 1px solid var(--amis-border); border-radius: 6px; overflow: hidden; }
+.amis-dock-bar { display: flex; min-height: 38px; flex-shrink: 0; align-items: center; }
+.amis-dock-bar [role=tab] { padding: 8px 16px; font-size: 13px; border-bottom: 2px solid transparent; }
+.amis-dock-bar [aria-selected=true] { color: #e9d5ff; border-bottom-color: #e879f9; background: #e879f90a; }
+.amis-new { margin-left: 8px; font-size: 11px; color: #fcd34d; }
+.amis-dock-content { min-height: 0; overflow: auto; flex: 1; }
+.amis-dock-panel { padding: 12px; }
+.amis-dock-panel > .amis-panel { border: 0; overflow: visible; }
+.amis-dock-panel > .amis-panel > .amis-panel-header { border: 0; background: transparent; padding: 0 0 8px; min-height: 0; }
+.amis-dock-panel > .amis-panel > .amis-panel-header h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.amis-dock-panel > .amis-panel > div:last-child { overflow: visible; padding: 0; }
+.amis-dock-panel figure { margin-top: 16px; }
+.amis-mission-bar { padding: 10px 16px; gap: 10px 16px; }
+.amis-vis-timeline { flex: 1; min-height: 100px; font-family: var(--font-mono); }
+@media (max-width: 1000px), (max-height: 650px) { .amis-app { height: auto; min-height: 100dvh; overflow: auto; } .amis-workspace { min-height: 750px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+
+.amis-dock-panel tbody tr:first-child td:not(:first-child) { font-family: var(--font-mono); font-size: 20px; padding-block: 6px; }
+
+@media (max-width: 1536px) { .amis-object-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Mission authoring shares the operations shell's surfaces and controls. */
+.amis-builder { background: var(--amis-bg); }
+.amis-builder-header { display: flex; align-items: center; gap: 20px; padding: 10px 20px; flex-shrink: 0; border-bottom: 1px solid var(--amis-border); background: var(--amis-surface); }
+.amis-builder-layout { grid-template-columns: minmax(440px, 36%) minmax(0, 1fr); }
+.amis-builder-sidebar { border-right: 1px solid var(--amis-border); background: var(--amis-surface); }
+.amis-builder-form { flex: 1; }
+.amis-builder-form h2 { font-size: 14px; font-weight: 600; color: #eef2f8; }
+.amis-builder-form > section + section { border-top: 1px solid var(--amis-border); padding-top: 20px; }
+.amis-builder-form label:not(:has(input[type=checkbox])) { display: flex; flex-direction: column; gap: 6px; color: #b9c6d8; font-size: 12px; }
+.amis-builder-form input:not([type=checkbox]), .amis-builder-form select { min-height: 36px; font-size: 13px; background: #101722; border-color: var(--amis-border); }
+.amis-builder-form input[type=number], .amis-builder-form input[type=datetime-local] { font-family: var(--font-mono); font-size: 12px; }
+.amis-builder-form input[type=checkbox] { accent-color: #7dd3fc; width: 15px; height: 15px; flex-shrink: 0; }
+.amis-builder-form fieldset { gap: 10px 16px; padding-block: 8px; }
+.amis-builder-form legend { margin-bottom: 8px; color: #b9c6d8; }
+.amis-builder-target { background: #101722; border: 1px solid var(--amis-border); }
+.amis-builder-footer { flex-shrink: 0; border-top: 1px solid var(--amis-border); padding: 14px 20px; background: #1b2533; max-height: 30%; overflow-y: auto; font-size: 12px; }
+.amis-builder-map-tools { position: absolute; top: 16px; left: 16px; max-width: calc(100% - 80px); display: flex; flex-wrap: wrap; gap: 8px; z-index: 10; }
+.amis-builder-map-tools button { background: var(--amis-surface); }
+@media (max-width: 1000px) { .amis-builder-layout { grid-template-columns: minmax(360px, 48%) minmax(0, 1fr); } .amis-builder-header { flex-wrap: wrap; } }
+@media (max-width: 720px) { .amis-builder-layout { display: flex; flex-direction: column-reverse; overflow: auto; } .amis-builder-map { min-height: 300px; flex-shrink: 0; } .amis-builder-sidebar { min-height: 600px; overflow: visible; } .amis-builder-form { overflow: visible; } .amis-builder-header > div:last-child { margin-left: 0; } }
+
+.amis-builder-heading { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+@media (max-width: 720px) { .amis-builder-heading { flex-wrap: wrap; gap: 4px 12px; } }
+
+.amis-builder button, .amis-builder-header label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-height: 32px; flex-shrink: 0; padding: 0 8px; font-size: 12px; line-height: 16px; }
+.amis-builder button svg, .amis-builder-header label svg { flex-shrink: 0; }
+.amis-builder-options, .amis-builder-stations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.amis-builder-form .amis-builder-checkbox { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; padding-block: 6px; font-size: 12px; line-height: 20px; color: #d5deeb; cursor: pointer; }
+.amis-builder-form .amis-builder-checkbox input[type=checkbox] { width: 16px; height: 16px; margin: 2px 0 0; accent-color: #7dd3fc; cursor: pointer; }
+.amis-builder-tle summary { display: flex; align-items: center; gap: 6px; list-style: none; }
+.amis-builder-tle summary::-webkit-details-marker { display: none; }
+.amis-builder-tle[open] summary svg { transform: rotate(90deg); }
+@media (max-width: 1100px) { .amis-builder-options, .amis-builder-stations { grid-template-columns: minmax(0, 1fr); } }
+
+/* Dashboard icon sizing follows the existing compact controls and headings. */
+.amis-controls button, .amis-settings summary, .amis-dock-bar button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.amis-controls button svg, .amis-settings summary svg, .amis-dock-bar button svg { flex-shrink: 0; }
+
+.amis-builder-select { position: relative; display: block; min-width: 0; }
+.amis-builder-form .amis-builder-select select { appearance: none; padding-right: 34px; text-overflow: ellipsis; }
+.amis-builder-select > svg { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #a4b1c4; }
+/* Centered mission settings, using the operations-shell theme. */
+.amis-settings-modal { position: fixed; inset: 0; margin: auto; width: min(720px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 24px; border: 1px solid var(--amis-border); border-radius: var(--radius-panel); background: var(--amis-surface); color: var(--color-mission-text); box-shadow: 0 24px 64px var(--color-black); }
+.amis-settings-modal::backdrop { background: rgb(0 0 0 / 65%); }
+body:has(.amis-settings-modal[open]) { overflow: hidden; }
+.amis-settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 16px; }
+.amis-settings-header h2:focus { outline: none; }
+.amis-settings-header h2 { font-size: 22px; line-height: 1.3; font-weight: 600; }
+.amis-settings-header p { margin-top: 6px; color: var(--color-mission-muted); font-size: 13px; }
+.amis-settings-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--radius-panel); color: var(--color-mission-muted); background: transparent; border: 0; cursor: pointer; transition: background-color 180ms, color 180ms; }
+.amis-settings-close:hover { background: var(--color-mission-elevated); }
+.amis-settings-section { padding-top: 16px; border-top: 1px solid var(--amis-border); }
+.amis-settings-section + .amis-settings-section { margin-top: 16px; }
+.amis-settings-section h3 { margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.amis-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.amis-controls .amis-settings-card { display: flex; align-items: center; justify-content: flex-start; gap: 12px; min-height: 84px; padding: 14px; text-align: left; border: 1px solid var(--color-mission-control-border); border-radius: var(--radius-panel); background: var(--amis-bg); cursor: pointer; transition: background-color 180ms, border-color 180ms; }
+.amis-settings-card-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: var(--radius-panel); border: 1px solid color-mix(in srgb, var(--color-mission-muted) 12%, transparent); background: color-mix(in srgb, var(--color-mission-muted) 4%, transparent); color: var(--color-mission-accent); }
+.amis-settings-card-title { font-size: 13px; line-height: 1.4; }
+.amis-settings-card-description { display: block; margin-top: 4px; color: var(--color-mission-muted); font-size: 12px; line-height: 1.4; }
+.amis-settings-card > svg { color: var(--color-mission-muted); }
+.amis-controls .amis-settings-card:is(:hover, :focus-visible):not(:disabled) { border-color: color-mix(in srgb, var(--color-mission-accent) 45%, var(--color-neutral-700)); background: color-mix(in srgb, var(--color-mission-elevated) 55%, var(--amis-bg)); }
+.amis-controls .amis-settings-card:active:not(:disabled) { background: var(--amis-surface); }
+.amis-controls .amis-settings-card:disabled { opacity: .6; cursor: not-allowed; transition: none; }
+.amis-controls .amis-settings-card-danger { border-color: color-mix(in srgb, var(--timeline-impacted) 22%, var(--color-mission-control-border)); }
+.amis-settings-card-danger .amis-settings-card-icon, .amis-settings-card-danger > svg, .amis-settings-card-danger .font-semibold { color: var(--timeline-impacted); }
+.amis-settings-card-danger .amis-settings-card-icon { border-color: color-mix(in srgb, var(--timeline-impacted) 16%, transparent); background: color-mix(in srgb, var(--timeline-impacted) 5%, transparent); }
+.amis-settings-card:disabled .amis-settings-card-icon { color: var(--color-mission-muted); border-color: color-mix(in srgb, var(--color-mission-muted) 8%, transparent); background: color-mix(in srgb, var(--color-mission-muted) 2%, transparent); }
+.amis-settings-card-danger:disabled .amis-settings-card-icon { color: color-mix(in srgb, var(--timeline-impacted) 45%, var(--color-mission-muted)); border-color: color-mix(in srgb, var(--timeline-impacted) 8%, transparent); background: color-mix(in srgb, var(--timeline-impacted) 2%, transparent); }
+.amis-controls .amis-settings-card-danger:is(:hover, :focus-visible):not(:disabled) { border-color: var(--timeline-impacted); }
+.amis-settings-field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.amis-settings-field .amis-settings-select { width: 100%; height: 38px; padding-inline: 10px; font-size: 13px; background: var(--amis-bg); border-color: var(--color-mission-control-border); color: var(--color-mission-text); }
+.amis-settings-modal :is(button, select):focus-visible, .amis-settings-trigger:focus-visible { outline: 2px solid var(--color-mission-accent); outline-offset: 3px; }
+@media (max-width: 540px) { .amis-settings-modal { padding: 20px; } .amis-settings-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.amis-settings-field:last-child { margin-bottom: 0; }
+.amis-settings-policy-help { margin-top: -2px; color: var(--color-mission-muted); font-size: 12px; line-height: 1.4; }
+.amis-settings-modal .amis-settings-close:focus-visible { outline: 1px solid var(--color-mission-muted); outline-offset: 2px; }
+
+.amis-settings-select-wrap { position: relative; min-width: 0; }
+.amis-settings-select-wrap .amis-settings-select { appearance: none; padding-right: 38px; text-overflow: ellipsis; }
+.amis-settings-select-wrap > svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--color-mission-muted); }
+.amis-settings-select-wrap:has(select:disabled) > svg { opacity: .4; }
+
+/* A shared quiet edge for neutral controls, including dialogs and authoring. */
+:is(button, input, select, textarea, summary):is(.border-neutral-600, .border-neutral-700, .border-neutral-800, .border-mission-border):where(:not(:hover):not(:focus-visible)) { border-color: var(--color-mission-control-border); }
+.amis-builder-form :is(input:not([type=checkbox]), select) { border-color: var(--color-mission-control-border); }
+
+/* Library dialogs share the settings surface and native modal top layer. */
+.amis-library-modal { width: min(600px, calc(100vw - 32px)); max-height: min(600px, calc(100dvh - 48px)); overflow: hidden; padding: 20px; }
+.amis-library-modal[open] { display: flex; flex-direction: column; }
+.amis-library-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-top: 16px; padding: 3px; }
+.amis-library-content > p { padding: 24px 0; color: var(--color-mission-muted); font-size: 14px; }
+.amis-library-list { display: grid; gap: 12px; }
+.amis-library-card { min-width: 0; border: 1px solid var(--color-mission-control-border); border-radius: var(--radius-panel); background: var(--amis-bg); overflow-wrap: anywhere; }
+.amis-library-card:has(.amis-library-choice:is(:hover, :focus-visible)), .amis-library-selected { border-color: var(--color-mission-accent); background: color-mix(in srgb, var(--color-mission-elevated) 55%, var(--amis-bg)); }
+.amis-library-choice { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 16px; text-align: left; cursor: pointer; border-radius: var(--radius-panel); }
+.amis-library-choice:disabled { cursor: wait; opacity: .65; }
+.amis-library-meta, .amis-library-id { display: block; margin-top: 6px; font-size: 12px; color: var(--color-mission-muted); }
+.amis-library-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.amis-library-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 10px; font-size: 13px; color: var(--color-mission-muted); }
+.amis-library-details { margin: 0 16px 14px; font-size: 13px; }
+.amis-library-details summary { cursor: pointer; color: var(--color-mission-accent); }
+.amis-library-details div { white-space: pre-wrap; line-height: 1.6; margin-top: 12px; }
+.amis-library-footer { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; border-top: 1px solid var(--amis-border); padding-top: 16px; margin-top: 16px; font-size: 13px; color: var(--color-mission-muted); }
+.amis-library-footer button, .amis-library-error button { border: 1px solid var(--color-mission-control-border); border-radius: var(--radius-panel); padding: 8px 14px; cursor: pointer; }
+.amis-library-error { padding: 12px 0 0; font-size: 13px; color: var(--timeline-impacted); overflow-wrap: anywhere; }
+.amis-library-error button { margin-left: 12px; }
+.amis-library-modal :is(input, summary):focus-visible { outline: 2px solid var(--color-mission-accent); outline-offset: 2px; }
+/* Mission surfaces stay in the viewport; only the inspector flows vertically. */
+.amis-workspace, .amis-workspace:has(.is-expanded) {
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 19vw, 280px) clamp(340px, 26vw, 390px);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.4fr);
+  min-height: 0;
+}
+.amis-workspace > .amis-panel:nth-child(1) { grid-column: 2; grid-row: 1; }
+.amis-workspace > .amis-panel:nth-child(2) { grid-column: 1; grid-row: 1; }
+.amis-workspace > .amis-workspace-timeline { grid-column: 1 / 3; grid-row: 2; }
+.amis-inspector { grid-column: 3; grid-row: 1 / 3; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 8px; }
+.amis-inspector-panel { flex: none; min-width: 0; }
+.amis-inspector-panel .amis-panel { height: auto; }
+.amis-inspector-panel .overflow-auto, .amis-expanded-content .overflow-auto, .amis-inspector-panel .overflow-x-auto { overflow: visible; }
+.amis-inspector-panel .truncate, .amis-expanded-content .truncate { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.amis-inspector-panel .amis-panel-header { flex-wrap: wrap; gap: 4px 8px; padding-block: 6px; }
+.amis-inspector-panel .amis-panel-header > span { order: 3; flex-basis: 100%; }
+.amis-inspector-panel table { table-layout: fixed; width: 100%; }
+.amis-inspector-panel :is(td, th) { overflow-wrap: anywhere; padding-right: 6px; }
+.amis-inspector-panel :is(p, span, dd, button) { overflow-wrap: anywhere; }
+.amis-expanded-dialog { margin: auto; padding: 0; width: min(88vw, 1280px); max-width: 94vw; max-height: 88dvh; border: 1px solid var(--amis-border); border-radius: var(--radius-panel); background: var(--amis-surface); color: var(--color-mission-text); overflow: hidden; }
+.amis-expanded-dialog[open] { display: flex; flex-direction: column; }
+.amis-expanded-dialog::backdrop { background: rgb(0 0 0 / .6); }
+.amis-expanded-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 12px 20px; border-bottom: 1px solid var(--amis-border); font-weight: 600; }
+.amis-expanded-content { min-height: 0; overflow-y: auto; padding: 16px; }
+.amis-expanded-content .amis-panel { border: 0; }
+.amis-expanded-content .amis-panel-header { display: none; }
+@media (max-width: 1100px) {
+  .amis-workspace { grid-template-columns: minmax(0, 1fr) 210px 340px; }
+}
+@media (max-width: 1000px), (max-height: 650px) {
+  .amis-app { height: 100dvh; min-height: 0; overflow: hidden; }
+  .amis-workspace { min-height: 0; }
+}
+@media (max-width: 900px) {
+  .amis-workspace { grid-template-columns: minmax(0, 1fr) 210px; position: relative; }
+  .amis-inspector { position: absolute; inset: 8px 8px 8px auto; width: min(390px, calc(100% - 16px)); z-index: 20; background: var(--amis-bg); padding: 8px; border: 1px solid var(--amis-border); }
+  .amis-inspector[data-collapsed="true"] { display: none; }
+}
+.amis-inspector-toggle { display: none; }
+@media (max-width: 900px) {
+ .amis-inspector-toggle { display: block; position: absolute; right: 16px; bottom: 16px; z-index: 21; padding: 8px 12px; border: 1px solid var(--amis-border); border-radius: var(--radius-panel); background: var(--amis-surface); color: var(--color-mission-text); }
+ .amis-inspector { padding-bottom: 56px; }
+}
+/* Placements and reason text stack beneath identifiers at inspector width. */
+.amis-inspector-panel ul[aria-label="Plan comparison"] li > button,
+.amis-inspector-panel ul[aria-label="Completed plan entries"] li > button,
+.amis-inspector-panel ul[aria-label="Unchanged plan entries"] li > button { grid-template-columns: minmax(0, 1fr) auto; }
+.amis-inspector-panel ul[aria-label="Plan comparison"] li > button > :last-child,
+.amis-inspector-panel ul[aria-label="Completed plan entries"] li > button > :last-child,
+.amis-inspector-panel ul[aria-label="Unchanged plan entries"] li > button > :last-child { grid-column: 1 / -1; }

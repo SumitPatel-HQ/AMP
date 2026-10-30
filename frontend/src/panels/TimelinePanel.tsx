@@ -14,7 +14,6 @@ import type {
   ScenarioSchema,
 } from "../api/client";
 import { planLabel } from "../state/planContext";
-import { StorageProfileChart } from "./StorageProfileChart";
 import type { ReplanResult } from "../state/types";
 import { PanelFrame } from "./PanelFrame";
 import { PlanTimeline } from "./PlanTimeline";
@@ -74,7 +73,7 @@ function TimelineLegend() {
     { label: "Mission time", className: "amis-legend-mission-time" },
   ];
   return (
-    <ul aria-label="Timeline legend" className="flex items-center gap-3 text-[10px] text-neutral-400">
+    <ul aria-label="Timeline legend" className="flex items-center gap-3 text-[12px] text-neutral-400">
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-1">
           <Swatch className={item.className} />
@@ -149,13 +148,13 @@ export function TimelinePanel({
       className={className}
     >
       {scenario === null || plan === null ? (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-400">
           {scenario === null
             ? "Load a scenario and generate a plan to see scheduled actions."
             : "Generate plan to lay the mission's scheduled actions on the timeline."}
         </p>
       ) : (
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex h-full min-h-0 min-w-0 flex-col gap-2">
           <PlanTimeline
             key={plan.id}
             label="Mission plan"
@@ -176,7 +175,7 @@ export function TimelinePanel({
             onSelectWindow={onSelectWindow}
             onSelectEvent={onSelectEvent}
           />
-          <StorageProfileChart scenario={scenario} plan={plan} missionState={missionState} />
+
         </div>
       )}
     </PanelFrame>
