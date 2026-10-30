@@ -208,9 +208,6 @@ export function MissionBar({
   return (
     <header className="amis-mission-bar relative z-20 flex min-h-9 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--amis-border)] bg-[var(--amis-surface)] px-3 py-1">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="rounded-sm border border-neutral-600 px-1.5 text-xs font-bold tracking-[0.2em] text-neutral-100">
-          AMIS
-        </span>
         {scenario === null ? (
           <span className="text-xs text-neutral-400">No scenario loaded.</span>
         ) : (

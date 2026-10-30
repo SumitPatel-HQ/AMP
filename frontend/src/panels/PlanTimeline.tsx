@@ -135,7 +135,7 @@ function timelineOptions(
     verticalScroll: true,
     horizontalScroll: true,
     groupHeightMode: "fitItems",
-    margin: { axis: 4, item: { horizontal: 3, vertical: 5 } },
+    margin: { axis: 10, item: { horizontal: 12, vertical: 8 } },
     dataAttributes: [
       "kind",
       "request-id",

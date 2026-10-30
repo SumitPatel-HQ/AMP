@@ -1,5 +1,5 @@
 import { useMissionSession } from "./state/useMissionSession";
-import { AnalysisDock } from "./panels/AnalysisDock";
+import { InspectorPanel } from "./panels/InspectorPanel";
 import { StorageProfileChart } from "./panels/StorageProfileChart";
 import { useState } from "react";
 import { useDialogHistory } from "./state/useDialogHistory";
@@ -47,13 +47,7 @@ function MissionFocus({ session }: { session: Session }) {
   );
 }
 
-/**
- * The mission workspace, one viewport tall. Mission objects to the left, the
- * map at the centre and live state to the right; the timeline spans the full
- * width beneath them, and the analysis of the current transition sits at the
- * bottom. Each region scrolls on its own so none of them pushes the others off
- * screen.
- */
+/** Fixed mission surfaces beside an independently scrolling inspector. */
 function MissionWorkspace({
   session,
   transition,
@@ -62,6 +56,7 @@ function MissionWorkspace({
   transition: MissionTransition;
 }) {
   const { selection, replanResult } = session;
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const plans = session.plans;
   return (
     <main className="amis-workspace grid min-h-0 min-w-0 flex-1 gap-1 p-1">
@@ -96,17 +91,8 @@ function MissionWorkspace({
         onSelectRequest={session.selectRequest}
         onSelectEvent={session.selectEvent}
       />
-      <StatePanel
-        state={session.missionState}
-        events={session.events}
-        plan={session.plan}
-        replanned={replanResult !== null && replanResult.revisedPlan.id === session.plan?.id}
-        satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
-        storageCapacityMb={session.scenario?.satellite.storage_capacity_mb ?? null}
-        requestCount={session.scenario === null ? null : session.requestPool.length}
-      />
       <TimelinePanel
-        className="col-span-3"
+        className="amis-workspace-timeline"
         scenario={session.scenario}
         plan={session.plan}
         replanResult={replanResult}
@@ -125,7 +111,19 @@ function MissionWorkspace({
         onSelectWindow={session.selectWindow}
         onSelectEvent={session.selectEvent}
       />
-      <AnalysisDock impactRevision={session.impact} comparisonRevision={replanResult} impact={
+      <button type="button" className="amis-inspector-toggle" aria-expanded={inspectorOpen} aria-controls="mission-inspector" onClick={() => setInspectorOpen(value => !value)}>{inspectorOpen ? "Close inspector" : "Open inspector"}</button>
+      <aside id="mission-inspector" aria-label="Mission inspector" className="amis-inspector" data-collapsed={!inspectorOpen}>
+      <InspectorPanel title="Mission state" expandable={false}>      <StatePanel
+        state={session.missionState}
+        events={session.events}
+        plan={session.plan}
+        replanned={replanResult !== null && replanResult.revisedPlan.id === session.plan?.id}
+        satelliteCapacityWh={session.scenario?.satellite.battery_capacity_wh ?? null}
+        storageCapacityMb={session.scenario?.satellite.storage_capacity_mb ?? null}
+        requestCount={session.scenario === null ? null : session.requestPool.length}
+      />
+</InspectorPanel>
+      <InspectorPanel title="Impact" expandable={false}>
         <ImpactPanel
           impact={session.impact}
           events={session.events}
@@ -138,7 +136,8 @@ function MissionWorkspace({
           onSelectWindow={session.selectWindow}
           onSelectEvent={session.selectEvent}
         />
-        } comparison={<PlanComparisonPanel
+        </InspectorPanel>
+        <InspectorPanel title="Plan comparison"><PlanComparisonPanel
           replanResult={replanResult}
           currentPlan={session.plan}
           loading={session.loading}
@@ -149,15 +148,17 @@ function MissionWorkspace({
           onSelectRequest={session.selectRequest}
           onSelectWindow={session.selectWindow}
           onSelectEvent={session.selectEvent}
-        />} evaluation={<><MetricsPanel
+        /></InspectorPanel>
+        <InspectorPanel title="Mission evaluation"><MetricsPanel
           currentPlanId={session.plan?.id ?? null}
           metrics={session.metrics}
           diff={replanResult?.diff ?? null}
           plans={plans}
           selectedPlanId={selection.planId}
+          resourceProfile={session.scenario !== null && session.plan !== null ? <StorageProfileChart scenario={session.scenario} plan={session.plan} missionState={session.missionState} /> : null}
         />
-        {session.scenario !== null && session.plan !== null && <StorageProfileChart scenario={session.scenario} plan={session.plan} missionState={session.missionState} />}
-      </>} />
+      </InspectorPanel>
+      </aside>
     </main>
   );
 }

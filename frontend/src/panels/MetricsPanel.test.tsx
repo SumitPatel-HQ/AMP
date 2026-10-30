@@ -1,7 +1,19 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { Presentation } from "./panelPresentation";
+import { cleanup, fireEvent, render as renderView, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MetricsSchema, MissionPlanSchema, PlanDiffSchema } from "../api/client";
 import { MetricsPanel } from "./MetricsPanel";
+
+// Existing detailed-content assertions exercise the dedicated details tab.
+function render(element: ReactElement) {
+ const result = renderView(element);
+ const details = screen.queryByRole("tab", { name: /Detailed comparison|Details and methodology/ });
+ if (details) {
+   fireEvent.click(details);
+ }
+ return result;
+}
 
 const metricsBefore = {
   plan_id: "PLAN-1",
@@ -81,7 +93,7 @@ function plan(id: string, version: number): MissionPlanSchema {
 const plans = [plan("PLAN-1", 1), plan("PLAN-2", 2)];
 
 function metricRow(label: string): HTMLElement {
-  const row = screen.getByText(label).closest("tr");
+  const row = screen.getByRole("cell", { name: label }).closest("tr");
   if (row === null) {
     throw new Error(`no row for ${label}`);
   }
@@ -109,7 +121,7 @@ describe("metrics panel", () => {
       <MetricsPanel currentPlanId="PLAN-1" metrics={metricsBefore} diff={null} plans={plans} />,
     );
 
-    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
+    const headers = screen.getAllByRole("columnheader").map(cell => cell.textContent);
     expect(headers).toEqual(["Metric", "V1"]);
     expect(metricRow("Mission utility").textContent).toContain("12");
     expect(metricRow("Plan churn").textContent).toContain("N/A");
@@ -120,7 +132,7 @@ describe("metrics panel", () => {
       <MetricsPanel currentPlanId="PLAN-2" metrics={metricsAfter} diff={diff} plans={plans} />,
     );
 
-    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
+    const headers = screen.getAllByRole("columnheader").map(cell => cell.textContent);
     expect(headers).toEqual(["Metric", "V1", "V2", "Δ"]);
     const utility = within(metricRow("Mission utility"));
     expect(utility.getByText("+2").getAttribute("data-trend")).toBe("better");
@@ -151,7 +163,8 @@ describe("metrics panel", () => {
     expect(state.textContent).toContain("11:05 UTC");
     expect(state.textContent).toContain("battery used 10%");
     expect(state.textContent).toContain("storage used 20%");
-    expect(screen.queryByText("Battery used")).toBeNull();
+    expect(screen.getByLabelText("Battery used: 10%")).toBeTruthy();
+    expect(screen.getByText("Battery used").closest("tr")).toBeNull();
   });
 
   it("flags a comparison whose two sides used different request pools and names the difference", () => {
@@ -194,7 +207,7 @@ describe("metrics panel", () => {
       />,
     );
 
-    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
+    const headers = screen.getAllByRole("columnheader").map(cell => cell.textContent);
     expect(headers).toEqual(["Metric", "V3"]);
   });
 
@@ -280,10 +293,10 @@ it("shows requester demand, shares, fulfillment, unattributed totals and scope t
   render(<MetricsPanel currentPlanId="PLAN-1" metrics={requesterMetrics} diff={null} />);
   const region = screen.getByRole("region", { name: "Requester service" });
   expect(region.textContent).toContain("10 total served priority units, including unattributed service");
-  const row = within(region).getByRole("rowheader", { name: "Agency" }).closest("tr")!;
+  const row = within(region).getByRole("article", { name: "Agency" });
   expect(row.textContent).toContain("50%");
   expect(row.textContent).toContain("63%");
-  expect(region.textContent).toContain("Unattributed (no requester id)");
+  expect(within(region).getByRole("article", { name: "Unattributed" })).toBeTruthy();
   expect(region.textContent).toContain("fewer than two requesters");
   expect(region.textContent).toContain("not normalized by demand");
   expect(region.textContent).toContain(requesterMetrics.measured_at);
@@ -314,16 +327,18 @@ it("shows requester archive credit in separate columns without changing acquisit
   }};
   render(<MetricsPanel currentPlanId="PLAN-1" metrics={metrics} diff={null} />);
   const region = within(screen.getByRole("region", { name: "Requester service" }));
-  expect(region.getByRole("columnheader", { name: "Archive count" })).toBeTruthy();
-  expect(region.getByRole("columnheader", { name: "Archive utility" })).toBeTruthy();
-  const row = region.getByRole("rowheader", { name: "Agency" }).closest("tr")!;
-  expect(within(row).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["1", "4", "2", "8", "1", "5", "50%", "63%"]);
+  const card = region.getByRole("article", { name: "Agency" });
+  expect(card.textContent).toContain("1 requests · 4 utility");
+  expect(card.textContent).toContain("5 / 8 demanded");
+  expect(card.textContent).toContain("50%");
+  expect(card.textContent).toContain("63%");
 });
 
 it("loads selected historical requester metrics and refreshes when live metrics change", async () => {
   const loadPlanMetrics = vi.fn().mockResolvedValue(requesterMetrics);
   const props = { currentPlanId: "PLAN-2", metrics: metricsAfter, diff, plans, selectedPlanId: "PLAN-1", loadPlanMetrics };
   const view = render(<MetricsPanel {...props} />);
+  fireEvent.click(await screen.findByRole("tab", { name: /Details and methodology/ }));
   expect(await screen.findByRole("region", { name: "Requester service" })).toBeTruthy();
   expect(loadPlanMetrics).toHaveBeenCalledWith("PLAN-1");
   loadPlanMetrics.mockResolvedValue({ ...requesterMetrics, measured_at: "2026-09-21T11:10:00Z" });
@@ -377,4 +392,122 @@ it("does not claim primary optimality when a bounded solve falls back", () => {
   expect(region.textContent).toContain("primary optimality unproven");
   expect(region.textContent).not.toContain("Optimal primary utility plan retained");
   expect(region.textContent).not.toContain("Stage 1 optimal baseline");
+});
+
+it("keeps the compact inspector detailed without the expanded analytics", () => {
+ render(<Presentation value={{ mode: "compact" }}><MetricsPanel currentPlanId="PLAN-2" metrics={metricsAfter} diff={diff} plans={plans} /></Presentation>);
+ expect(screen.queryByLabelText("Evaluation analytics")).toBeNull();
+ expect(screen.getByLabelText("Mission Utility metric").textContent).toContain("14");
+ expect(screen.getByLabelText("Archive and total fulfillment")).toBeTruthy();
+});
+
+it("switches between analytics and version comparison with keyboard navigation", () => {
+ renderView(<MetricsPanel currentPlanId="PLAN-2" metrics={metricsAfter} diff={diff} plans={plans} />);
+ const analytics = screen.getByRole("tab", { name: "Analytics" });
+ const details = screen.getByRole("tab", { name: "Detailed comparison (V1 vs V2)" });
+ expect(analytics.getAttribute("aria-selected")).toBe("true");
+ expect(screen.queryByRole("columnheader", { name: "Metric" })).toBeNull();
+ fireEvent.keyDown(analytics, { key: "ArrowRight" });
+ expect(document.activeElement).toBe(details);
+ expect(details.getAttribute("aria-selected")).toBe("true");
+ expect(screen.getByRole("columnheader", { name: "Metric" })).toBeTruthy();
+ fireEvent.click(analytics);
+ expect(screen.queryByRole("columnheader", { name: "Metric" })).toBeNull();
+ expect(screen.getByLabelText("Evaluation analytics").closest("[hidden]")).toBeNull();
+});
+
+it("shows detailed comparison sections directly without expand controls", () => {
+ renderView(<MetricsPanel currentPlanId="PLAN-2" metrics={metricsAfter} diff={diff} plans={plans} />);
+ fireEvent.click(screen.getByRole("tab", { name: "Detailed comparison (V1 vs V2)" }));
+ const panel = screen.getByRole("tabpanel");
+ expect(within(panel).getByLabelText("Mission utility comparison")).toBeTruthy();
+ expect(within(panel).getByLabelText("Plan churn: 25%")).toBeTruthy();
+ expect(within(panel).getByText("Measurement context & fulfillment notes").closest("details")).toBeTruthy();
+ expect(within(panel).getByRole("heading", { name: "Requester service & fulfillment" })).toBeTruthy();
+ expect(within(panel).getByRole("columnheader", { name: "Metric" })).toBeTruthy();
+});
+
+function compact(props: Partial<React.ComponentProps<typeof MetricsPanel>> = {}) {
+ return renderView(<Presentation value={{ mode: "compact" }}><MetricsPanel currentPlanId="PLAN-1" metrics={metricsBefore} diff={null} plans={plans} {...props} /></Presentation>);
+}
+it("shows single-plan compact KPIs, exact resources and separate fulfillment", () => {
+ compact({ metrics: { ...metricsBefore, battery_utilisation: 0.123456, archive_satisfied_count: 2, archive_satisfied_utility: 7, total_fulfilled_count: 4, total_fulfilled_utility: 19 } });
+ expect(screen.queryByRole("table")).toBeNull();
+ expect(screen.getByLabelText("Mission Utility metric").textContent).toContain("12");
+ expect(screen.getByLabelText("Completion metric").textContent).toContain("40%");
+ expect(screen.getByLabelText("Plan Churn metric").textContent).toContain("N/A");
+ expect(screen.getByRole("progressbar", { name: "Battery used" }).getAttribute("aria-valuetext")).toBe("12.3456%");
+ expect(screen.getByText("2 of 5")).toBeTruthy();
+ expect(screen.getByText("4 requests · 19 utility")).toBeTruthy();
+ expect(screen.getByText("2 requests · 7 utility")).toBeTruthy();
+ expect(screen.queryByText(/Comparing/)).toBeNull();
+});
+it("preserves precise compact version comparisons and metric direction", () => {
+ compact({ currentPlanId: "PLAN-2", diff: { ...diff, metrics_after: { ...metricsAfter, planning_time_ms: 2.75, violation_count: 1 } } });
+ expect(screen.getByLabelText("Mission Utility metric").textContent).toContain("V1: 12 → V2: 14");
+ expect(screen.getByLabelText("Mission Utility metric").textContent).toContain("Δ +2 priority units · improved");
+ expect(screen.getByLabelText("Constraint Violations metric").textContent).toContain("degraded");
+ expect(screen.getByLabelText("Planning Time metric").textContent).toContain("Δ -0.45 ms · improved");
+ expect(screen.getByLabelText("Plan Churn metric").textContent).not.toContain("Δ");
+});
+it("does not judge pool-dependent compact changes across different pools", () => {
+ compact({ currentPlanId: "PLAN-2", diff: { ...diff, request_pool_mismatch: true } });
+ expect(screen.getByLabelText("Mission Utility metric").querySelector('[data-trend]')).toBeNull();
+ expect(screen.getByLabelText("Mission Utility metric").textContent).toContain("not directly comparable");
+});
+it("keeps empty-pool completion N/A and zeros distinct from missing measurements", () => {
+ compact({ metrics: { ...metricsBefore, request_pool_size: 0, request_pool_ids: [], completion_rate: 0, mission_utility: 0, battery_utilisation: 0, storage_utilisation: 0 } });
+ expect(screen.getByLabelText("Completion metric").textContent).toContain("N/A");
+ expect(screen.getByLabelText("Mission Utility metric").querySelector("strong")?.textContent).toBe("0");
+ expect(screen.getByRole("progressbar", { name: "Storage used" }).getAttribute("value")).toBe("0");
+ expect(screen.getByText("0 of 0")).toBeTruthy();
+});
+it("labels compact historical measurements and avoids the live comparison", async () => {
+ const load = vi.fn().mockResolvedValue(metricsBefore);
+ compact({ currentPlanId: "PLAN-2", metrics: metricsAfter, diff, selectedPlanId: "PLAN-1", loadPlanMetrics: load });
+ expect(await screen.findByText("Historical plan · V1")).toBeTruthy();
+ expect(screen.queryByText(/Comparing/)).toBeNull();
+ expect(load).toHaveBeenCalledWith("PLAN-1");
+});
+it("exposes complete compact requester cards and methodology through disclosures", () => {
+ compact({ metrics: requesterMetrics });
+ const requester = screen.getByText("Requester Service", { selector: "summary" });
+ expect(requester.closest("details")?.open).toBe(false);
+ fireEvent.click(requester);
+ const region = screen.getByRole("region", { name: "Requester service" });
+ expect(within(region).getByRole("article", { name: "Agency" }).textContent).toContain("5 / 8 demanded");
+ expect(region.textContent).toContain("fewer than two requesters");
+ expect(region.textContent).toContain(requesterMetrics.requester_service!.limitations);
+ fireEvent.click(screen.getByText("Metric Details & Methodology", { selector: "summary" }));
+ expect(screen.getByText(/Only|Empty request pool|OBS-A, OBS-B/)).toBeTruthy();
+ fireEvent.click(screen.getByText("Emergency Response", { selector: "summary" }));
+ expect(screen.getByText("No emergency requests in this plan's pool.")).toBeTruthy();
+});
+it("handles a compact inspector with no plan", () => {
+ compact({ currentPlanId: null, metrics: null });
+ expect(screen.getByText("Generate a plan to evaluate it.")).toBeTruthy();
+ expect(screen.queryByLabelText("Compact mission evaluation")).toBeNull();
+});
+
+it("keeps emergency attribution and solver evidence accessible in compact details", () => {
+ const metrics: MetricsSchema = { ...requesterMetrics, emergency_request_count: 1, planned_emergency_request_count: 1, time_to_first_acquisition_s: 2100,
+ emergency_response: [{ request_id: "OBS-EMG", event_id: "EVT-001", arrival_time: "2026-09-21T10:05:00Z", request_status: "scheduled", planned_start_time: "2026-09-21T10:40:00Z", planned_latency_s: 2100, planned_satellite_id: "SAT-001", achieved_start_time: null, achieved_latency_s: null, achieved_satellite_id: null }] };
+ compact({ metrics, plans: [{ ...plans[0], planning_policy: "utility_then_fairness", solver_details: { status: "UNKNOWN", skip_reason: "primary optimality unproven", fallback_reason: "solver_unknown" } }] });
+ fireEvent.click(screen.getByText("Emergency Response", { selector: "summary" }));
+ const response = screen.getByRole("region", { name: "Emergency response" });
+ expect(response.textContent).toContain("V1 planned: 10:40 UTC on SAT-001 · 35 min");
+ expect(response.textContent).toContain("Achieved: not started");
+ expect(within(response).getByRole("listitem").getAttribute("data-event-id")).toBe("EVT-001");
+ fireEvent.click(screen.getByText("Requester Service", { selector: "summary" }));
+ const requester = screen.getByRole("region", { name: "Requester service" });
+ expect(requester.textContent).toContain("Solver status: UNKNOWN");
+ expect(requester.textContent).toContain("primary optimality unproven");
+ expect(requester.textContent).toContain("solver_unknown");
+});
+
+it("preserves the compact Expand action", () => {
+ const expand = vi.fn();
+ renderView(<Presentation value={{ mode: "compact", expand }}><MetricsPanel currentPlanId="PLAN-1" metrics={metricsBefore} diff={null} /></Presentation>);
+ fireEvent.click(screen.getByRole("button", { name: "Expand panel" }));
+ expect(expand).toHaveBeenCalledOnce();
 });

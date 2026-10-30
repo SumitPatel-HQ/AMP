@@ -1,3 +1,5 @@
+import { PanelExpandAction } from "./InspectorPanel";
+import { usePanelPresentation } from "./panelPresentation";
 import { Activity, ChartNoAxesCombined, GitCompareArrows, Globe2, ListChecks, TriangleAlert, Rows3, type LucideIcon } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
@@ -33,10 +35,12 @@ export function PanelFrame({
   children: ReactNode;
 }) {
   const titleId = useId();
+  const presentation = usePanelPresentation();
   const Icon = PANEL_ICONS[title];
   return (
     <section
       aria-labelledby={titleId}
+      data-presentation={presentation.mode}
       className={`amis-panel flex min-h-0 min-w-0 flex-col border border-[var(--amis-border)] bg-[var(--amis-surface)] ${className}`}
     >
       <div className="amis-panel-header flex min-h-10 shrink-0 items-center gap-2 border-b border-[var(--amis-border)] bg-white/[0.02] px-2">
@@ -50,7 +54,7 @@ export function PanelFrame({
         {meta === undefined ? null : (
           <span className="min-w-0 truncate text-xs text-neutral-400">{meta}</span>
         )}
-        {actions === undefined ? null : <div className="ml-auto flex shrink-0 items-center">{actions}</div>}
+        <div className="ml-auto flex shrink-0 items-center">{actions}<PanelExpandAction /></div>
       </div>
       <div className={`min-h-0 flex-1 overflow-auto ${bodyClassName}`}>{children}</div>
     </section>
