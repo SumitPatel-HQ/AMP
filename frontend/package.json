@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "npm run dev",
     "predev": "npm run generate:api",
     "dev": "vite --host",
     "prebuild": "npm run generate:api",
