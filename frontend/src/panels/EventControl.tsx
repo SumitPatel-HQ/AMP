@@ -405,7 +405,7 @@ export function EventControl({
           {`evaluated against Plan V${plan.version} at ${clockTime(missionState.simulated_time)} UTC`}
         </span>
       </div>
-      <div role="radiogroup" aria-label="Event type" className="flex gap-1">
+      <div role="radiogroup" aria-label="Event type" className="flex flex-wrap gap-1">
         {EVENT_TYPES.map((option) => (
           <button
             key={option.type}
